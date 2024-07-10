@@ -1,13 +1,15 @@
 import re
 import numpy as np
 
-
 class XvalTokenizer:
-    def __init__(self, pretrained_tokenizer=None, num_token="[NUM]"):
+    def __init__(self, pretrained_tokenizer=None, vocab_files=None, save_file=None, num_token="[NUM]"):
         if pretrained_tokenizer:
             self.tokenizer = pretrained_tokenizer
         else:
-            self.tokenizer = self.get_tokenizer()
+            assert vocab_files, 'Provide arg vocab_files (list of paths to training corpus files)'
+            assert save_file, 'Provide arg save_file (path to save trained tokenizer)'
+            self.tokenizer = get_tokenizer(vocab_files=vocab_files, save_file=save_file)
+            
         self.tokenizer.add_special_tokens({
             "additional_special_tokens": [num_token],
             "pad_token": "[PAD]",
@@ -60,3 +62,41 @@ def compress_matrix(text):
         .replace("¬,¬", "¬¬")
     )
     return text
+
+def get_tokenizer(vocab_files, save_file):
+    """
+    Train a Byte Pair Encoding (BPE) tokenizer and save it to a file.
+
+    Args:
+    vocab_files (list of str): List of paths to training corpus files.
+    save_file (str): Path to save the trained tokenizer.
+
+    Returns:
+    Tokenizer: The trained tokenizer.
+    """
+    #special tokens (taken from xVal code)
+    special_tokens = ["[END]", "[MASK]", "[PAD]", "[NUM]"]
+
+    #train
+    tokenizer = Tokenizer(models.BPE())
+    tokenizer.add_special_tokens(special_tokens)
+    
+    full_vocab = []
+    if vocab_files is not None:
+        for file_path in vocab_files:
+            with open(file_path, 'r', encoding='utf-8') as file:
+                for line in file:
+                    full_vocab.extend(line.strip().split())
+
+    trainer = trainers.BpeTrainer(vocab=full_vocab, special_tokens=special_tokens)
+    tokenizer.train(vocab_files, trainer)
+
+    #post-processing
+    tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=False)
+    tokenizer.post_processor = processors.ByteLevel(trim_offsets=False)
+    tokenizer.decoder = decoders.ByteLevel()
+
+    # save 
+    tokenizer.save(save_file)
+    
+    return tokenizer
