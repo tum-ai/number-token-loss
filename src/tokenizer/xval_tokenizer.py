@@ -3,8 +3,11 @@ import numpy as np
 
 
 class XvalTokenizer:
-    def __init__(self, pretrained_tokenizer, num_token="[NUM]"):
-        self.tokenizer = pretrained_tokenizer
+    def __init__(self, pretrained_tokenizer=None, num_token="[NUM]"):
+        if pretrained_tokenizer:
+            self.tokenizer = pretrained_tokenizer
+        else:
+            self.tokenizer = self.get_tokenizer()
         self.tokenizer.add_special_tokens({
             "additional_special_tokens": [num_token],
             "pad_token": "[PAD]",
