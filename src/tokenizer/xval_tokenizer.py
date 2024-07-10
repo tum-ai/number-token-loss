@@ -1,13 +1,16 @@
 import re
 import numpy as np
+from tokenizers import Tokenizer, models, trainers, pre_tokenizers, processors, decoders
 
 class XvalTokenizer:
     def __init__(self, pretrained_tokenizer=None, vocab_files=None, save_file=None, num_token="[NUM]"):
         if pretrained_tokenizer:
             self.tokenizer = pretrained_tokenizer
         else:
-            assert vocab_files, 'Provide arg vocab_files (list of paths to training corpus files)'
-            assert save_file, 'Provide arg save_file (path to save trained tokenizer)'
+            if not vocab_files:
+                raise ValueError('Provide arg vocab_files (list of paths to training corpus files)')
+            if not save_file:
+                raise ValueError('Provide arg save_file (path to save trained tokenizer)')
             self.tokenizer = get_tokenizer(vocab_files=vocab_files, save_file=save_file)
             
         self.tokenizer.add_special_tokens({
@@ -74,19 +77,18 @@ def get_tokenizer(vocab_files, save_file):
     Returns:
     Tokenizer: The trained tokenizer.
     """
-    #special tokens (taken from xVal code)
+    #special tokens (taken from xVal paper)
     special_tokens = ["[END]", "[MASK]", "[PAD]", "[NUM]"]
 
-    #train
+    # get vocabulary and special tokens and train
     tokenizer = Tokenizer(models.BPE())
     tokenizer.add_special_tokens(special_tokens)
     
     full_vocab = []
-    if vocab_files is not None:
-        for file_path in vocab_files:
-            with open(file_path, 'r', encoding='utf-8') as file:
-                for line in file:
-                    full_vocab.extend(line.strip().split())
+    for file_path in vocab_files:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            for line in file:
+                full_vocab.extend(line.strip().split())
 
     trainer = trainers.BpeTrainer(vocab=full_vocab, special_tokens=special_tokens)
     tokenizer.train(vocab_files, trainer)
