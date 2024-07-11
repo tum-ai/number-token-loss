@@ -1,25 +1,21 @@
 import re
 import numpy as np
+from src.tokenizer.abstract_tokenizer import AbstractTokenizer
 
-class RtTokenizer:
-    def __init__(self, pretrained_tokenizer, num_tokens, embedding_dim):
-        self.tokenizer = pretrained_tokenizer
-        self.tokenizer.add_special_tokens({
+class RtTokenizer(AbstractTokenizer):
+    def __init__(self, special_tokens, num_tokens, embedding_dim, pretrained_tokenizer=None, vocab_files=None, save_file=None):
+        super().__init__(special_tokens=special_tokens, num_tokens=num_tokens, embedding_dim=embedding_dim, pretrained_tokenizer=pretrained_tokenizer, vocab_files=vocab_files, save_file=save_file)
+        """self.tokenizer.add_special_tokens({
             "additional_special_tokens": ["[NEG]"],
             "pad_token": "[PAD]",
             "mask_token": "[MASK]",
-        })
-        self.tokenizer.add_tokens(num_tokens)
-        self.num_tokens = num_tokens
-        self.num_token_ids = [self.tokenizer.convert_tokens_to_ids(num_token) for num_token in num_tokens]
-        self.embedding_dim = embedding_dim
-
+        })"""
 
     def __call__(self, text, return_attention_mask=False, return_token_type_ids=True):
         if isinstance(text, dict):
             text = text["text"]
 
-        nonum_text, number_tokens = extract(text)
+        nonum_text, number_tokens = self.extract(text)
         out = self.tokenizer(
             nonum_text, return_attention_mask=return_attention_mask, return_token_type_ids=return_token_type_ids
         )
@@ -37,37 +33,37 @@ class RtTokenizer:
         return out
 
 
-def extract(text):
-    pattern = r"\s*[\s]*?(\+|\-)?(\d+)(\.)?(\d+)?\s*"
-    numbers = []
+    def extract(self, text):
+        pattern = r"\s*[\s]*?(\+|\-)?(\d+)(\.)?(\d+)?\s*"
+        numbers = []
 
-    def replace(match):
-        number = match.group(0).strip()
-        tokens = []
-        is_negative = number.startswith('-')
-        if is_negative:
-            number = number[1:]
-            tokens.append('[NEG]')
+        def replace(match):
+            number = match.group(0).strip()
+            tokens = []
+            is_negative = number.startswith('-')
+            if is_negative:
+                number = number[1:]
+                tokens.append('[NEG]') # TODO
 
-        if "." in number:
-            integer_part, dot, fractional_part = number.partition('.')
-        else:
-            integer_part = number
-            fractional_part = []
+            if "." in number:
+                integer_part, dot, fractional_part = number.partition('.')
+            else:
+                integer_part = number
+                fractional_part = []
 
-        z = len(integer_part) - 1
-        for digit in integer_part:
-            tokens.append(f"_{digit}_{z}_")
-            numbers.append(f"_{digit}_{z}_")
-            z -= 1
-        for i, digit in enumerate(fractional_part):
-            tokens.append(f"_{digit}_{-i-1}_")
-            number.append(f"_{digit}_{-i-1}_")
+            z = len(integer_part) - 1
+            for digit in integer_part:
+                tokens.append(f"_{digit}_{z}_")
+                numbers.append(f"_{digit}_{z}_")
+                z -= 1
+            for i, digit in enumerate(fractional_part):
+                tokens.append(f"_{digit}_{-i-1}_")
+                number.append(f"_{digit}_{-i-1}_")
 
-        return " ".join(tokens)
+            return " ".join(tokens)
 
-    nonum_text = re.sub(pattern, replace, text)
-    return nonum_text, numbers
+        nonum_text = re.sub(pattern, replace, text)
+        return nonum_text, numbers
 
 
 def NEFloat(v, p, j):
