@@ -3,14 +3,14 @@ import numpy as np
 from src.tokenizer.abstract_tokenizer import AbstractTokenizer
 
 class XvalTokenizer(AbstractTokenizer):
-    def __init__(self, special_tokens, num_tokens, embedding_dim, pretrained_tokenizer=None, vocab_files=None, save_file=None):
+    def __init__(self, num_tokens, embedding_dim, special_tokens=None, pretrained_tokenizer=None, vocab_files=None, save_file=None):
         super().__init__(special_tokens=special_tokens, num_tokens=num_tokens, embedding_dim=embedding_dim, pretrained_tokenizer=pretrained_tokenizer, vocab_files=vocab_files, save_file=save_file)
         
     def __call__(self, text, return_attention_mask=False, return_token_type_ids=True):
         if isinstance(text, dict):
             text = text["text"]
 
-        nonum_text, numbers = self.extract(text)#, num_tokens=self.num_tokens[0]) # TODO
+        nonum_text, numbers = self.extract(text)
         out = self.tokenizer(
             nonum_text, return_attention_mask=return_attention_mask, return_token_type_ids=return_token_type_ids
         )
@@ -23,7 +23,7 @@ class XvalTokenizer(AbstractTokenizer):
         return out
 
 
-    def extract(self, text):#, num_token="[NUM]"):
+    def extract(self, text):
         import re
 
         # this regular expression is intended to match numerical values in various forms

@@ -4,10 +4,11 @@ from abc import ABC, abstractmethod
 from tokenizers import Tokenizer, models, trainers, pre_tokenizers, processors, decoders
 
 class AbstractTokenizer(ABC):
-    def __init__(self, special_tokens, num_tokens, embedding_dim, pretrained_tokenizer=None, vocab_files=None, save_file=None):
+    def __init__(self, num_tokens, embedding_dim, special_tokens=None,  pretrained_tokenizer=None, vocab_files=None, save_file=None):
         if pretrained_tokenizer:
             self.tokenizer = pretrained_tokenizer
             self.tokenizer.add_special_tokens(special_tokens)
+            self.tokenizer.add_tokens(num_tokens)
         else:
             if not vocab_files:
                 raise ValueError('Provide arg vocab_files (list of paths to training corpus files)')

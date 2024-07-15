@@ -3,7 +3,7 @@ import numpy as np
 from src.tokenizer.abstract_tokenizer import AbstractTokenizer
 
 class RtTokenizer(AbstractTokenizer):
-    def __init__(self, special_tokens, num_tokens, embedding_dim, pretrained_tokenizer=None, vocab_files=None, save_file=None):
+    def __init__(self, num_tokens, embedding_dim, special_tokens=None, pretrained_tokenizer=None, vocab_files=None, save_file=None):
         super().__init__(special_tokens=special_tokens, num_tokens=num_tokens, embedding_dim=embedding_dim, pretrained_tokenizer=pretrained_tokenizer, vocab_files=vocab_files, save_file=save_file)
         """self.tokenizer.add_special_tokens({
             "additional_special_tokens": ["[NEG]"],
