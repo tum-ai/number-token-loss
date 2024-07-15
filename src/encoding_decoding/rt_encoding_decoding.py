@@ -2,6 +2,11 @@ import torch
 from torch import nn
 from torch.nn.utils.rnn import pad_sequence
 
+MODEL_TO_EMBEDDING_FN = {
+    "XLNetBackbone": "self.transformer_backbone.transformer.word_embedding",
+    "T5RegressionModel": "self.transformer_backbone.model.shared",
+}
+
 
 class RegressionTransformer(nn.Module):
     def __init__(self, transformer_backbone, vocab_size, dim_feedforward=3072, context_length=190,
@@ -9,8 +14,9 @@ class RegressionTransformer(nn.Module):
         super(RegressionTransformer, self).__init__()
         self.transformer_backbone = transformer_backbone
 
-        self.token_embed = nn.Embedding(vocab_size, self.transformer_backbone.hidden_size)
-        self.position_embed = nn.Embedding(context_length, self.transformer_backbone.hidden_size)
+        self.transformer_backbone.transformer.resize_token_embeddings(vocab_size)
+        model_name = transformer_backbone._get_name()
+        self.embed_fn = eval(MODEL_TO_EMBEDDING_FN[model_name])
 
         self.lm_head = nn.Sequential(
             nn.Linear(self.transformer_backbone.hidden_size, dim_feedforward, bias=transformer_bias),
@@ -19,11 +25,8 @@ class RegressionTransformer(nn.Module):
         )
 
     def forward(self, x, number_embeddings, attention_mask, token_type_ids):
-        token_embeddings = self.token_embed(x) + number_embeddings
-        position_embeddings = self.position_embed.weight[:x.shape[1]].unsqueeze(0)
-
-        embeddings = token_embeddings + position_embeddings
-        sequence_output = self.transformer_backbone(embeddings=embeddings, attention_mask=attention_mask,
+        token_embeddings = self.embed_fn(x) + number_embeddings  #To do: do we want to overwrite or sum? 
+        sequence_output = self.transformer_backbone(embeddings=token_embeddings, attention_mask=attention_mask,
                                                     token_type_ids=token_type_ids)
         logit_preds = self.lm_head(sequence_output)
         return logit_preds
