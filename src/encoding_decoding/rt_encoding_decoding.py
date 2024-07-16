@@ -25,7 +25,9 @@ class RegressionTransformer(nn.Module):
         )
 
     def forward(self, x, number_embeddings, attention_mask, token_type_ids):
-        token_embeddings = self.embed_fn(x) + number_embeddings  #To do: do we want to overwrite or sum? 
+        token_embeddings = self.embed_fn(x)
+        embedding_dim = number_embeddings.size(-1)
+        token_embeddings[:, :, -embedding_dim:] = number_embeddings # Replace the last dimensions of the learned embeddings with the numerical embeddings
         sequence_output = self.transformer_backbone(embeddings=token_embeddings, attention_mask=attention_mask,
                                                     token_type_ids=token_type_ids)
         logit_preds = self.lm_head(sequence_output)
