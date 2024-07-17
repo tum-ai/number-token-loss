@@ -33,12 +33,10 @@ class RegressionTransformer(nn.Module):
 
 
 class CustomMaskingCollator(DataCollatorForLanguageModeling):
-    def __init__(self, tokenizer, mlm_probability=0.15):
-        super().__init__(tokenizer, mlm_probability)
+    def __init__(self, tokenizer):
+        super().__init__(tokenizer, mlm=False)
         self.tokenizer = tokenizer
-        self.mlm_probability = mlm_probability
         self.pad_token_id = tokenizer.pad_token_id
-        self.mask_token_id = tokenizer.mask_token_id
 
     def __call__(self, examples: List[Dict[str, Union[str, List[int]]]]) -> Dict[str, torch.Tensor]:
         # Tokenize questions and answers separately
@@ -54,8 +52,6 @@ class CustomMaskingCollator(DataCollatorForLanguageModeling):
         # Masking the answers
         answer_input_ids = answer_encodings['input_ids']
         labels = answer_input_ids.clone()
-
-        answer_input_ids[:] = self.mask_token_id
 
         return {
             'input_ids': input_ids,

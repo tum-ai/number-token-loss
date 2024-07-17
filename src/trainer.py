@@ -1,5 +1,5 @@
 """
-Taken from https://github.com/huggingface/transformers/blob/v3.1.0/src/transformers/trainer.py
+Taken from https://github.com/huggingface/transformers/blob/v4.33.3/src/transformers/trainer.py
 """
 
 import collections
@@ -10,6 +10,7 @@ import shutil
 import warnings
 from random import random
 from time import time
+import re
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -24,10 +25,7 @@ from transformers.trainer_utils import (
 from .encoding_decoding.numerical_encodings import FloatEncoding, IntEncoding
 from transformers.utils import logging
 
-
 logger = logging.get_logger(__name__)
-
-
 
 NON_MODEL_KEYS = ["real_property", "sample_weights"]
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -37,7 +35,6 @@ MODEL_TO_EMBEDDING_FN = {
     "albert": "model.albert.embeddings",
     "xlnet": "self.model.transformer.word_embedding",
 }
-
 
 
 def get_trainer_dict(dictionary: Dict[str, Any]) -> Dict[str, Any]:
@@ -95,7 +92,6 @@ class CustomTrainer(Trainer):
             tokens = self.data_collator.property_tokens
         except AttributeError:
             tokens = [None]
-
 
         if self.logs != []:
             self.min_loss = pd.DataFrame(self.logs)["loss"].min()
@@ -162,7 +158,7 @@ class CustomTrainer(Trainer):
         return e + num_e
 
     def overwrite_embed(self, e: torch.Tensor, num_e: torch.Tensor) -> torch.Tensor:
-        e[:, :, -self.numerical_encodings_dim :] = num_e
+        e[:, :, -self.numerical_encodings_dim:] = num_e
         return e
 
     def save_attention(self, inputs: torch.Tensor, attention: torch.Tensor):
@@ -188,7 +184,7 @@ class CustomTrainer(Trainer):
         self.counter += 1
 
     def feed_model(
-        self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]
+            self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]
     ) -> Dict[str, Union[torch.Tensor, Any]]:
         """
         Forward pass of `inputs` through `model`. This function handles the numerical
@@ -232,13 +228,12 @@ class CustomTrainer(Trainer):
 
         return outputs
 
-   
-
     def prediction_step(
-        self,
-        model: nn.Module,
-        inputs: Dict[str, Union[torch.Tensor, Any]],
-        prediction_loss_only: bool,
+            self,
+            model: nn.Module,
+            inputs: Dict[str, Union[torch.Tensor, Any]],
+            prediction_loss_only: bool,
+            gnore_keys: Optional[List[str]] = None,
     ) -> Tuple[Optional[float], Optional[torch.Tensor], Optional[torch.Tensor]]:
         """
         NOTE: Overwritten here to enable custom embeddings + for moinitoring purposes.
@@ -322,7 +317,7 @@ class CustomTrainer(Trainer):
         return loss, logits, labels
 
     def training_step(
-        self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]
+            self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]
     ) -> torch.Tensor:
         """
         Perform a training step on a batch of inputs.
@@ -375,7 +370,7 @@ class CustomTrainer(Trainer):
             iterator (:obj:`tqdm`, `optional`):
                 A potential tqdm progress bar to write the logs on.
         """
-        super().log(logs, iterator)
+        super().log(logs)
 
         if "eval_loss" in logs.keys():
             logger.info(f"Evaluation {logs}")
@@ -422,7 +417,7 @@ class CustomTrainer(Trainer):
                     self._rotate_checkpoints(prefix=checkpoint_prefix)
 
     def _rotate_checkpoints(
-        self, use_mtime: bool = False, prefix: str = PREFIX_CHECKPOINT_DIR
+            self, use_mtime: bool = False, prefix: str = PREFIX_CHECKPOINT_DIR
     ) -> None:
         """NOTE: Overwritten to enable passing down checkpoint prefix for deletion."""
         if self.args.save_total_limit is None or self.args.save_total_limit <= 0:

@@ -8,7 +8,11 @@ import torch.nn as nn
 import transformers
 from torch import Tensor
 
-from .utils import get_device
+def get_device():
+    return torch.device("cuda" if cuda() else "cpu")
+
+def cuda():
+    return torch.cuda.is_available()
 
 
 def get_float_encoding(
