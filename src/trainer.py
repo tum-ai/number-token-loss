@@ -34,6 +34,7 @@ NUM_ENCODING_FACTORY = {"float": FloatEncoding, "int": IntEncoding}
 MODEL_TO_EMBEDDING_FN = {
     "albert": "model.albert.embeddings",
     "xlnet": "self.model.transformer.word_embedding",
+    "t5-small": "self.model.encoder.embed_tokens"
 }
 
 
@@ -139,9 +140,9 @@ class CustomTrainer(Trainer):
             self.numerical_encoder = NUM_ENCODING_FACTORY[
                 self.numerical_encodings_type
             ](
-                num_embeddings=child_kwargs["vocab_size"],
+                num_embeddings=len(self.tokenizer),
                 embedding_dim=self.numerical_encodings_dim,
-                vocab=self.tokenizer.vocab,
+                vocab=self.tokenizer.get_vocab(),
                 vmax=child_kwargs.get("vmax", None),
             )
 
@@ -377,25 +378,25 @@ class CustomTrainer(Trainer):
             self.eval_logs.append({"eval_loss": logs["eval_loss"]})
             if "epoch" in logs.keys():
                 self.eval_logs[-1].update(
-                    {"epoch": logs["epoch"], "step": self.global_step}
+                    {"epoch": logs["epoch"], "step": self.state.global_step}
                 )
 
         # Custom logging
         if "loss" in logs.keys():
             # In case of training logging
-            if self.epoch is not None:
-                logs["epoch"] = self.epoch
-                output = {**logs, **{"step": self.global_step}}
+            if self.state.epoch is not None:
+                logs["epoch"] = self.state.epoch
+                output = {**logs, **{"step": self.state.global_step}}
                 self.logs.append(output)
 
             # Save new best model
             if logs["loss"] < self.min_loss:
-                checkpoint_folder = f"{PREFIX_CHECKPOINT_DIR}-best-{self.global_step}"
+                checkpoint_folder = f"{PREFIX_CHECKPOINT_DIR}-best-{self.state.global_step}"
                 output_dir = os.path.join(self.args.output_dir, checkpoint_folder)
                 self.min_loss = logs["loss"]
                 self.save_model(output_dir)
                 # Save optimizer and scheduler
-                if self.is_world_master():
+                if self.state.is_world_process_zero:
                     torch.save(
                         self.optimizer.state_dict(),
                         os.path.join(output_dir, "optimizer.pt"),
@@ -414,10 +415,10 @@ class CustomTrainer(Trainer):
                 checkpoint_prefix = f"{PREFIX_CHECKPOINT_DIR}-best"
 
                 if self.is_world_process_zero():
-                    self._rotate_checkpoints(prefix=checkpoint_prefix)
+                    self._rotate_checkpoints(prefix=checkpoint_prefix, output_dir=output_dir)
 
     def _rotate_checkpoints(
-            self, use_mtime: bool = False, prefix: str = PREFIX_CHECKPOINT_DIR
+            self, use_mtime: bool = False, prefix: str = PREFIX_CHECKPOINT_DIR, output_dir=None
     ) -> None:
         """NOTE: Overwritten to enable passing down checkpoint prefix for deletion."""
         if self.args.save_total_limit is None or self.args.save_total_limit <= 0:
@@ -425,7 +426,7 @@ class CustomTrainer(Trainer):
 
         # Check if we should delete older checkpoint(s)
         checkpoints_sorted = self._sorted_checkpoints(
-            use_mtime=use_mtime, checkpoint_prefix=prefix
+            use_mtime=use_mtime, checkpoint_prefix=prefix, output_dir=output_dir
         )
 
         if len(checkpoints_sorted) <= self.args.save_total_limit:
