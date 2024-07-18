@@ -5,6 +5,9 @@ Language modeling adapted from Huggingface transformers.
 The file is an adaptation of https://github.com/huggingface/transformers/blob/v3.1.0/examples/language-modeling/run_language_modeling.py
 
 """
+import sys
+sys.path.append("..")
+
 import json
 import logging
 import os
@@ -279,10 +282,10 @@ def main():
         tokenizer=tokenizer
     )
 
-    custom_trainer_params = get_trainer_dict(model_params)
+    #custom_trainer_params = get_trainer_dict(model_params)
 
     # Initialize our Trainer
-    trainer = CustomTrainer(
+    """trainer = CustomTrainer(
         model=model,
         args=training_args,
         data_collator=data_collator,
@@ -293,6 +296,13 @@ def main():
         model_type="t5-small", # TODO as parameter
         vmax=10,
         **custom_trainer_params,
+    )"""
+    trainer = transformers.Trainer(
+        model=model,
+        args=training_args,
+        data_collator=data_collator,
+        train_dataset=train_dataset,
+        tokenizer=tokenizer        
     )
 
     # Training
