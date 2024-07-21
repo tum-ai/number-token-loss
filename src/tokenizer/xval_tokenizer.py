@@ -1,27 +1,20 @@
 import re
 import numpy as np
+from transformers import T5Tokenizer
 
+    
+class XvalTokenizer(T5Tokenizer):
+    def __init__(self, embedding_dim=256, **kwargs):
+        super().__init__(**kwargs)
+        num_tokens = ["[NUM]"]
+        self.add_tokens(num_tokens)
+        self.num_tokens = num_tokens
+        self.num_token_ids = [self.convert_tokens_to_ids(num_token) for num_token in num_tokens]
+        self.embedding_dim = embedding_dim
 
-class XvalTokenizer:
-    def __init__(self, pretrained_tokenizer, num_token="[NUM]"):
-        self.tokenizer = pretrained_tokenizer
-        self.tokenizer.add_special_tokens({
-            "additional_special_tokens": [num_token],
-            "pad_token": "[PAD]",
-            "mask_token": "[MASK]",
-        })
-        self.num_token = num_token
-        self.num_token_id = self.tokenizer.convert_tokens_to_ids(num_token)
-        print(f"Number token ID: {self.num_token_id}")
-
-    def __call__(self, text, return_attention_mask=False, return_token_type_ids=True):
-        if isinstance(text, dict):
-            text = text["text"]
-
+    def tokenize(self, text, **kwargs): #TODO
         nonum_text, numbers = extract(text, num_token=self.num_token)
-        out = self.tokenizer(
-            nonum_text, return_attention_mask=return_attention_mask, return_token_type_ids=return_token_type_ids
-        )
+        out = super().tokenize(nonum_text, **kwargs)
         ids = np.array(out["input_ids"])
         locs = ids == self.num_token_id
         num_embed = np.ones(len(ids)).astype(np.float32)  # Use float32 instead of float16

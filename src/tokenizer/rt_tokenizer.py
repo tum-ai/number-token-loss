@@ -28,7 +28,7 @@ class RtTokenizer(T5Tokenizer):
     def tokenize(self, text: str, add_special_tokens=False, **kwargs) -> List[str]:
         nonum_text, number_tokens = extract(text)
         out = super().tokenize(
-            nonum_text, add_special_tokens=add_special_tokens, **kwargs
+            nonum_text, **kwargs
         )
         return out
 
