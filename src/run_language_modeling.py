@@ -31,7 +31,9 @@ from transformers.training_args import TrainingArguments
 from src.data import load_txt_dataset
 from src.encoding_decoding.rt_encoding_decoding import CustomMaskingCollator
 from src.tokenizer.rt_tokenizer import RtTokenizer
+from src.tokenizer.xval_tokenizer import XvalTokenizer
 from src.trainer import CustomTrainer, get_trainer_dict
+from src.transformer_backbone.t5 import T5RegressionModel
 
 transformers.logging.set_verbosity_info()
 logger = logging.getLogger(__name__)
@@ -134,7 +136,12 @@ class ModelArguments:
             "help": "Where do you want to store the pretrained models downloaded from s3"
         },
     )
-
+    number_encoding: Optional[str] = field(
+        default="rt",
+        metadata={
+            "help": "Chose either xval or rt for number encodings"
+        }
+    )
 
 def main():
     # See all possible arguments in src/transformers/training_args.py
@@ -213,24 +220,45 @@ def main():
         model_params = config.__dict__
         logger.warning("You are instantiating a new config instance from scratch.")
 
-    if model_args.tokenizer_name:
-        tokenizer = RtTokenizer.from_pretrained(
-            model_args.tokenizer_name, cache_dir=model_args.cache_dir
-        )
+    # load tokenizer    
+    if model_args.number_encoding == "rt":
+        if model_args.tokenizer_name:
+            tokenizer = RtTokenizer.from_pretrained(
+                model_args.tokenizer_name, cache_dir=model_args.cache_dir
+            )
 
-    elif model_args.model_name_or_path:
-        tokenizer = RtTokenizer.from_pretrained(
-            model_args.model_name_or_path, cache_dir=model_args.cache_dir
-        )
-    elif model_args.config_name:
-        tokenizer = RtTokenizer.from_pretrained(
-            model_args.config_name, cache_dir=model_args.cache_dir
-        )
-    else:
-        raise ValueError(
-            "You are instantiating a new tokenizer from scratch. This is not supported, but you can do it from another script, save it,"
-            "and load it from here, using --tokenizer_name"
-        )
+        elif model_args.model_name_or_path:
+            tokenizer = RtTokenizer.from_pretrained(
+                model_args.model_name_or_path, cache_dir=model_args.cache_dir
+            )
+        elif model_args.config_name:
+            tokenizer = RtTokenizer.from_pretrained(
+                model_args.config_name, cache_dir=model_args.cache_dir
+            )
+        else:
+            raise ValueError(
+                "You are instantiating a new tokenizer from scratch. This is not supported, but you can do it from another script, save it,"
+                "and load it from here, using --tokenizer_name"
+            )
+    elif model_args.number_encoding == "xval":
+        if model_args.tokenizer_name:
+            tokenizer = XvalTokenizer.from_pretrained(
+                model_args.tokenizer_name, cache_dir=model_args.cache_dir
+            )
+
+        elif model_args.model_name_or_path:
+            tokenizer = XvalTokenizer.from_pretrained(
+                model_args.model_name_or_path, cache_dir=model_args.cache_dir
+            )
+        elif model_args.config_name:
+            tokenizer = XvalTokenizer.from_pretrained(
+                model_args.config_name, cache_dir=model_args.cache_dir
+            )
+        else:
+            raise ValueError(
+                "You are instantiating a new tokenizer from scratch. This is not supported, but you can do it from another script, save it,"
+                "and load it from here, using --tokenizer_name"
+            )
 
     if model_args.model_name_or_path:
 
@@ -240,8 +268,8 @@ def main():
                 model_args.model_name_or_path,
                 must_contain="best",
             )
-
-        model = AutoModelWithLMHead.from_pretrained(
+        config.vocab_size = len(tokenizer)  # Update vocab size
+        model = T5RegressionModel.from_pretrained( 
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
             config=config,
@@ -264,20 +292,24 @@ def main():
 
     else:
         logger.info("Training new model from scratch")
-        model = AutoModelWithLMHead.from_config(config)
+        model = T5RegressionModel(config=config)
 
     logger.info(f"PyTorch version: {torch.__version__}")
     model.resize_token_embeddings(len(tokenizer))
 
+    # Set number embeddings for RT encoding
+    if model_args.number_encoding == "rt":
+        model.set_number_embeds(len(tokenizer), tokenizer.get_vocab())
+
     # Get datasets
-    data_path = '../data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
+    data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
     train_dataset = load_txt_dataset(data_path)
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"Number of parameters {num_params} of type {type(model)}")
 
 
-    # Only vanilla PLM training
+    # Conditional Generation Training
     data_collator = CustomMaskingCollator(
         tokenizer=tokenizer
     )

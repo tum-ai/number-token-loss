@@ -3,12 +3,16 @@ from transformers import T5Tokenizer, T5Model, T5ForConditionalGeneration
 from transformers.modeling_outputs import Seq2SeqLMOutput
 import torch
 import torch.nn as nn
+from src.encoding_decoding.numerical_encodings import FloatEncoding
 
 class T5RegressionModel(T5ForConditionalGeneration):
-    def __init__(self, pretrained_model_name='t5-small', num_output=1):
-        super(T5RegressionModel, self).__init__(pretrained_model_name)
+    def __init__(self, config, num_output=1):
+        super().__init__(config)
         self.regression_head = nn.Linear(self.config.d_model, num_output)
-        
+
+    def set_number_embeds(self, num_embeddings, vocab):
+        self.number_embeds = FloatEncoding(num_embeddings=num_embeddings, embedding_dim=self.config.d_model, vocab=vocab)
+
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -33,16 +37,19 @@ class T5RegressionModel(T5ForConditionalGeneration):
         """
         # create embeddings
         inputs_embeds = self.shared(input_ids)
+
+        # compute number embeddings and add them to the output
+        number_embeds = self.number_embeds(input_ids)
+        inputs_embeds += number_embeds
         
         # call super().forward()
         outputs = super(T5RegressionModel, self).forward(
             inputs_embeds=inputs_embeds,
-            attention_mask=attention_mask
-        )
+            attention_mask=attention_mask,
+            labels=labels
+        )        
 
-        hidden_states = outputs[0]
-        
-        return hidden_states
+        return outputs
     
         """def forward(self, input_ids, attention_mask=None):
         encoder_outputs = self.model.encoder(input_ids=input_ids, attention_mask=attention_mask)
