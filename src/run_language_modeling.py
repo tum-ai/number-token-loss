@@ -35,7 +35,7 @@ from src.encoding_decoding.rt_encoding_decoding import CustomMaskingCollator
 from src.tokenizer.rt_tokenizer import RtTokenizer
 from src.tokenizer.xval_tokenizer import XvalTokenizer
 from src.trainer import CustomTrainer, get_trainer_dict
-from src.transformer_backbone.t5 import T5RegressionModel
+from src.transformer_backbone.t5.t5_rt import T5RegressionModelRT
 from src.evaluation import CustomMetrics
 
 transformers.logging.set_verbosity_info()
@@ -274,7 +274,7 @@ def main():
             )
         config.vocab_size = len(tokenizer)  # Update vocab size
         config.added_vocab = tokenizer.get_added_vocab() # Set added vocab for number encoding
-        model = T5RegressionModel.from_pretrained( 
+        model = T5RegressionModelRT.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
             config=config,
@@ -299,7 +299,7 @@ def main():
         logger.info("Training new model from scratch")
         config.vocab_size = len(tokenizer)  # Update vocab size
         config.added_vocab = tokenizer.get_added_vocab() # Set added vocab for number encoding
-        model = T5RegressionModel(config=config)
+        model = T5RegressionModelRT(config=config)
 
     logger.info(f"PyTorch version: {torch.__version__}")
     '''
@@ -308,7 +308,7 @@ def main():
     if model_args.number_encoding == "rt":
         model.set_number_embeds(len(tokenizer), tokenizer.get_vocab())
     '''
-    
+
     # Get datasets
     train_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/train.txt'
     eval_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/val.txt'
@@ -333,8 +333,8 @@ def main():
     # Early stopping
     early_stopping_callback = EarlyStoppingCallback(
         early_stopping_patience=5,
-        early_stopping_threshold=0.001)   
-    
+        early_stopping_threshold=0.001)
+
     #custom_trainer_params = get_trainer_dict(model_params)
 
     # Initialize our Trainer
