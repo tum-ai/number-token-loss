@@ -31,11 +31,13 @@ from transformers import (
 from transformers.training_args import TrainingArguments
 
 from src.data import load_txt_dataset
-from src.encoding_decoding.rt_encoding_decoding import CustomMaskingCollator
+from src.collators.rt_question_answer_collator import RtQuestionAnswerCLMCollator
+from src.collators.xval_question_answer_collator import XvalQuestionAnswerCLMCollator
 from src.tokenizer.rt_tokenizer import RtTokenizer
 from src.tokenizer.xval_tokenizer import XvalTokenizer
 from src.trainer import CustomTrainer, get_trainer_dict
 from src.transformer_backbone.t5.t5_rt import T5RegressionModelRT
+from src.transformer_backbone.t5.t5_xval import T5RegressionModelXval
 from src.evaluation import CustomMetrics
 
 transformers.logging.set_verbosity_info()
@@ -264,6 +266,8 @@ def main():
                 "and load it from here, using --tokenizer_name"
             )
 
+    model_class = T5RegressionModelRT if model_args.number_encoding == "rt" else T5RegressionModelXval
+
     if model_args.model_name_or_path:
 
         # Restore checkpoint if available
@@ -274,7 +278,7 @@ def main():
             )
         config.vocab_size = len(tokenizer)  # Update vocab size
         config.added_vocab = tokenizer.get_added_vocab() # Set added vocab for number encoding
-        model = T5RegressionModelRT.from_pretrained(
+        model = model_class.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
             config=config,
@@ -299,7 +303,7 @@ def main():
         logger.info("Training new model from scratch")
         config.vocab_size = len(tokenizer)  # Update vocab size
         config.added_vocab = tokenizer.get_added_vocab() # Set added vocab for number encoding
-        model = T5RegressionModelRT(config=config)
+        model = model_class(config=config)
 
     logger.info(f"PyTorch version: {torch.__version__}")
     '''
@@ -323,9 +327,14 @@ def main():
 
 
     # Conditional Generation Training
-    data_collator = CustomMaskingCollator(
-        tokenizer=tokenizer
-    )
+    if model_args.number_encoding == "rt":
+        data_collator = RtQuestionAnswerCLMCollator(
+            tokenizer=tokenizer
+        )
+    else:
+        data_collator = XvalQuestionAnswerCLMCollator(
+            tokenizer=tokenizer
+        )
 
     # Custom Metric
     custom_metrics = CustomMetrics(vocab = tokenizer.get_vocab())
