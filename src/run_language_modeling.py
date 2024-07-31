@@ -266,7 +266,13 @@ def main():
                 "and load it from here, using --tokenizer_name"
             )
 
-    model_class = T5RegressionModelRT if model_args.number_encoding == "rt" else T5RegressionModelXval
+    if model_args.number_encoding == "rt":
+        model_class = T5RegressionModelRT
+        model_init_kwargs = {}
+    else:
+        model_class = T5RegressionModelXval
+        model_init_kwargs = {"tokenizer": tokenizer}
+
 
     if model_args.model_name_or_path:
 
@@ -303,7 +309,7 @@ def main():
         logger.info("Training new model from scratch")
         config.vocab_size = len(tokenizer)  # Update vocab size
         config.added_vocab = tokenizer.get_added_vocab() # Set added vocab for number encoding
-        model = model_class(config=config)
+        model = model_class(config=config, **model_init_kwargs)
 
     logger.info(f"PyTorch version: {torch.__version__}")
     '''

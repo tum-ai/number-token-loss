@@ -11,13 +11,12 @@ from transformers.utils import PaddingStrategy
 
 
 class XvalTokenizer(T5Tokenizer):
-    def __init__(self, embedding_dim=256, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
         num_token = "[NUM]"
         self.add_tokens([num_token])
         self.num_token = num_token
         self.num_token_id = self.convert_tokens_to_ids(num_token)
-        self.embedding_dim = embedding_dim
         self.model_input_names.append("number_embeddings")
 
     def _encode_plus(

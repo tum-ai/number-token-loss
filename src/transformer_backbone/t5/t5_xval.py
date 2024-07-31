@@ -8,11 +8,13 @@ from src.encoding_decoding.numerical_encodings import FloatEncoding
 
 
 class T5RegressionModelXval(T5ForConditionalGeneration):
-    def __init__(self, config, dim_feedforward=1024, numhead_bias=True):
+    def __init__(self, config, tokenizer, dim_feedforward=1024, numhead_bias=True):
         super().__init__(config)
+        
+        self.tokenizer = tokenizer
 
         self.num_head = nn.Sequential(
-            nn.Linear(self.transformer_backbone.hidden_size, dim_feedforward, bias=numhead_bias),
+            nn.Linear(config.d_model, dim_feedforward, bias=numhead_bias),
             nn.GELU(),
             nn.Linear(dim_feedforward, 1, bias=numhead_bias),
         )
@@ -22,33 +24,25 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
             input_ids: Optional[torch.LongTensor] = None,
             input_number_embeddings: Optional[torch.LongTensor] = None,
             attention_mask: Optional[torch.FloatTensor] = None,
-            decoder_input_ids: Optional[torch.LongTensor] = None,
-            decoder_attention_mask: Optional[torch.BoolTensor] = None,
-            head_mask: Optional[torch.FloatTensor] = None,
-            decoder_head_mask: Optional[torch.FloatTensor] = None,
-            cross_attn_head_mask: Optional[torch.Tensor] = None,
-            encoder_outputs: Optional[Tuple[Tuple[torch.Tensor]]] = None,
-            past_key_values: Optional[Tuple[Tuple[torch.Tensor]]] = None,
             inputs_embeds: Optional[torch.FloatTensor] = None,
-            decoder_inputs_embeds: Optional[torch.FloatTensor] = None,
             labels: Optional[torch.LongTensor] = None,
             number_labels: Optional[torch.LongTensor] = None,
-            use_cache: Optional[bool] = None,
-            output_attentions: Optional[bool] = None,
-            output_hidden_states: Optional[bool] = None,
-            return_dict: Optional[bool] = None,
+            **kwargs
+            
     ) -> Union[Tuple[torch.FloatTensor], Seq2SeqLMOutput]:
         """Overwrites forward method of parent class T5ForConditionalGeneration. Computes embeddings
         from input_ids and stores them to inputs_embeds. Argument inputs_embeds will not persist.
         """
         # create embeddings
-        inputs_embeds = self.shared(input_ids) * input_number_embeddings
+        inputs_embeds = self.shared(input_ids) * input_number_embeddings.unsqueeze(-1)
 
         # call super().forward()
         outputs = super(T5RegressionModelXval, self).forward(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
-            labels=labels
+            labels=labels,
+            output_hidden_states=True,
+            **kwargs
         )
 
         sequence_output = outputs.decoder_hidden_states[-1]
@@ -60,7 +54,7 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
 
         loss_num = F.mse_loss(
             num_preds[num_mask],
-            number_labels[num_mask].view(-1, 1).cuda(),
+            number_labels[num_mask].view(-1, 1),
             reduction="mean",
         )
         loss = loss_mlm + loss_num
