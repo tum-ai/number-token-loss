@@ -1,21 +1,22 @@
 import re
 import numpy as np
-from src.tokenizer.abstract_tokenizer import AbstractTokenizer
+from transformers import T5Tokenizer
 
-class XvalTokenizer(AbstractTokenizer):
-    def __init__(self, num_tokens, embedding_dim, special_tokens=None, pretrained_tokenizer=None, vocab_files=None, save_file=None):
-        super().__init__(special_tokens=special_tokens, num_tokens=num_tokens, embedding_dim=embedding_dim, pretrained_tokenizer=pretrained_tokenizer, vocab_files=vocab_files, save_file=save_file)
-        
-    def __call__(self, text, return_attention_mask=False, return_token_type_ids=True):
-        if isinstance(text, dict):
-            text = text["text"]
+    
+class XvalTokenizer(T5Tokenizer):
+    def __init__(self, embedding_dim=256, **kwargs):
+        super().__init__(**kwargs)
+        num_tokens = ["[NUM]"]
+        self.add_tokens(num_tokens)
+        self.num_tokens = num_tokens
+        self.num_token_ids = [self.convert_tokens_to_ids(num_token) for num_token in num_tokens]
+        self.embedding_dim = embedding_dim
 
-        nonum_text, numbers = self.extract(text)
-        out = self.tokenizer(
-            nonum_text, return_attention_mask=return_attention_mask, return_token_type_ids=return_token_type_ids
-        )
+    def tokenize(self, text, **kwargs): #TODO
+        nonum_text, numbers = extract(text, num_token=self.num_token)
+        out = super().tokenize(nonum_text, **kwargs)
         ids = np.array(out["input_ids"])
-        locs = ids == self.num_token_ids[0] # TODO
+        locs = ids == self.num_token_id
         num_embed = np.ones(len(ids)).astype(np.float32)  # Use float32 instead of float16
         num_embed[locs] = numbers
         out["numbers"] = num_embed
@@ -23,22 +24,22 @@ class XvalTokenizer(AbstractTokenizer):
         return out
 
 
-    def extract(self, text):
-        import re
+def extract(text, num_token="[NUM]"):
+    import re
 
-        # this regular expression is intended to match numerical values in various forms
-        # like integers, floating-point numbers, or scientific notation, while avoiding
-        # matching numbers that are part of strings.
-        pattern = r"(?<!\')-?\d+(\.\d+)?([eE][-+]?\d+)?(?!\'|\d)"
+    # this regular expression is intended to match numerical values in various forms
+    # like integers, floating-point numbers, or scientific notation, while avoiding
+    # matching numbers that are part of strings.
+    pattern = r"(?<!\')-?\d+(\.\d+)?([eE][-+]?\d+)?(?!\'|\d)"
 
-        numbers = []
+    numbers = []
 
-        def replace(match):
-            numbers.append(match.group())
-            return "¬"
+    def replace(match):
+        numbers.append(match.group())
+        return "¬"
 
-        nonum_text = re.sub(pattern, replace, text)
-        return compress_matrix(nonum_text).replace("¬", self.num_tokens[0]), numbers
+    nonum_text = re.sub(pattern, replace, text)
+    return compress_matrix(nonum_text).replace("¬", num_token), numbers
 
 
 def compress_matrix(text):
