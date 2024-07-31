@@ -154,11 +154,12 @@ class FloatEncoding(nn.Embedding):
         super(FloatEncoding, self).__init__(
             num_embeddings, embedding_dim, *args, **kwargs
         )
-
+        ''' commented out as during intialization only added vocab is used
         if not len(vocab) == num_embeddings:
             raise ValueError(
                 f"num_embeddings needs to match size of vocabulary ({num_embeddings}!={len(vocab)})"
             )
+        '''
         if not (vmax is None or isinstance(3, numbers.Number)):
             raise TypeError(f"vmax needs to be a number or None, not {vmax}.")
 
@@ -185,9 +186,11 @@ class FloatEncoding(nn.Embedding):
 
         weights = torch.zeros(num_embeddings, embedding_dim)
         for idx, (token, index) in enumerate(vocab.items()):
+            '''
             assert (
                 idx == index
             ), "Please sort vocab indexes in ascending order starting from 0"
+            '''
             weights[idx, :] = get_float_encoding(token, embedding_dim, vmax)
         weights = weights.to(device=get_device())
         self.embedding = nn.Embedding.from_pretrained(weights, freeze=True)

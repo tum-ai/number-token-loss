@@ -8,7 +8,9 @@ from src.encoding_decoding.numerical_encodings import FloatEncoding
 class T5RegressionModel(T5ForConditionalGeneration):
     def __init__(self, config, num_output=1):
         super().__init__(config)
+        super()._resize_token_embeddings(config.vocab_size)
         self.regression_head = nn.Linear(self.config.d_model, num_output)
+        self.set_number_embeds(num_embeddings=config.vocab_size, vocab=config.added_vocab)
 
     def set_number_embeds(self, num_embeddings, vocab):
         self.number_embeds = FloatEncoding(num_embeddings=num_embeddings, embedding_dim=self.config.d_model, vocab=vocab)
