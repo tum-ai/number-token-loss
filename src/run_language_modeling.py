@@ -13,6 +13,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from typing import Optional
+import wandb
 
 import numpy as np
 import pandas as pd
@@ -25,6 +26,7 @@ from transformers import (
     AutoModelWithLMHead,
     HfArgumentParser,
     set_seed,
+    EarlyStoppingCallback
 )
 from transformers.training_args import TrainingArguments
 
@@ -34,6 +36,7 @@ from src.tokenizer.rt_tokenizer import RtTokenizer
 from src.tokenizer.xval_tokenizer import XvalTokenizer
 from src.trainer import CustomTrainer, get_trainer_dict
 from src.transformer_backbone.t5 import T5RegressionModel
+from src.evaluation import CustomMetrics
 
 transformers.logging.set_verbosity_info()
 logger = logging.getLogger(__name__)
@@ -140,8 +143,9 @@ class ModelArguments:
         default="rt",
         metadata={
             "help": "Chose either xval or rt for number encodings"
-        }
+        },
     )
+
 
 def main():
     # See all possible arguments in src/transformers/training_args.py
@@ -152,7 +156,7 @@ def main():
     os.environ["COMET_MODE"] = "DISABLED"
 
     # Switch off WandB
-    os.environ["WANDB_DISABLED"] = "true"
+    os.environ["WANDB_DISABLED"] = "false"
 
     parser = HfArgumentParser(
         (ModelArguments, CustomTrainingArguments)
@@ -269,6 +273,7 @@ def main():
                 must_contain="best",
             )
         config.vocab_size = len(tokenizer)  # Update vocab size
+        config.added_vocab = tokenizer.get_added_vocab() # Set added vocab for number encoding
         model = T5RegressionModel.from_pretrained( 
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -292,18 +297,26 @@ def main():
 
     else:
         logger.info("Training new model from scratch")
+        config.vocab_size = len(tokenizer)  # Update vocab size
+        config.added_vocab = tokenizer.get_added_vocab() # Set added vocab for number encoding
         model = T5RegressionModel(config=config)
 
     logger.info(f"PyTorch version: {torch.__version__}")
-    model.resize_token_embeddings(len(tokenizer))
-
+    '''
+    #model.resize_token_embeddings(len(tokenizer))
     # Set number embeddings for RT encoding
     if model_args.number_encoding == "rt":
         model.set_number_embeds(len(tokenizer), tokenizer.get_vocab())
-
+    '''
+    
     # Get datasets
-    data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
-    train_dataset = load_txt_dataset(data_path)
+    train_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/train.txt'
+    eval_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/val.txt'
+    test_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/test.txt'
+
+    train_dataset = load_txt_dataset(train_data_path)
+    eval_dataset = load_txt_dataset(eval_data_path)
+    test_dataset = load_txt_dataset(test_data_path)
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"Number of parameters {num_params} of type {type(model)}")
@@ -314,6 +327,14 @@ def main():
         tokenizer=tokenizer
     )
 
+    # Custom Metric
+    custom_metrics = CustomMetrics(vocab = tokenizer.get_vocab())
+
+    # Early stopping
+    early_stopping_callback = EarlyStoppingCallback(
+        early_stopping_patience=5,
+        early_stopping_threshold=0.001)   
+    
     #custom_trainer_params = get_trainer_dict(model_params)
 
     # Initialize our Trainer
@@ -334,7 +355,10 @@ def main():
         args=training_args,
         data_collator=data_collator,
         train_dataset=train_dataset,
-        tokenizer=tokenizer        
+        eval_dataset=eval_dataset,
+        tokenizer=tokenizer,
+        callbacks=[early_stopping_callback],
+        compute_metrics = custom_metrics,
     )
 
     # Training
@@ -352,7 +376,13 @@ def main():
         tokenizer.save_pretrained(training_args.output_dir)
 
 
+    if training_args.do_eval:
+        logger.info("*** Evaluate ***")
+        trainer.evaluate(eval_dataset=test_dataset)
+        eval_results = trainer.evaluate()
+        logger.info(f"eval_results: {eval_results}")
+
+
 if __name__ == "__main__":
     main()
-
 
