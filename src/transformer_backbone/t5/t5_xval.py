@@ -1,15 +1,16 @@
 from typing import Optional, Tuple, Union
-from transformers import T5Tokenizer, T5Model, T5ForConditionalGeneration
-from transformers.modeling_outputs import Seq2SeqLMOutput
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.encoding_decoding.numerical_encodings import FloatEncoding
+from transformers import T5ForConditionalGeneration
+from transformers.modeling_outputs import Seq2SeqLMOutput
 
 
 class T5RegressionModelXval(T5ForConditionalGeneration):
     def __init__(self, config, tokenizer, dim_feedforward=1024, numhead_bias=True):
         super().__init__(config)
+        super()._resize_token_embeddings(config.vocab_size)
         
         self.tokenizer = tokenizer
 
