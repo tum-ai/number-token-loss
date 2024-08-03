@@ -6,6 +6,7 @@ The file is an adaptation of https://github.com/huggingface/transformers/blob/v3
 
 """
 import sys
+
 sys.path.append("..")
 
 import json
@@ -294,7 +295,6 @@ def main():
     else:
         raise ValueError(f"Unknown number encoding: {model_args.number_encoding}")
 
-
     if model_args.model_name_or_path:
 
         # Restore checkpoint if available
@@ -304,7 +304,7 @@ def main():
                 must_contain="best",
             )
         config.vocab_size = len(tokenizer)  # Update vocab size
-        config.added_vocab = tokenizer.get_added_vocab() # Set added vocab for number encoding
+        config.added_vocab = tokenizer.get_added_vocab()  # Set added vocab for number encoding
         model = model_class.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -330,7 +330,7 @@ def main():
     else:
         logger.info("Training new model from scratch")
         config.vocab_size = len(tokenizer)  # Update vocab size
-        config.added_vocab = tokenizer.get_added_vocab() # Set added vocab for number encoding
+        config.added_vocab = tokenizer.get_added_vocab()  # Set added vocab for number encoding
         model = model_class(config=config, **model_init_kwargs)
 
     logger.info(f"PyTorch version: {torch.__version__}")
@@ -353,7 +353,6 @@ def main():
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"Number of parameters {num_params} of type {type(model)}")
 
-
     # Conditional Generation Training
     if model_args.number_encoding == "rt":
         data_collator = RtQuestionAnswerCLMCollator(
@@ -370,14 +369,14 @@ def main():
         )
 
     # Custom Metric
-    custom_metrics = CustomMetrics(vocab=tokenizer.get_vocab())
+    custom_metrics = CustomMetrics(tokenizer=tokenizer, number_encoding=model_args.number_encoding)
 
     # Early stopping
     early_stopping_callback = EarlyStoppingCallback(
         early_stopping_patience=5,
         early_stopping_threshold=0.001)
 
-    #custom_trainer_params = get_trainer_dict(model_params)
+    # custom_trainer_params = get_trainer_dict(model_params)
 
     # Initialize our Trainer
     """trainer = CustomTrainer(
@@ -400,7 +399,7 @@ def main():
         eval_dataset=eval_dataset,
         tokenizer=tokenizer,
         callbacks=[early_stopping_callback],
-        compute_metrics = custom_metrics,
+        compute_metrics=custom_metrics,
     )
 
     # Training
@@ -427,4 +426,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
