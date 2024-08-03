@@ -61,5 +61,6 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
         loss = loss_mlm + loss_num
 
         outputs.loss = loss
+        outputs["number_predictions"] = num_preds
 
         return outputs

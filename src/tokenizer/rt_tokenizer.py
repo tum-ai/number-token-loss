@@ -1,12 +1,11 @@
+import os
+import re
 from typing import List
 
-from transformers import T5Tokenizer
-import numpy as np
-import re
-import os
+from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 
 
-class RtTokenizer(T5Tokenizer):
+class RtTokenizer(NumberEncodingTokenizer):
     def __init__(self, embedding_dim=256, **kwargs):
         super().__init__(**kwargs)
 
@@ -24,6 +23,9 @@ class RtTokenizer(T5Tokenizer):
         self.num_tokens = num_tokens
         self.num_token_ids = [self.convert_tokens_to_ids(num_token) for num_token in num_tokens]
         self.embedding_dim = embedding_dim
+
+    def get_num_token_ids(self):
+        return self.num_token_ids
 
     def tokenize(self, text: str, add_special_tokens=False, **kwargs) -> List[str]:
         nonum_text, number_tokens = extract(text)
@@ -65,17 +67,3 @@ def extract(text):
     nonum_text = re.sub(pattern, replace, text)
     return nonum_text, numbers
 
-
-def NEFloat(v, p, j):
-    return (-1) ** j * v * 10 ** p / (j + 1)
-
-
-def generate_ne(token, embedding_dim):
-    parts = [part for part in token.split('_') if part]
-    digit, place = parts
-    v = int(digit)
-    p = int(place)
-    ne = np.zeros(embedding_dim)
-    for j in range(embedding_dim):
-        ne[j] = NEFloat(v, p, j)
-    return ne
