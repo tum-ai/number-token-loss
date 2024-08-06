@@ -4,6 +4,8 @@ import torch.nn.functional as F
 from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 from src.encoding_decoding.numerical_encodings import encoding_to_number
 
+PADDING_TOKEN = -100
+MASKED_OUT = -1
 
 class CustomMetrics:
     '''
@@ -70,17 +72,17 @@ class CustomMetrics:
         predictions = np.argmax(logits, axis=2)
 
         # Mask to ignore padding tokens (-100)
-        mask = token_labels != -100
+        mask = token_labels != -100 # TODO use globl PADDING_TOKEN variable (see above)
 
         # Apply mask to predictions and labels
-        masked_predictions = np.where(mask, predictions, -1)  # Set masked-out positions to -1
+        masked_predictions = np.where(mask, predictions, -1)  # Set masked-out positions to -1 ' TODO MASKED_OUT variable
         masked_labels = np.where(mask, token_labels, -1)
 
         # compute whole number accuracy and token accuracy
         correct_predictions_w = np.all(masked_predictions == masked_labels, axis=1)
         accuracy_w = np.mean(correct_predictions_w)
         correct_predictions = (predictions == token_labels) & mask
-        accuracy = np.sum(correct_predictions) / np.sum(mask) if np.sum(mask) > 0 else 0
+        accuracy = np.sum(correct_predictions) / np.sum(mask) if np.sum(mask) > 0 else 0 # TODO ?
 
         # compute MSE
         mse = self.mse(predictions, number_predictions, token_labels, number_labels)
