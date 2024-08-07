@@ -19,6 +19,11 @@ class RtTokenizer(NumberEncodingTokenizer):
             #"pad_token": "[PAD]",
             #"mask_token": "[MASK]",
         #})
+        mask_token = "[MASK]"
+        self.add_tokens([mask_token])
+        self.mask_token = mask_token
+        self.mask_token_id = self.convert_tokens_to_ids(mask_token)
+
         self.add_tokens(num_tokens)
         self.num_tokens = num_tokens
         self.num_token_ids = [self.convert_tokens_to_ids(num_token) for num_token in num_tokens]
