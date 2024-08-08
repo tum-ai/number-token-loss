@@ -44,6 +44,9 @@ from src.transformer_backbone.t5.t5_rt import T5RegressionModelRT
 from src.transformer_backbone.t5.t5_xval import T5RegressionModelXval
 from src.evaluation import CustomMetrics
 
+import wandb
+wandb.init(mode="disabled")
+
 transformers.logging.set_verbosity_info()
 logger = logging.getLogger(__name__)
 # logger.setLevel(level=logging.DEBUG)
