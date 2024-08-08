@@ -1,5 +1,7 @@
 from typing import List, Union, Dict
 
+import pdb 
+
 import torch
 from transformers import DataCollatorForLanguageModeling
 
@@ -23,8 +25,11 @@ class RtCookingRecipeCollator(DataCollatorForLanguageModeling):
         # Get token IDs for numerical tokens and special tokens
         number_token_ids = self.tokenizer.get_num_token_ids()
         special_token_ids = self.tokenizer.all_special_ids
-        # Generate a mask (stratify by numbers and words) 
+        #pdb.set_trace()
+        # Generate a msask (stratify by numbers and words) 
         masked = get_stratified_masking(input_ids, number_token_ids, special_token_ids)
+        #print(masked)
+        #print(masked.shape)
         
         # clone input_ids and apply mask token
         input_ids_masked = input_ids.clone()
@@ -42,7 +47,7 @@ class RtCookingRecipeCollator(DataCollatorForLanguageModeling):
         number_labels[label_num_mask] = number_values
 
         # TODO: print input_ids_masked in the debugger --> they are all masked, and I have not yet figured out why
-        import pdb; pdb.set_trace()
+        #pdb.set_trace()
         return {
             'input_ids': input_ids_masked,
             'attention_mask': encodings['attention_mask'],
@@ -50,23 +55,31 @@ class RtCookingRecipeCollator(DataCollatorForLanguageModeling):
             'number_labels': number_labels
         }
 
-def get_stratified_masking(input_ids, num_token_ids, special_token_ids):
-    # create mask to identify numerical and special tokens
-    label_num_mask = torch.isin(input_ids, torch.tensor(num_token_ids, dtype=torch.long))
-    special_token_mask = torch.isin(input_ids, torch.tensor(special_token_ids, dtype=torch.long))
-    
-    # indices of numerical and word tokens
-    number_indices = torch.where(label_num_mask & ~special_token_mask)[0]
-    word_indices = torch.where(~label_num_mask & ~special_token_mask)[0]
 
-    # randomly select 15% of numerical and word tokens to mask
-    masked_numbers = rnd_select(number_indices, 0.15)
-    masked_words = rnd_select(word_indices, 0.15)
+def get_stratified_masking(input_ids, num_token_ids, special_token_ids):
+    batch_masks = []
     
-    masked_indices = torch.cat([masked_numbers, masked_words], dim=0)
-    mask = torch.zeros_like(input_ids, dtype=torch.bool)
-    mask[masked_indices] = True
-    return mask
+    for input_ids_seq in input_ids:
+        # Create masks to identify numerical and special tokens
+        label_num_mask = torch.isin(input_ids_seq, torch.tensor(num_token_ids, dtype=torch.long))
+        special_token_mask = torch.isin(input_ids_seq, torch.tensor(special_token_ids, dtype=torch.long))
+        
+        # Indices of numerical and word tokens
+        number_indices = torch.where(label_num_mask & ~special_token_mask)[0]
+        word_indices = torch.where(~label_num_mask & ~special_token_mask)[0]
+
+        # Randomly select 15% of numerical and word tokens to mask
+        masked_numbers = rnd_select(number_indices, 0.15)
+        masked_words = rnd_select(word_indices, 0.15)
+        
+        masked_indices = torch.cat([masked_numbers, masked_words], dim=0)
+        mask = torch.zeros_like(input_ids_seq, dtype=torch.bool)
+        mask[masked_indices] = True
+        
+        batch_masks.append(mask)
+    
+    #pdb.set_trace()
+    return torch.stack(batch_masks)
 
 def rnd_select(indices, prob):
     count = int(prob * len(indices))
