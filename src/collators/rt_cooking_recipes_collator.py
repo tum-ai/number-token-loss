@@ -60,15 +60,15 @@ def get_stratified_masking(input_ids, num_token_ids, special_token_ids):
     batch_masks = []
     
     for input_ids_seq in input_ids:
-        # Create masks to identify numerical and special tokens
+        #identify numerical and special tokens
         label_num_mask = torch.isin(input_ids_seq, torch.tensor(num_token_ids, dtype=torch.long))
         special_token_mask = torch.isin(input_ids_seq, torch.tensor(special_token_ids, dtype=torch.long))
         
-        # Indices of numerical and word tokens
+        # indices of numerical and word tokens
         number_indices = torch.where(label_num_mask & ~special_token_mask)[0]
         word_indices = torch.where(~label_num_mask & ~special_token_mask)[0]
 
-        # Randomly select 15% of numerical and word tokens to mask
+        #randomly select 15% of numerical and word tokens to mask
         masked_numbers = rnd_select(number_indices, 0.15)
         masked_words = rnd_select(word_indices, 0.15)
         
