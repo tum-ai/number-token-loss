@@ -8,6 +8,7 @@ python3 src/run_language_modeling.py \
   --output_dir train_run_1 \
   --config_name t5-base \
   --learning_rate 1e-4 \
+  --lr_scheduler_type reduce_lr_on_plateau \
   --num_train_epochs 10 \
   --save_total_limit 2 \
   --save_steps 1000 \

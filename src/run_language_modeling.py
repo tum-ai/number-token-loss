@@ -26,7 +26,7 @@ from transformers import (
     AutoModelWithLMHead,
     HfArgumentParser,
     set_seed,
-    EarlyStoppingCallback
+    EarlyStoppingCallback, T5ForConditionalGeneration
 )
 from transformers.training_args import TrainingArguments
 
@@ -144,7 +144,7 @@ class ModelArguments:
     number_encoding: Optional[str] = field(
         default="rt",
         metadata={
-            "help": "Chose either xval or rt for number encodings"
+            "help": "Chose either xval or rt or None for number encodings"
         },
     )
 
@@ -232,7 +232,6 @@ def main():
             tokenizer = RtTokenizer.from_pretrained(
                 model_args.tokenizer_name, cache_dir=model_args.cache_dir
             )
-
         elif model_args.model_name_or_path:
             tokenizer = RtTokenizer.from_pretrained(
                 model_args.model_name_or_path, cache_dir=model_args.cache_dir
@@ -251,7 +250,6 @@ def main():
             tokenizer = XvalTokenizer.from_pretrained(
                 model_args.tokenizer_name, cache_dir=model_args.cache_dir
             )
-
         elif model_args.model_name_or_path:
             tokenizer = XvalTokenizer.from_pretrained(
                 model_args.model_name_or_path, cache_dir=model_args.cache_dir
@@ -265,13 +263,36 @@ def main():
                 "You are instantiating a new tokenizer from scratch. This is not supported, but you can do it from another script, save it,"
                 "and load it from here, using --tokenizer_name"
             )
+    elif model_args.number_encoding.lower() == "none":
+        if model_args.tokenizer_name:
+            tokenizer = transformers.AutoTokenizer.from_pretrained(
+                model_args.tokenizer_name, cache_dir=model_args.cache_dir
+            )
+        elif model_args.model_name_or_path:
+            tokenizer = transformers.AutoTokenizer.from_pretrained(
+                model_args.model_name_or_path, cache_dir=model_args.cache_dir
+            )
+        elif model_args.config_name:
+            tokenizer = transformers.AutoTokenizer.from_pretrained(
+                model_args.config_name, cache_dir=model_args.cache_dir
+            )
+        else:
+            raise ValueError(
+                "You are instantiating a new tokenizer from scratch. This is not supported, but you can do it from another script, save it,"
+                "and load it from here, using --tokenizer_name"
+            )
 
     if model_args.number_encoding == "rt":
         model_class = T5RegressionModelRT
         model_init_kwargs = {}
-    else:
+    elif model_args.number_encoding == "xval":
         model_class = T5RegressionModelXval
         model_init_kwargs = {"tokenizer": tokenizer}
+    elif model_args.number_encoding.lower() == "none":
+        model_class = T5ForConditionalGeneration
+        model_init_kwargs = {}
+    else:
+        raise ValueError(f"Unknown number encoding: {model_args.number_encoding}")
 
 
     if model_args.model_name_or_path:
@@ -289,6 +310,7 @@ def main():
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
             config=config,
             cache_dir=model_args.cache_dir,
+            **model_init_kwargs,
         )
         logger.info("Model restored")
 
@@ -337,13 +359,18 @@ def main():
         data_collator = RtQuestionAnswerCLMCollator(
             tokenizer=tokenizer
         )
-    else:
+    elif model_args.number_encoding == "xval":
         data_collator = XvalQuestionAnswerCLMCollator(
+            tokenizer=tokenizer
+        )
+    elif model_args.number_encoding.lower() == "none":
+        # Rt collator can be used for default T5 as well
+        data_collator = RtQuestionAnswerCLMCollator(
             tokenizer=tokenizer
         )
 
     # Custom Metric
-    custom_metrics = CustomMetrics(vocab = tokenizer.get_vocab())
+    custom_metrics = CustomMetrics(vocab=tokenizer.get_vocab())
 
     # Early stopping
     early_stopping_callback = EarlyStoppingCallback(
