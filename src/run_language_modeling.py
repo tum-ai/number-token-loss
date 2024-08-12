@@ -26,16 +26,18 @@ from transformers import (
     AutoModelWithLMHead,
     HfArgumentParser,
     set_seed,
-    EarlyStoppingCallback
+    EarlyStoppingCallback, T5ForConditionalGeneration
 )
 from transformers.training_args import TrainingArguments
 
 from src.data import load_txt_dataset
-from src.encoding_decoding.rt_encoding_decoding import CustomMaskingCollator
+from src.collators.rt_question_answer_collator import RtQuestionAnswerCLMCollator
+from src.collators.xval_question_answer_collator import XvalQuestionAnswerCLMCollator
 from src.tokenizer.rt_tokenizer import RtTokenizer
 from src.tokenizer.xval_tokenizer import XvalTokenizer
 from src.trainer import CustomTrainer, get_trainer_dict
-from src.transformer_backbone.t5 import T5RegressionModel
+from src.transformer_backbone.t5.t5_rt import T5RegressionModelRT
+from src.transformer_backbone.t5.t5_xval import T5RegressionModelXval
 from src.evaluation import CustomMetrics
 
 transformers.logging.set_verbosity_info()
@@ -142,7 +144,7 @@ class ModelArguments:
     number_encoding: Optional[str] = field(
         default="rt",
         metadata={
-            "help": "Chose either xval or rt for number encodings"
+            "help": "Chose either xval or rt or None for number encodings"
         },
     )
 
@@ -230,7 +232,6 @@ def main():
             tokenizer = RtTokenizer.from_pretrained(
                 model_args.tokenizer_name, cache_dir=model_args.cache_dir
             )
-
         elif model_args.model_name_or_path:
             tokenizer = RtTokenizer.from_pretrained(
                 model_args.model_name_or_path, cache_dir=model_args.cache_dir
@@ -249,7 +250,6 @@ def main():
             tokenizer = XvalTokenizer.from_pretrained(
                 model_args.tokenizer_name, cache_dir=model_args.cache_dir
             )
-
         elif model_args.model_name_or_path:
             tokenizer = XvalTokenizer.from_pretrained(
                 model_args.model_name_or_path, cache_dir=model_args.cache_dir
@@ -263,6 +263,37 @@ def main():
                 "You are instantiating a new tokenizer from scratch. This is not supported, but you can do it from another script, save it,"
                 "and load it from here, using --tokenizer_name"
             )
+    elif model_args.number_encoding.lower() == "none":
+        if model_args.tokenizer_name:
+            tokenizer = transformers.AutoTokenizer.from_pretrained(
+                model_args.tokenizer_name, cache_dir=model_args.cache_dir
+            )
+        elif model_args.model_name_or_path:
+            tokenizer = transformers.AutoTokenizer.from_pretrained(
+                model_args.model_name_or_path, cache_dir=model_args.cache_dir
+            )
+        elif model_args.config_name:
+            tokenizer = transformers.AutoTokenizer.from_pretrained(
+                model_args.config_name, cache_dir=model_args.cache_dir
+            )
+        else:
+            raise ValueError(
+                "You are instantiating a new tokenizer from scratch. This is not supported, but you can do it from another script, save it,"
+                "and load it from here, using --tokenizer_name"
+            )
+
+    if model_args.number_encoding == "rt":
+        model_class = T5RegressionModelRT
+        model_init_kwargs = {}
+    elif model_args.number_encoding == "xval":
+        model_class = T5RegressionModelXval
+        model_init_kwargs = {"tokenizer": tokenizer}
+    elif model_args.number_encoding.lower() == "none":
+        model_class = T5ForConditionalGeneration
+        model_init_kwargs = {}
+    else:
+        raise ValueError(f"Unknown number encoding: {model_args.number_encoding}")
+
 
     if model_args.model_name_or_path:
 
@@ -274,11 +305,12 @@ def main():
             )
         config.vocab_size = len(tokenizer)  # Update vocab size
         config.added_vocab = tokenizer.get_added_vocab() # Set added vocab for number encoding
-        model = T5RegressionModel.from_pretrained( 
+        model = model_class.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
             config=config,
             cache_dir=model_args.cache_dir,
+            **model_init_kwargs,
         )
         logger.info("Model restored")
 
@@ -299,7 +331,7 @@ def main():
         logger.info("Training new model from scratch")
         config.vocab_size = len(tokenizer)  # Update vocab size
         config.added_vocab = tokenizer.get_added_vocab() # Set added vocab for number encoding
-        model = T5RegressionModel(config=config)
+        model = model_class(config=config, **model_init_kwargs)
 
     logger.info(f"PyTorch version: {torch.__version__}")
     '''
@@ -308,7 +340,7 @@ def main():
     if model_args.number_encoding == "rt":
         model.set_number_embeds(len(tokenizer), tokenizer.get_vocab())
     '''
-    
+
     # Get datasets
     train_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/train.txt'
     eval_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/val.txt'
@@ -323,18 +355,28 @@ def main():
 
 
     # Conditional Generation Training
-    data_collator = CustomMaskingCollator(
-        tokenizer=tokenizer
-    )
+    if model_args.number_encoding == "rt":
+        data_collator = RtQuestionAnswerCLMCollator(
+            tokenizer=tokenizer
+        )
+    elif model_args.number_encoding == "xval":
+        data_collator = XvalQuestionAnswerCLMCollator(
+            tokenizer=tokenizer
+        )
+    elif model_args.number_encoding.lower() == "none":
+        # Rt collator can be used for default T5 as well
+        data_collator = RtQuestionAnswerCLMCollator(
+            tokenizer=tokenizer
+        )
 
     # Custom Metric
-    custom_metrics = CustomMetrics(vocab = tokenizer.get_vocab())
+    custom_metrics = CustomMetrics(vocab=tokenizer.get_vocab())
 
     # Early stopping
     early_stopping_callback = EarlyStoppingCallback(
         early_stopping_patience=5,
-        early_stopping_threshold=0.001)   
-    
+        early_stopping_threshold=0.001)
+
     #custom_trainer_params = get_trainer_dict(model_params)
 
     # Initialize our Trainer
