@@ -20,6 +20,7 @@ python3 src/run_language_modeling.py \
   --number_encoding rt \
   --load_best_model_at_end True \
   --eval_strategy steps \
+  --batch_eval_metrics \
   --metric_for_best_model loss \
   --greater_is_better False \
   --report_to wandb
