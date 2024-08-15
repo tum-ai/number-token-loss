@@ -41,7 +41,9 @@ class RtTokenizer(NumberEncodingTokenizer):
 
 
 def extract(text):
-    pattern = r"\s*[\s]*?(\+|\-)?(\d+)(\.)?(\d+)?\s*"
+    #r"\s*[\s]*?(\+|\-)?(\d+)(\.)?(\d+)?\s*" with r"(\+|\-)?(\d+)(\.)?(\d+)?" to maintain spaces
+    #Why are we not using the same strings as xval class (numbers are numbers after all) or the strings from RT?
+    pattern = r"(\+|\-)?(\d+)(\.)?(\d+)?"   
     numbers = []
 
     def replace(match):
