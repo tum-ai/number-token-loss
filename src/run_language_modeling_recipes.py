@@ -32,6 +32,7 @@ from transformers import (
 )
 from transformers.training_args import TrainingArguments
 
+from src.get_cooking_data import download_cooking
 from src.data import load_txt_dataset, load_txt_cooking_dataset
 from src.collators.rt_question_answer_collator import RtQuestionAnswerCLMCollator
 from src.collators.rt_cooking_recipes_collator import RtCookingRecipeCollator
@@ -324,7 +325,10 @@ def main():
     if model_args.number_encoding == "rt":
         model.set_number_embeds(len(tokenizer), tokenizer.get_vocab())
     '''
-
+    
+    if not os.path.exists("data/cooking_dataset_splits"):
+        os.mkdir("data/cooking_dataset_splits")
+        download_cooking()
     # Get datasets
     train_data_path = 'data/cooking_dataset_splits/train.txt'
     eval_data_path = 'data/cooking_dataset_splits/val.txt'
