@@ -11,7 +11,7 @@ import math
 
 def is_valid_number_sequence(tokens: List[str]) -> List[bool]:
     """
-    Validates the tokens based on the specified rules.
+    Validates the tokens.
     
     Parameters:
     - tokens: A list of string tokens representing numbers.
@@ -120,7 +120,6 @@ class CustomMetrics:
         self.batch_stats = []
 
     def parse_rt(self, predictions):
-        print(predictions)
         parsed_tokens = [[self.index_to_token.get(index, '<pad>') for index in seq] for seq in predictions]
         converted_numbers = convert_to_number_rt(parsed_tokens)
         return converted_numbers
@@ -167,6 +166,9 @@ class CustomMetrics:
     def __call__(self, pred: EvalPrediction, compute_result: bool) -> Dict[str, float]:
         # Extract predictions and labels
         model_output, labels = pred
+        print(type(model_output))
+        print(type(labels))
+
         logits = model_output[0]
         token_labels, number_labels = labels
 
