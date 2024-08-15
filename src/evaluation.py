@@ -7,105 +7,82 @@ from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 from src.encoding_decoding.numerical_encodings import encoding_to_number
 from typing import List, Tuple, Dict
 import math
+import functools
 
+import numpy as np
 
-def is_valid_number_sequence(tokens: List[str]) -> List[bool]:
-    """
-    Validates the tokens.
-    
-    Parameters:
-    - tokens: A list of string tokens representing numbers.
-    
-    Returns:
-    - A list of booleans indicating whether each token is valid.
-    """
-    is_valid = []
-
-    for sublist in tokens:
-        valid_sublist = True
-        last_pos = None
-        for token in sublist:
-            if token.startswith("_") and token.endswith("_"):
-                try:
-                    parts = token.strip("_").split("_")
-                    if len(parts) != 2:
-                        valid_sublist = False
-                        break
-
-                    x, y = parts
-                    if not (len(x) == 1 and x.isdigit()):
-                        valid_sublist = False
-                        break
-
-                    y = int(y)
-
-                    if last_pos is not None and y != last_pos - 1:
-                        valid_sublist = False
-                        break
-
-                    last_pos = y
-                except ValueError:
-                    valid_sublist = False
-                    break
-            elif token in ['[NEG]', '</s>', '<pad>']:
-                continue
-            else:
-                valid_sublist = False
-                break
-
-        is_valid.append(valid_sublist)
-
-    return is_valid
-
-
-def convert_to_number_rt(parsed_tokens: List[List[str]]) -> List[float]:
-    """
-    Converts parsed tokens to a list of floats after validating and transforming them.
-    
-    Parameters:
-    - parsed_tokens: A list of lists containing string tokens.
-    
-    Returns:
-    - A list of floats, where invalid conversions are represented by NaN.
-    """
-    results = []
-    valid_tokens = is_valid_number_sequence(parsed_tokens)
-
-    for idx, sublist in enumerate(parsed_tokens):
-        if not valid_tokens[idx]:
-            results.append(float('nan'))
-            continue
-
-        transformed = []
-
-        for token in sublist:
-            if token == "[NEG]":
-                transformed.append("-")
-            elif token in ["</s>", "<pad>"]:
-                continue
-            elif token.startswith("_") and token.endswith("_"):
-                parts = token.strip("_").split("_")
-                x, y = parts
-                y = int(y)
-                if y == -1:
-                    transformed.append(f".{x}")
-                else:
-                    transformed.append(x)
-            else:
-                raise ValueError("Validation missed non number")
-
-        try:
-            number_str = "".join(transformed)
-            number = float(number_str)
-            results.append(number)
-        except ValueError:
-            results.append(float('nan'))
-
-    return results
-
-
-PADDING_TOKEN = -100
+PAnumeric_tokenING_TOKEN = -100
 MASKED_OUT = -1
+MALFORMED_RT_TOKEN = 100000
+NON_NUMERIC_TOKEN = 10000
+SURELY_NUMERIC_TOKEN_BOUND = 5000
+
+def convert_token_to_check_validity(token: str) -> float:
+    """
+    Validates a token and extracts its numeric value if valid. Uses number encoding to allow usage with numpy
+    
+    Args:
+        token (str): The token to be validated and converted.
+    
+    Returns:
+        float: The extracted numeric value if the token is valid, otherwise a predefined error code.
+    """
+    if token.startswith("_") and token.endswith("_"):
+        parts = token.strip("_").split("_")
+        if len(parts) == 2 and parts[0].isdigit():
+            return int(parts[1])
+        else:
+            return MALFORMED_RT_TOKEN
+    else:
+        return NON_NUMERIC_TOKEN
+
+def is_valid_numeric_token_sequence(validation_array: np.ndarray) -> bool:
+    """
+    Checks if the validation array contains a valid decreasing sequence of numeric tokens.
+    
+    Args:
+        validation_array (np.ndarray): Array of numeric values derived from tokens.
+    
+    Returns:
+        bool: True if the array contains a valid decreasing sequence, otherwise False.
+    """
+    numeric_token_indices = np.where(validation_array < SURELY_NUMERIC_TOKEN_BOUND)[0]
+    if len(numeric_token_indices) == 0:
+        return False
+    #Numeric tokens are a) consequitive without interruption, b) encoded position form decreasing sequence
+    valid_sequence = np.all(np.diff(numeric_token_indices) == 1) and np.all(np.diff(validation_array[numeric_token_indices]) == -1)
+    return valid_sequence
+
+def convert_tokens_to_num_rt(token_array: np.ndarray) -> np.ndarray:
+    """
+    Converts an array of tokens into numeric values, checking for validity and applying transformations.
+    
+    Args:
+        token_array (np.ndarray): Array of tokens to be converted.
+    
+    Returns:
+        tuple: A tuple containing:
+            - A numpy array with the numeric values or NaNs for invalid sequences.
+            - A boolean mask indicating which rows contain valid sequences.
+    """
+    validation_array = np.vectorize(convert_token_to_check_validity)(token_array)
+
+    all_tokens_valid_per_row = np.all(validation_array != MALFORMED_RT_TOKEN, axis=1)
+    valid_numeric_token_sequence_per_row = np.apply_along_axis(is_valid_numeric_token_sequence, 1, validation_array)
+    valid_mask = all_tokens_valid_per_row & valid_numeric_token_sequence_per_row
+
+    #We use a trick by converting non numeric tokens to zero and assuming there is only one numeric token
+    float_array = np.vectorize(functools.partial(encoding_to_number, invalid_strict=False))(token_array)
+    value_array = np.sum(float_array, axis=1)
+
+    #Currently, this leaves multiple [NEG] predictions a possibility. Fixing not trivial. Maybe apply simplification rules like https://github.com/PolymathicAI/xVal/blob/main/xval/preprocess.py
+    contains_neg = np.any(token_array == "[NEG]", axis=1)
+    
+    value_array = np.where(contains_neg, -value_array, value_array)
+
+    value_array_with_nans = np.where(valid_mask, value_array, np.nan)
+
+    return value_array_with_nans, valid_mask
 
 
 class CustomMetrics:
@@ -120,10 +97,15 @@ class CustomMetrics:
         self.batch_stats = []
 
     def parse_rt(self, predictions):
-        parsed_tokens = [[self.index_to_token.get(index, '<pad>') for index in seq] for seq in predictions]
-        converted_numbers = convert_to_number_rt(parsed_tokens)
+        if predictions.is_cuda:
+            predictions = predictions.cpu()
+        
+        predictions_np = predictions.numpy()
+        
+        parsed_tokens = np.vectorize(lambda x: self.index_to_token.get(x, '<pad>'))(predictions_np)
+        
+        converted_numbers, _ = convert_tokens_to_num_rt(parsed_tokens)
         return converted_numbers
-
     def calculate_mse(self, predicted: List[float], groundtruth: List[float]) -> Tuple[float, int]:
         """
             Calculates the mean squared error for valid predicted-ground truth pairs.
@@ -148,7 +130,7 @@ class CustomMetrics:
         return mse / valid_count, valid_count
 
     def perplexity(self, logits, labels):
-        # Mask to ignore padding tokens (-100)
+        # Mask to ignore panumeric_tokening tokens (-100)
         mask = labels != -100
 
         # Apply mask to predictions and labels
@@ -166,12 +148,11 @@ class CustomMetrics:
     def __call__(self, pred: EvalPrediction, compute_result: bool) -> Dict[str, float]:
         # Extract predictions and labels
         model_output, labels = pred
-        print(type(model_output))
-        print(type(labels))
 
+        #While EvalPrediction uses np.arrays we actually use torch.Tensors
         logits = model_output[0]
         token_labels, number_labels = labels
-
+        
         # compute perplexity
         perplexity_value = self.perplexity(logits, token_labels)
 
@@ -185,8 +166,8 @@ class CustomMetrics:
             predicted_numbers = self.parse_rt(predictions)
             groundtruth_numbers = self.parse_rt(token_labels)
 
-        # Mask to ignore padding tokens (-100)
-        mask = token_labels != PADDING_TOKEN
+        # Mask to ignore panumeric_tokening tokens (-100)
+        mask = token_labels != PAnumeric_tokenING_TOKEN
 
         # Apply mask to predictions and labels
         masked_predictions = torch.where(mask, predictions, MASKED_OUT)

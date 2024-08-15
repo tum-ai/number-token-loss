@@ -121,16 +121,18 @@ def get_int_encoding(token: str, embedding_size: int) -> torch.Tensor:
     return vals
 
 
-def encoding_to_number(token: str) -> float:
+def encoding_to_number(token: str, invalid_strict=True) -> float:
     if len(token) == 1 or not (
             token.startswith("_") and token.endswith("_") and token.count("_") == 3
     ):
-        raise ValueError(f"no valid rt encoding {token}")
-
+        if invalid_strict:
+            raise ValueError(f"no valid rt encoding {token}")
+        else:
+            return 0
     digit = int(token[1])
     order = int(token.split("_")[-2])
     val = digit * 10 ** order
-    return val
+    return float(val)
 
 
 class FloatEncoding(nn.Embedding):
