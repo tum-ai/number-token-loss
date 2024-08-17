@@ -203,7 +203,6 @@ class CustomMetrics:
         
         if self.number_encoding == "xval":
             # TODO .reshape(-1) not correct, need to apply mask
-            print(model_output[-1].shape)
             predictions = predictions.detach().cpu().numpy()
             predicted_numbers = model_output[-1].detach().cpu().numpy()
             token_labels = token_labels.detach().cpu().numpy()
