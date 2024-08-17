@@ -34,6 +34,7 @@ from transformers.training_args import TrainingArguments
 from src.data import load_txt_dataset
 from src.collators.rt_question_answer_collator import RtQuestionAnswerCLMCollator
 from src.collators.xval_question_answer_collator import XvalQuestionAnswerCLMCollator
+from src.collators.vanilla_question_answer_collator import VanillaQuestionAnswerCLMCollator
 from src.tokenizer.rt_tokenizer import RtTokenizer
 from src.tokenizer.xval_tokenizer import XvalTokenizer
 from src.trainer import CustomTrainer, get_trainer_dict
@@ -341,10 +342,11 @@ def main():
         model.set_number_embeds(len(tokenizer), tokenizer.get_vocab())
     '''
 
+
     # Get datasets
-    train_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/train.txt'
-    eval_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/val.txt'
-    test_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/test.txt'
+    train_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
+    eval_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
+    test_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
     train_dataset = load_txt_dataset(train_data_path)
     eval_dataset = load_txt_dataset(eval_data_path)
     test_dataset = load_txt_dataset(test_data_path)
@@ -363,7 +365,7 @@ def main():
         )
     elif model_args.number_encoding.lower() == "none":
         # Rt collator can be used for default T5 as well
-        data_collator = RtQuestionAnswerCLMCollator(
+        data_collator = VanillaQuestionAnswerCLMCollator(
             tokenizer=tokenizer
         )
 

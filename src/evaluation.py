@@ -1,6 +1,7 @@
 from typing import List, Tuple, Dict
 import math
 import functools
+import re 
 
 import numpy as np
 import torch
@@ -16,6 +17,7 @@ MASKED_OUT = -1
 MALFORMED_RT_TOKEN = 100000
 NON_NUMERIC_TOKEN = 10000
 SURELY_NUMERIC_TOKEN_BOUND = 5000
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def convert_token_to_check_validity(token: str) -> float:
     """
@@ -94,6 +96,15 @@ class CustomMetrics:
         self.tokenizer = tokenizer
         self.index_to_token = {v: k for k, v in tokenizer.get_vocab().items()}
         self.number_encoding = number_encoding
+        
+        if self.number_encoding == "none":
+            #▁ is necessary as T5 Tokenizes white spaces like this and it has tokens for 1 and ▁1
+            self.numeric_token_pattern = re.compile(r"(\+|\-|▁)?(\d+)(\.)?(\d+)?")
+            self.numeric_token_ids = set(
+                v for k, v in tokenizer.get_vocab().items() if self.numeric_token_pattern.fullmatch(k)
+            )
+            self.numeric_token_tensor = torch.tensor(list(self.numeric_token_ids), device=DEVICE)
+
         self.batch_stats = []
 
     def parse_rt(self, predictions):
@@ -131,16 +142,15 @@ class CustomMetrics:
         return mse / valid_count, valid_count
     
 
-    def calculate_mse_xval(self, predictions, number_predictions, token_labels, number_labels):
-        num_mask = np.isin(token_labels, self.tokenizer.get_num_token_ids())
-        write_debug_log(num_mask)
+    def calculate_mse_xval(self, number_predictions, token_labels, number_labels):
+        num_mask = torch.isin(token_labels, torch.tensor(self.tokenizer.get_num_token_ids(), device=DEVICE))
         mse = F.mse_loss(
-            torch.tensor(number_predictions[num_mask]),
-            torch.tensor(number_labels[num_mask].reshape(-1, 1)),
+            number_predictions[num_mask],
+            number_labels[num_mask].reshape(-1, 1),
             reduction="mean",
         )
 
-        return mse
+        return mse.cpu().numpy()
 
     def perplexity(self, logits, labels):
         # Mask to ignore panumeric_tokening tokens (-100)
@@ -181,8 +191,10 @@ class CustomMetrics:
         model_output, labels = pred
 
         logits = model_output[0]
-        token_labels, number_labels = labels
-        
+        if self.number_encoding in ["xval", "rt"]:
+            token_labels, number_labels = labels
+        else:
+            token_labels, number_labels = labels, None
         # compute perplexity
         perplexity_value = self.perplexity(logits, token_labels)
 
@@ -202,30 +214,45 @@ class CustomMetrics:
         accuracy = (torch.sum(correct_predictions) / torch.sum(mask)).item() if torch.sum(mask) > 0 else 0
         
         if self.number_encoding == "xval":
-            # TODO .reshape(-1) not correct, need to apply mask
-            predictions = predictions.detach().cpu().numpy()
-            predicted_numbers = model_output[-1].detach().cpu().numpy()
-            token_labels = token_labels.detach().cpu().numpy()
-            number_labels = number_labels.detach().cpu().numpy()
-            
-            #print_structure(predictions)
-            #print_structure(predicted_numbers)
-            #print_structure(token_labels)
-            #print_structure(number_labels)
-
-            #write_debug_log(predictions)
-            #write_debug_log(predicted_numbers)
-            #write_debug_log(token_labels)
-            #write_debug_log(number_labels)
-
-            mse = self.calculate_mse_xval(predictions, predicted_numbers, token_labels, number_labels)
-            #print(mse)
-            nan_count = -1
-        else:
+            predicted_numbers = model_output[-1]
+            mse = self.calculate_mse_xval(predicted_numbers, token_labels, number_labels)
+            nan_count = -1 #TODO
+        elif self.number_encoding == "rt":
             predicted_numbers = self.parse_rt(predictions)
             groundtruth_numbers = self.parse_rt(token_labels)
             mse, _ = self.calculate_mse_rt(predicted_numbers, groundtruth_numbers)
             nan_count = sum(math.isnan(num) for num in predicted_numbers)
+        elif self.number_encoding.lower() == "none":
+            num_mask = torch.isin(predictions, self.numeric_token_tensor).cpu().numpy()
+
+            predictions = predictions.cpu().numpy()
+            token_labels = token_labels.cpu().numpy()
+
+            #We have to remove ▁ instead of _ because T5 Tokenizer uses unicode for some reason and encode whitespaces like this
+            convert_to_string = np.vectorize(lambda x: self.index_to_token[x].strip("▁"))
+            predicted_text = convert_to_string(predictions)
+            groundtruth_text = convert_to_string(token_labels)
+
+            predicted_text = np.where(num_mask, predicted_text, "")            
+            groundtruth_text = np.where(num_mask, groundtruth_text, "")            
+            
+            collapsed_predicted_text = np.apply_along_axis(''.join, 1, predicted_text)
+            collapsed_groundtruth_text = np.apply_along_axis(''.join, 1, groundtruth_text)
+    
+            def try_convert(s):
+                try:
+                    return float(s)
+                except ValueError:
+                    return np.nan
+            
+            vectorized_conversion = np.vectorize(try_convert)
+            predicted_numbers = vectorized_conversion(collapsed_predicted_text)
+            groundtruth_numbers = vectorized_conversion(collapsed_groundtruth_text)
+
+            mse, _ = self.calculate_mse_rt(predicted_numbers, groundtruth_numbers)
+            nan_count = sum(math.isnan(num) for num in predicted_numbers)
+        else:
+            raise NotImplementedError("Requesting evaluation for not supported number_encoding: {self.number_encoding}")
 
         self.batch_stats.append({
             'token_accuracy_whole': accuracy_w,
