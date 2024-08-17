@@ -51,11 +51,13 @@ def extract(text):
         tokens = []
         is_negative = number.startswith('-')
         if is_negative:
-            number = number[1:]
             tokens.append('[NEG]')
+        
+        #Remove plus as previously we treated it like a digit
+        number = number.lstrip('+-')
 
         if "." in number:
-            integer_part, dot, fractional_part = number.partition('.')
+            integer_part, _, fractional_part = number.partition('.')
         else:
             integer_part = number
             fractional_part = []
