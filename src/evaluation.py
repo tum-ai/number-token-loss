@@ -1,3 +1,7 @@
+from typing import List, Tuple, Dict
+import math
+import functools
+
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -5,13 +9,9 @@ from transformers import EvalPrediction
 
 from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 from src.encoding_decoding.numerical_encodings import encoding_to_number
-from typing import List, Tuple, Dict
-import math
-import functools
+from src.utils.helper_functionality import print_structure, write_debug_log
 
-import numpy as np
-
-PAnumeric_tokenING_TOKEN = -100
+PADDING_TOKEN = -100
 MASKED_OUT = -1
 MALFORMED_RT_TOKEN = 100000
 NON_NUMERIC_TOKEN = 10000
@@ -106,16 +106,17 @@ class CustomMetrics:
         
         converted_numbers, _ = convert_tokens_to_num_rt(parsed_tokens)
         return converted_numbers
-    def calculate_mse(self, predicted: List[float], groundtruth: List[float]) -> Tuple[float, int]:
+    
+    def calculate_mse_rt(self, predicted: List[float], groundtruth: List[float]) -> Tuple[float, int]:
         """
             Calculates the mean squared error for valid predicted-ground truth pairs.
             
-            Parameters:
-            - predicted: A list of predicted float numbers.
-            - groundtruth: A list of ground truth float numbers.
+            Args:
+                predicted: A list of predicted float numbers.
+                groundtruth: A list of ground truth float numbers.
             
             Returns:
-            - The mean squared error for valid pairs and the count of valid pairs.
+                The mean squared error for valid pairs and the count of valid pairs.
             """
         mse = 0.0
         valid_count = 0
@@ -128,6 +129,18 @@ class CustomMetrics:
         if valid_count == 0:
             return float('nan'), 0
         return mse / valid_count, valid_count
+    
+
+    def calculate_mse_xval(self, predictions, number_predictions, token_labels, number_labels):
+        num_mask = np.isin(token_labels, self.tokenizer.get_num_token_ids())
+        write_debug_log(num_mask)
+        mse = F.mse_loss(
+            torch.tensor(number_predictions[num_mask]),
+            torch.tensor(number_labels[num_mask].reshape(-1, 1)),
+            reduction="mean",
+        )
+
+        return mse
 
     def perplexity(self, logits, labels):
         # Mask to ignore panumeric_tokening tokens (-100)
@@ -146,10 +159,27 @@ class CustomMetrics:
         return perplexity.item()
 
     def __call__(self, pred: EvalPrediction, compute_result: bool) -> Dict[str, float]:
-        # Extract predictions and labels
+        """
+            While EvalPrediction declares to send 2- or 3-Tupel of np.arrays, we actually receive a 2-Tupel of tupels!
+            The number of elements in model_output differs based on the number_encoding choosen.
+            The shapes of the contained tensors differ for model_output and labels:
+            Use print_structure to analyse.
+            rt Args: 
+                model_output (2-tupel of torch.Tensors) 
+                labels 2-tupel of torch.Tensors: token_labels, number_labels
+            xval Args:
+                model_output (5-tupel of torch.Tensors)
+                labels 2-tupel of torch.Tensors: token_labels, number_labels
+            general Args:
+                compute_result (bool): We calculate metrics in batches. Set to True during final batch to calculate overall results 
+
+            Returns:
+                Overall results if compute_result else None 
+        
+        """
+        # Extract predictions and labels from pred tuple
         model_output, labels = pred
 
-        #While EvalPrediction uses np.arrays we actually use torch.Tensors
         logits = model_output[0]
         token_labels, number_labels = labels
         
@@ -158,16 +188,8 @@ class CustomMetrics:
 
         predictions = torch.argmax(logits, dim=2)
 
-        if self.number_encoding == "xval":
-            # TODO .reshape(-1) not correct, need to apply mask
-            predicted_numbers = model_output[-1].detach().cpu().numpy().reshape(-1)
-            groundtruth_numbers = number_labels.detach().cpu().numpy().reshape(-1)
-        else:
-            predicted_numbers = self.parse_rt(predictions)
-            groundtruth_numbers = self.parse_rt(token_labels)
-
         # Mask to ignore panumeric_tokening tokens (-100)
-        mask = token_labels != PAnumeric_tokenING_TOKEN
+        mask = token_labels != PADDING_TOKEN
 
         # Apply mask to predictions and labels
         masked_predictions = torch.where(mask, predictions, MASKED_OUT)
@@ -178,9 +200,33 @@ class CustomMetrics:
         accuracy_w = torch.mean(correct_predictions_w.float()).item()
         correct_predictions = (predictions == token_labels) & mask
         accuracy = (torch.sum(correct_predictions) / torch.sum(mask)).item() if torch.sum(mask) > 0 else 0
+        
+        if self.number_encoding == "xval":
+            # TODO .reshape(-1) not correct, need to apply mask
+            print(model_output[-1].shape)
+            predictions = predictions.detach().cpu().numpy()
+            predicted_numbers = model_output[-1].detach().cpu().numpy()
+            token_labels = token_labels.detach().cpu().numpy()
+            number_labels = number_labels.detach().cpu().numpy()
+            
+            #print_structure(predictions)
+            #print_structure(predicted_numbers)
+            #print_structure(token_labels)
+            #print_structure(number_labels)
 
-        mse, _ = self.calculate_mse(predicted_numbers, groundtruth_numbers)
-        nan_count = sum(math.isnan(num) for num in predicted_numbers)
+            #write_debug_log(predictions)
+            #write_debug_log(predicted_numbers)
+            #write_debug_log(token_labels)
+            #write_debug_log(number_labels)
+
+            mse = self.calculate_mse_xval(predictions, predicted_numbers, token_labels, number_labels)
+            #print(mse)
+            nan_count = -1
+        else:
+            predicted_numbers = self.parse_rt(predictions)
+            groundtruth_numbers = self.parse_rt(token_labels)
+            mse, _ = self.calculate_mse_rt(predicted_numbers, groundtruth_numbers)
+            nan_count = sum(math.isnan(num) for num in predicted_numbers)
 
         self.batch_stats.append({
             'token_accuracy_whole': accuracy_w,
@@ -189,6 +235,7 @@ class CustomMetrics:
             'nan_count': nan_count,
             'token_perplexity': perplexity_value
         })
+
         if compute_result:
             computed_metrics = {
                 'token_accuracy_whole': np.mean([stat['token_accuracy_whole'] for stat in self.batch_stats]),
