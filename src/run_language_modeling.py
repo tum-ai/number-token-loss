@@ -37,6 +37,7 @@ from src.collators.xval_question_answer_collator import XvalQuestionAnswerCLMCol
 from src.collators.vanilla_question_answer_collator import VanillaQuestionAnswerCLMCollator
 from src.tokenizer.rt_tokenizer import RtTokenizer
 from src.tokenizer.xval_tokenizer import XvalTokenizer
+from src.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
 from src.trainer import CustomTrainer, get_trainer_dict
 from src.transformer_backbone.t5.t5_rt import T5RegressionModelRT
 from src.transformer_backbone.t5.t5_xval import T5RegressionModelXval
@@ -228,73 +229,40 @@ def main():
         model_params = config.__dict__
         logger.warning("You are instantiating a new config instance from scratch.")
 
-    # load tokenizer    
-    if model_args.number_encoding == "rt":
-        if model_args.tokenizer_name:
-            tokenizer = RtTokenizer.from_pretrained(
-                model_args.tokenizer_name, cache_dir=model_args.cache_dir
-            )
-        elif model_args.model_name_or_path:
-            tokenizer = RtTokenizer.from_pretrained(
-                model_args.model_name_or_path, cache_dir=model_args.cache_dir
-            )
-        elif model_args.config_name:
-            tokenizer = RtTokenizer.from_pretrained(
-                model_args.config_name, cache_dir=model_args.cache_dir
-            )
-        else:
-            raise ValueError(
-                "You are instantiating a new tokenizer from scratch. This is not supported, but you can do it from another script, save it,"
-                "and load it from here, using --tokenizer_name"
-            )
-    elif model_args.number_encoding == "xval":
-        if model_args.tokenizer_name:
-            tokenizer = XvalTokenizer.from_pretrained(
-                model_args.tokenizer_name, cache_dir=model_args.cache_dir
-            )
-        elif model_args.model_name_or_path:
-            tokenizer = XvalTokenizer.from_pretrained(
-                model_args.model_name_or_path, cache_dir=model_args.cache_dir
-            )
-        elif model_args.config_name:
-            tokenizer = XvalTokenizer.from_pretrained(
-                model_args.config_name, cache_dir=model_args.cache_dir
-            )
-        else:
-            raise ValueError(
-                "You are instantiating a new tokenizer from scratch. This is not supported, but you can do it from another script, save it,"
-                "and load it from here, using --tokenizer_name"
-            )
-    elif model_args.number_encoding.lower() == "none":
-        if model_args.tokenizer_name:
-            tokenizer = transformers.AutoTokenizer.from_pretrained(
-                model_args.tokenizer_name, cache_dir=model_args.cache_dir
-            )
-        elif model_args.model_name_or_path:
-            tokenizer = transformers.AutoTokenizer.from_pretrained(
-                model_args.model_name_or_path, cache_dir=model_args.cache_dir
-            )
-        elif model_args.config_name:
-            tokenizer = transformers.AutoTokenizer.from_pretrained(
-                model_args.config_name, cache_dir=model_args.cache_dir
-            )
-        else:
-            raise ValueError(
-                "You are instantiating a new tokenizer from scratch. This is not supported, but you can do it from another script, save it,"
-                "and load it from here, using --tokenizer_name"
-            )
-
     if model_args.number_encoding == "rt":
         model_class = T5RegressionModelRT
         model_init_kwargs = {}
+        tokenizer_class = RtTokenizer
     elif model_args.number_encoding == "xval":
         model_class = T5RegressionModelXval
         model_init_kwargs = {"tokenizer": tokenizer}
+        tokenizer_class = XvalTokenizer
     elif model_args.number_encoding.lower() == "none":
         model_class = T5ForConditionalGeneration
         model_init_kwargs = {}
+        tokenizer_class = T5Custom_Tokenizer
     else:
         raise ValueError(f"Unknown number encoding: {model_args.number_encoding}")
+
+    # load tokenizer    
+    if model_args.tokenizer_name:
+        tokenizer = tokenizer_class.from_pretrained(
+            model_args.tokenizer_name, cache_dir=model_args.cache_dir
+        )
+    elif model_args.model_name_or_path:
+        tokenizer = tokenizer_class.from_pretrained(
+            model_args.model_name_or_path, cache_dir=model_args.cache_dir
+        )
+    elif model_args.config_name:
+        tokenizer = tokenizer_class.from_pretrained(
+            model_args.config_name, cache_dir=model_args.cache_dir
+        )
+    else:
+        raise ValueError(
+            "You are instantiating a new tokenizer from scratch. This is not supported, but you can do it from another script, save it,"
+            "and load it from here, using --tokenizer_name"
+        )
+
 
     if model_args.model_name_or_path:
 
@@ -341,7 +309,6 @@ def main():
     if model_args.number_encoding == "rt":
         model.set_number_embeds(len(tokenizer), tokenizer.get_vocab())
     '''
-
 
     # Get datasets
     train_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
