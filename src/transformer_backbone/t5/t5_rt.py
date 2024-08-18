@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from src.encoding_decoding.numerical_encodings import FloatEncoding
 
+V_MAX = 3000000000
 
 class T5RegressionModelRT(T5ForConditionalGeneration):
     def __init__(self, config):
@@ -14,7 +15,7 @@ class T5RegressionModelRT(T5ForConditionalGeneration):
 
     def set_number_embeds(self, num_embeddings, vocab):
         self.number_embeds = FloatEncoding(num_embeddings=num_embeddings, embedding_dim=self.config.d_model,
-                                           vocab=vocab)
+                                           vocab=vocab, vmax=V_MAX)
 
     def forward(
             self,
