@@ -51,5 +51,19 @@ def debug_cooking_dataset():
     print("Validation Dataset:", val_dataset[0])  
     print("Test Dataset:", test_dataset[0])
 
+
+def read_json(file_path):
+    data = []
+    with open(file_path, 'r') as file:
+        for line in file:
+            # Parse each line as a JSON object and append it to the list
+            data.append(json.loads(line))
+
+    for i in range(len(data)):
+        yield data[i]
+
+def load_json_dataset(file_path):
+    return Dataset.from_generator(read_json, gen_kwargs={'file_path': file_path})
+
 if __name__ == '__main__':
     debug_cooking_dataset()
