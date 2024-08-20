@@ -15,10 +15,12 @@ class RtTokenizer(NumberEncodingTokenizer):
         num_tokens = [line.strip() for line in lines]
 
 
+        # TODO remove NEG token?
         self.add_special_tokens({"additional_special_tokens": ["[NEG]"]})
             #"pad_token": "[PAD]",
             #"mask_token": "[MASK]",
         #})
+        # TODO mask token should not be needed
         mask_token = "[MASK]"
         self.add_tokens([mask_token])
         self.mask_token = mask_token

@@ -20,6 +20,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
         self.num_token_id = self.convert_tokens_to_ids(num_token)
         self.model_input_names.append("number_embeddings")
         
+        # TODO mask token should not be needed
         mask_token = "[MASK]"
         self.add_tokens([mask_token])
         self.mask_token = mask_token
