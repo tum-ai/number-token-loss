@@ -7,6 +7,8 @@ The file is an adaptation of https://github.com/huggingface/transformers/blob/v3
 """
 import sys
 
+from src.trainer import CustomSeq2SeqTrainer
+
 sys.path.append("..")
 
 import json
@@ -27,9 +29,8 @@ from transformers import (
     AutoModelWithLMHead,
     HfArgumentParser,
     set_seed,
-    EarlyStoppingCallback, T5ForConditionalGeneration
+    EarlyStoppingCallback, T5ForConditionalGeneration, Seq2SeqTrainingArguments
 )
-from transformers.training_args import TrainingArguments
 
 from src.data import load_txt_dataset
 from src.collators.rt_question_answer_collator import RtQuestionAnswerCLMCollator
@@ -38,7 +39,6 @@ from src.collators.vanilla_question_answer_collator import VanillaQuestionAnswer
 from src.tokenizer.rt_tokenizer import RtTokenizer
 from src.tokenizer.xval_tokenizer import XvalTokenizer
 from src.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
-from src.trainer import CustomTrainer, get_trainer_dict
 from src.transformer_backbone.t5.t5_rt import T5RegressionModelRT
 from src.transformer_backbone.t5.t5_xval import T5RegressionModelXval
 from src.evaluation import CustomMetrics
@@ -88,7 +88,7 @@ def get_latest_checkpoint(model_path: str, must_contain: str = "best") -> str:
 
 
 @dataclass
-class CustomTrainingArguments(TrainingArguments):
+class CustomTrainingArguments(Seq2SeqTrainingArguments):
     """
     NOTE: Expanding TrainingArguments class from transformers with custom arguments.
 
@@ -167,6 +167,7 @@ def main():
         (ModelArguments, CustomTrainingArguments)
     )
     model_args, training_args = parser.parse_args_into_dataclasses()
+    training_args.predict_with_generate = True
 
     if (
             os.path.exists(training_args.output_dir)
@@ -231,15 +232,13 @@ def main():
 
     if model_args.number_encoding == "rt":
         model_class = T5RegressionModelRT
-        model_init_kwargs = {}
         tokenizer_class = RtTokenizer
     elif model_args.number_encoding == "xval":
         model_class = T5RegressionModelXval
-        model_init_kwargs = {"tokenizer": tokenizer}
         tokenizer_class = XvalTokenizer
     elif model_args.number_encoding.lower() == "none":
         model_class = T5ForConditionalGeneration
-        model_init_kwargs = {}
+        # TODO only use for custom loss, else use default T5 tokenizer
         tokenizer_class = T5Custom_Tokenizer
     else:
         raise ValueError(f"Unknown number encoding: {model_args.number_encoding}")
@@ -262,6 +261,11 @@ def main():
             "You are instantiating a new tokenizer from scratch. This is not supported, but you can do it from another script, save it,"
             "and load it from here, using --tokenizer_name"
         )
+
+    if model_args.number_encoding == "xval":
+        model_init_kwargs = {"tokenizer": tokenizer}
+    else:
+        model_init_kwargs = {}
 
 
     if model_args.model_name_or_path:
@@ -359,7 +363,7 @@ def main():
         vmax=10,
         **custom_trainer_params,
     )"""
-    trainer = transformers.Trainer(
+    trainer = CustomSeq2SeqTrainer(
         model=model,
         args=training_args,
         data_collator=data_collator,
