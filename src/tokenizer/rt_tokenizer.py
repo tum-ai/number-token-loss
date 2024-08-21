@@ -1,12 +1,11 @@
+import os
+import re
 from typing import List
 
-from transformers import T5Tokenizer
-import numpy as np
-import re
-import os
+from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 
 
-class RtTokenizer(T5Tokenizer):
+class RtTokenizer(NumberEncodingTokenizer):
     def __init__(self, embedding_dim=256, **kwargs):
         super().__init__(**kwargs)
 
@@ -16,14 +15,24 @@ class RtTokenizer(T5Tokenizer):
         num_tokens = [line.strip() for line in lines]
 
 
+        # TODO remove NEG token?
         self.add_special_tokens({"additional_special_tokens": ["[NEG]"]})
             #"pad_token": "[PAD]",
             #"mask_token": "[MASK]",
         #})
+        # TODO mask token should not be needed
+        mask_token = "[MASK]"
+        self.add_tokens([mask_token])
+        self.mask_token = mask_token
+        self.mask_token_id = self.convert_tokens_to_ids(mask_token)
+
         self.add_tokens(num_tokens)
         self.num_tokens = num_tokens
         self.num_token_ids = [self.convert_tokens_to_ids(num_token) for num_token in num_tokens]
         self.embedding_dim = embedding_dim
+
+    def get_num_token_ids(self):
+        return self.num_token_ids
 
     def tokenize(self, text: str, add_special_tokens=False, **kwargs) -> List[str]:
         nonum_text, number_tokens = extract(text)
@@ -34,7 +43,9 @@ class RtTokenizer(T5Tokenizer):
 
 
 def extract(text):
-    pattern = r"\s*[\s]*?(\+|\-)?(\d+)(\.)?(\d+)?\s*"
+    #r"\s*[\s]*?(\+|\-)?(\d+)(\.)?(\d+)?\s*" with r"(\+|\-)?(\d+)(\.)?(\d+)?" to maintain spaces
+    #Why are we not using the same strings as xval class (numbers are numbers after all) or the strings from RT?
+    pattern = r"(\+|\-)?(\d+)(\.)?(\d+)?"   
     numbers = []
 
     def replace(match):
@@ -42,11 +53,13 @@ def extract(text):
         tokens = []
         is_negative = number.startswith('-')
         if is_negative:
-            number = number[1:]
             tokens.append('[NEG]')
+        
+        #Remove plus as previously we treated it like a digit
+        number = number.lstrip('+-')
 
         if "." in number:
-            integer_part, dot, fractional_part = number.partition('.')
+            integer_part, _, fractional_part = number.partition('.')
         else:
             integer_part = number
             fractional_part = []
@@ -65,17 +78,3 @@ def extract(text):
     nonum_text = re.sub(pattern, replace, text)
     return nonum_text, numbers
 
-
-def NEFloat(v, p, j):
-    return (-1) ** j * v * 10 ** p / (j + 1)
-
-
-def generate_ne(token, embedding_dim):
-    parts = [part for part in token.split('_') if part]
-    digit, place = parts
-    v = int(digit)
-    p = int(place)
-    ne = np.zeros(embedding_dim)
-    for j in range(embedding_dim):
-        ne[j] = NEFloat(v, p, j)
-    return ne

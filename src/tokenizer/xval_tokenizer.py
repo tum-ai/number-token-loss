@@ -4,13 +4,14 @@ from typing import List, Optional, Union, Tuple, Dict
 
 import numpy as np
 from torch import TensorType
-from transformers import T5Tokenizer
 from transformers.tokenization_utils_base import TruncationStrategy, BatchEncoding, TextInput, TextInputPair, \
     PreTokenizedInput, PreTokenizedInputPair, EncodedInput, EncodedInputPair
 from transformers.utils import PaddingStrategy
 
+from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 
-class XvalTokenizer(T5Tokenizer):
+
+class XvalTokenizer(NumberEncodingTokenizer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         num_token = "[NUM]"
@@ -18,6 +19,15 @@ class XvalTokenizer(T5Tokenizer):
         self.num_token = num_token
         self.num_token_id = self.convert_tokens_to_ids(num_token)
         self.model_input_names.append("number_embeddings")
+        
+        # TODO mask token should not be needed
+        mask_token = "[MASK]"
+        self.add_tokens([mask_token])
+        self.mask_token = mask_token
+        self.mask_token_id = self.convert_tokens_to_ids(mask_token)
+
+    def get_num_token_ids(self):
+        return [self.num_token_id]
 
     def _encode_plus(
             self,
