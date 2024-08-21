@@ -1,22 +1,24 @@
 import numbers
 import warnings
 from math import cos, inf, sin
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 import torch
 import torch.nn as nn
 import transformers
 from torch import Tensor
 
+
 def get_device():
     return torch.device("cuda" if cuda() else "cpu")
+
 
 def cuda():
     return torch.cuda.is_available()
 
 
 def get_float_encoding(
-    token: str, embedding_size: int, vmax: float = 1.0
+        token: str, embedding_size: int, vmax: float = 1.0
 ) -> torch.Tensor:
     """Convert a token representing a float into a _fixed_ embedding vector.
     NOTE: This can be used for *any* range of numbers > 0.
@@ -38,13 +40,13 @@ def get_float_encoding(
 
     vals = torch.zeros((embedding_size,))
     if len(token) == 1 or not (
-        token.startswith("_") and token.endswith("_") and token.count("_") == 3
+            token.startswith("_") and token.endswith("_") and token.count("_") == 3
     ):
         return vals
     else:
         digit = int(token[1])
         order = int(token.split("_")[-2])
-        val = digit * 10**order
+        val = digit * 10 ** order
 
     for i in range(0, embedding_size, 2):
         vals[i] = val / (i + 1)
@@ -54,7 +56,7 @@ def get_float_encoding(
 
 
 def get_full_float_encoding(
-    value: float, embedding_size: int, vmax: float = 1.0
+        value: float, embedding_size: int, vmax: float = 1.0
 ) -> Tensor:
     """
     Convert a float value into a _fixed_ embedding vector.
@@ -73,7 +75,7 @@ def get_full_float_encoding(
         raise ValueError(f"Embedding size {embedding_size} cant be odd.")
     integer = int(value)
     decimal = value - integer
-    scalar = integer * 10**decimal
+    scalar = integer * 10 ** decimal
     embedding = torch.zeros((embedding_size,))
     for i in range(0, embedding_size, 2):
         embedding[i] = scalar / (i + 1)
@@ -98,13 +100,13 @@ def get_int_encoding(token: str, embedding_size: int) -> torch.Tensor:
     vals = torch.zeros((ed,))
 
     if len(token) == 1 or not (
-        token.startswith("_") and token.endswith("_") and token.count("_") == 3
+            token.startswith("_") and token.endswith("_") and token.count("_") == 3
     ):
         return vals
     else:
         digit = int(token[1])
         order = int(token.split("_")[-2])
-        val = digit * 10**order
+        val = digit * 10 ** order
 
         if order < 0:
             raise ValueError(
@@ -119,6 +121,20 @@ def get_int_encoding(token: str, embedding_size: int) -> torch.Tensor:
     return vals
 
 
+def encoding_to_number(token: str, invalid_strict=True) -> float:
+    if len(token) == 1 or not (
+            token.startswith("_") and token.endswith("_") and token.count("_") == 3
+    ):
+        if invalid_strict:
+            raise ValueError(f"no valid rt encoding {token}")
+        else:
+            return 0
+    digit = int(token[1])
+    order = int(token.split("_")[-2])
+    val = digit * 10 ** order
+    return float(val)
+
+
 class FloatEncoding(nn.Embedding):
     """
     A nn.Embedding inspired class to generate fixed embedding vectors that represent
@@ -127,13 +143,13 @@ class FloatEncoding(nn.Embedding):
     """
 
     def __init__(
-        self,
-        num_embeddings: int,
-        embedding_dim: int,
-        vocab: Dict,
-        vmax: Optional[float] = None,
-        *args,
-        **kwargs,
+            self,
+            num_embeddings: int,
+            embedding_dim: int,
+            vocab: Dict,
+            vmax: Optional[float] = None,
+            *args,
+            **kwargs,
     ) -> None:
         """
         Constructor for FloatEmbedding; sets up the fixed embedding matrix.
@@ -166,7 +182,7 @@ class FloatEncoding(nn.Embedding):
         if vmax is None:
             # Infer the highest number in the dictionary (for normalization)
             test = lambda t: len(t) == 1 or not (
-                t.startswith("_") and t.endswith("_") and t.count("_") == 3
+                    t.startswith("_") and t.endswith("_") and t.count("_") == 3
             )
             vmax = max(
                 [
@@ -208,7 +224,7 @@ class IntEncoding(nn.Embedding):
     """
 
     def __init__(
-        self, num_embeddings: int, embedding_dim: int, vocab: Dict, *args, **kwargs
+            self, num_embeddings: int, embedding_dim: int, vocab: Dict, *args, **kwargs
     ) -> None:
         """
         Constructor for FloatEmbedding; sets up the fixed embedding matrix.
@@ -240,7 +256,7 @@ class IntEncoding(nn.Embedding):
         weights = torch.zeros(num_embeddings, embedding_dim)
         for idx, (token, index) in enumerate(vocab.items()):
             assert (
-                idx == index
+                    idx == index
             ), "Please sort vocab indexes in ascending order starting from 0"
             weights[idx, :] = get_int_encoding(token, embedding_dim)
 
