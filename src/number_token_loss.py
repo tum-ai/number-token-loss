@@ -3,9 +3,10 @@ import torch.nn.functional as F
 from torch._tensor import Tensor
 from src.encoding_decoding.numerical_encodings import encoding_to_number
 class NumberTokenLoss:
-    def __init__(self, tokenizer, loss_order=2):
+    def __init__(self, tokenizer, loss_order=2, weight=0.5):
         self.tokenizer = tokenizer
         self.order = loss_order
+        self.weight = weight
         hashed_num_tokens = set(self.tokenizer.num_tokens)
         self.nvocab = torch.tensor(
             [encoding_to_number(token) if token in hashed_num_tokens else float('nan') for token in self.tokenizer.get_vocab()],

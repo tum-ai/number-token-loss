@@ -20,7 +20,7 @@ class T5RegressionModelRT(T5ForConditionalGeneration):
         "lm_head.weight",
     ]
 
-    def __init__(self, config):
+    def __init__(self, config, number_token_loss: NumberTokenLoss = None):
         super().__init__(config)
         super()._resize_token_embeddings(config.vocab_size)
         number_embeds = FloatEncoding(num_embeddings=config.vocab_size, embedding_dim=self.config.d_model,
@@ -28,10 +28,8 @@ class T5RegressionModelRT(T5ForConditionalGeneration):
         combined_embeddings = RTEmbeddings(self.shared, number_embeds)
         # Set the new embedding for encoder and decoder.
         self.set_input_embeddings(combined_embeddings)
+        self.number_token_loss = number_token_loss
 
-        # Initialize NumberTokenLoss
-        self.number_token_loss = NumberTokenLoss(config.tokenizer, loss_order=2)
-        self.number_token_loss_weight = 1.0
 
     def forward(
             self,
@@ -76,8 +74,8 @@ class T5RegressionModelRT(T5ForConditionalGeneration):
         if labels is not None:
             number_token_loss = self.number_token_loss.forward(outputs.logits, labels)
             if hasattr(outputs, 'loss') and outputs.loss is not None:
-                outputs.loss = (1.0 - self.number_token_loss_weight) * outputs.loss + \
-                            self.number_token_loss_weight * number_token_loss
+                outputs.loss = (1.0 - self.number_token_loss.weight) * outputs.loss + \
+                            self.number_token_loss.weight * number_token_loss
             else:
                 outputs.loss = number_token_loss
         return outputs

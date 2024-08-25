@@ -6,12 +6,11 @@ from src.number_token_loss import NumberTokenLoss
 
 
 class T5Default(T5ForConditionalGeneration):
-    def __init__(self, config):
+    def __init__(self, config, number_token_loss: NumberTokenLoss = None):
         super().__init__(config)
 
         # Initialize NumberTokenLoss
-        self.number_token_loss = NumberTokenLoss(config.tokenizer, loss_order=2)
-        self.number_token_loss_weight = 0.5
+        self.number_token_loss = number_token_loss
 
     def forward(
             self,
@@ -56,8 +55,8 @@ class T5Default(T5ForConditionalGeneration):
         if labels is not None:
             number_token_loss = self.number_token_loss.forward(outputs.logits, labels)
             if hasattr(outputs, 'loss') and outputs.loss is not None:
-                outputs.loss = (1.0 - self.number_token_loss_weight) * outputs.loss + \
-                               self.number_token_loss_weight * number_token_loss
+                outputs.loss = (1.0 - self.number_token_loss.weight) * outputs.loss + \
+                               self.number_token_loss.weight * number_token_loss
             else:
                 outputs.loss = number_token_loss
         return outputs
