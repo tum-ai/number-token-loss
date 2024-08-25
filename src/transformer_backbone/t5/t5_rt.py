@@ -31,7 +31,7 @@ class T5RegressionModelRT(T5ForConditionalGeneration):
 
         # Initialize NumberTokenLoss
         self.number_token_loss = NumberTokenLoss(config.tokenizer, loss_order=2)
-        self.number_token_loss_weight = 0.5
+        self.number_token_loss_weight = 1.0
 
     def forward(
             self,
@@ -75,14 +75,14 @@ class T5RegressionModelRT(T5ForConditionalGeneration):
         # If labels are provided, calculate the NumberTokenLoss
         if labels is not None:
             number_token_loss = self.number_token_loss.forward(outputs.logits, labels)
-            combined_loss = (1.0 - self.number_token_loss_weight) * outputs.loss + \
+            if hasattr(outputs, 'loss') and outputs.loss is not None:
+                outputs.loss = (1.0 - self.number_token_loss_weight) * outputs.loss + \
                             self.number_token_loss_weight * number_token_loss
-            outputs.loss = combined_loss
-
+            else:
+                outputs.loss = number_token_loss
         return outputs
 
 
-# The RTEmbeddings class remains unchanged
 class RTEmbeddings(nn.Module):
     def __init__(self, token_embeddings, number_embeddings):
         super().__init__()
