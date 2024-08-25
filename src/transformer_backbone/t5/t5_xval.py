@@ -18,6 +18,9 @@ if is_accelerate_available():
 
 logger = logging.get_logger(__name__)
 
+# Set maximal value for normalization 
+V_MAX = 3000000000
+
 
 class T5RegressionModelXval(T5ForConditionalGeneration):
     def __init__(self, config, tokenizer: NumberEncodingTokenizer, dim_feedforward=1024, numhead_bias=True):
@@ -75,6 +78,10 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
             if inputs_embeds is not None:
                 raise ValueError("inputs_embeds are not None")
             # Convert encoder inputs in embeddings if needed
+            # Normalize embeddings
+            number_locs = input_ids == self.tokenizer.num_token_id
+            input_number_embeddings[number_locs] = torch.sign(input_number_embeddings[number_locs]) * torch.log10(torch.abs(input_number_embeddings[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
+            
             inputs_embeds = self.shared(input_ids) * input_number_embeddings.unsqueeze(-1)
             encoder_outputs = self.encoder(
                 attention_mask=attention_mask,
@@ -127,6 +134,11 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
         if decoder_inputs_embeds is not None:
             raise ValueError("decoder_inputs_embeds are not None")
             # Convert encoder inputs in embeddings if needed
+        # Normalize embeddings
+        number_locs = decoder_input_ids == self.tokenizer.num_token_id
+        if number_locs.any():
+            decoder_number_embeddings[number_locs] = torch.sign(decoder_number_embeddings[number_locs]) * torch.log10(torch.abs(decoder_number_embeddings[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
+        
         decoder_inputs_embeds = self.shared(decoder_input_ids) * decoder_number_embeddings.unsqueeze(-1)
 
         # Decode
@@ -296,6 +308,11 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
         #######################
         encoder_input_ids = encoder_kwargs.pop("input_ids", None)
         encoder_input_number_embeddings = model_kwargs.pop("input_number_embeddings", None)
+        
+        # Normalize embeddings
+        number_locs = encoder_input_ids == self.tokenizer.num_token_id
+        encoder_input_number_embeddings[number_locs] = torch.sign(encoder_input_number_embeddings[number_locs]) * torch.log10(torch.abs(encoder_input_number_embeddings[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
+        
         encoder_kwargs["inputs_embeds"] = self.shared(encoder_input_ids) * encoder_input_number_embeddings.unsqueeze(-1)
         #######################
         # Customized code end
