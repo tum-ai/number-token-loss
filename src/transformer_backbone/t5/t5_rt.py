@@ -6,6 +6,7 @@ import torch.nn as nn
 from src.encoding_decoding.numerical_encodings import FloatEncoding
 import copy
 
+# Set maximal value for normalization
 V_MAX = 3000000000
 
 

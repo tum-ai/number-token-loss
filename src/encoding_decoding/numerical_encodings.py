@@ -52,7 +52,7 @@ def get_float_encoding(
         vals[i] = val / (i + 1)
         vals[i + 1] = -val / (i + 1)
 
-    return vals / (vmax / 10)
+    return torch.sign(vals)*torch.log10(torch.abs(vals)+1) / (torch.log10(torch.tensor(vmax)) / 10)
 
 
 def get_full_float_encoding(
