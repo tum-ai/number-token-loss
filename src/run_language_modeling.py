@@ -42,6 +42,7 @@ from src.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
 from src.transformer_backbone.t5.t5_rt import T5RegressionModelRT
 from src.transformer_backbone.t5.t5_xval import T5RegressionModelXval
 from src.evaluation import CustomMetrics
+from src.number_token_loss import NumberTokenLoss
 
 transformers.logging.set_verbosity_info()
 logger = logging.getLogger(__name__)
@@ -148,6 +149,24 @@ class ModelArguments:
         default="rt",
         metadata={
             "help": "Chose either xval or rt or None for number encodings"
+        },
+    )
+    number_token_loss: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "Adds NumberTokenLoss object"
+        },
+    )
+    number_token_loss_weight: Optional[float] = field(
+        default=False,
+        metadata={
+            "help": "Weight of the number_token_loss in reference to other loss"
+        },
+    )
+    number_token_loss_order: Optional[int] = field(
+        default=False,
+        metadata={
+            "help": "Sets the order of the NTL. For example 2 -> MSE, 3 -> Mean Cubic Error etc."
         },
     )
 
@@ -267,6 +286,15 @@ def main():
     else:
         model_init_kwargs = {}
 
+    if model_args.number_encoding == "xval" and model_args.number_token_loss is not None:
+        raise Exception("Xval does not accept NumberTokenLoss")
+
+    if model_args.number_token_loss is not None:
+        model_init_kwargs["number_token_loss"] = NumberTokenLoss(
+            tokenizer,
+            loss_order=model_args.number_token_loss_order,
+            weight=model_args.number_token_loss_weight
+        )
 
     if model_args.model_name_or_path:
 
