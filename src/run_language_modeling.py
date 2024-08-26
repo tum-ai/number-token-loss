@@ -158,13 +158,13 @@ class ModelArguments:
         },
     )
     number_token_loss_weight: Optional[float] = field(
-        default=False,
+        default=0.5,
         metadata={
             "help": "Weight of the number_token_loss in reference to other loss"
         },
     )
     number_token_loss_order: Optional[int] = field(
-        default=False,
+        default=2,
         metadata={
             "help": "Sets the order of the NTL. For example 2 -> MSE, 3 -> Mean Cubic Error etc."
         },
@@ -180,7 +180,7 @@ def main():
     os.environ["COMET_MODE"] = "DISABLED"
 
     # Switch off WandB
-    os.environ["WANDB_DISABLED"] = "false"
+    os.environ["WANDB_DISABLED"] = "true"
 
     parser = HfArgumentParser(
         (ModelArguments, CustomTrainingArguments)
@@ -292,6 +292,7 @@ def main():
     if model_args.number_token_loss is not None:
         model_init_kwargs["number_token_loss"] = NumberTokenLoss(
             tokenizer,
+            training_args.device,
             loss_order=model_args.number_token_loss_order,
             weight=model_args.number_token_loss_weight
         )
@@ -343,9 +344,9 @@ def main():
     '''
 
     # Get datasets
-    train_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
-    eval_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
-    test_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
+    train_data_path = '../data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
+    eval_data_path = '../data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
+    test_data_path = '../data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
     train_dataset = load_txt_dataset(train_data_path)
     eval_dataset = load_txt_dataset(eval_data_path)
     test_dataset = load_txt_dataset(test_data_path)

@@ -45,6 +45,7 @@ class T5RegressionModelRT(T5ForConditionalGeneration):
             inputs_embeds: Optional[torch.FloatTensor] = None,
             decoder_inputs_embeds: Optional[torch.FloatTensor] = None,
             labels: Optional[torch.LongTensor] = None,
+            number_labels: Optional[torch.LongTensor] = None,
             use_cache: Optional[bool] = None,
             output_attentions: Optional[bool] = None,
             output_hidden_states: Optional[bool] = None,
