@@ -150,15 +150,20 @@ class CustomMetrics:
             return float('nan'), 0
         return mse / valid_count, valid_count
 
-    def calculate_mse_xval(self, number_predictions, token_labels, number_labels):
+    def calculate_mse_xval(self,predictions, number_predictions, token_labels, number_labels):
         num_mask = torch.isin(token_labels, torch.tensor(self.tokenizer.get_num_token_ids(), device=DEVICE))
         mse = F.mse_loss(
             number_predictions[num_mask],
             number_labels[num_mask].reshape(-1, 1),
             reduction="mean",
         )
+        predicted_num_mask = predictions == 32100
+        true_num_mask = num_mask
+        # 1. Predict number but no number in true values
+        sum_incorrectly_predicted_nums = np.sum(predicted_num_mask & ~true_num_mask)
+        sum_incorrectly_predicted_text = np.sum(~predicted_num_mask & true_num_mask)
 
-        return mse.cpu().numpy()
+        return mse.cpu().numpy(), sum_incorrectly_predicted_nums, sum_incorrectly_predicted_text
 
     def perplexity(self, logits, labels):
         # Mask to ignore panumeric_tokening tokens (-100)
@@ -256,7 +261,6 @@ class CustomMetrics:
 
         if self.number_encoding in ["xval", "rt"]:
             token_labels, number_labels = labels
-
         else:
             token_labels, number_labels = labels, None
 
@@ -288,7 +292,7 @@ class CustomMetrics:
         accuracy = (torch.sum(correct_predictions) / torch.sum(mask)).item() if torch.sum(mask) > 0 else 0
 
         if self.number_encoding == "xval":
-            mse = self.calculate_mse_xval(predicted_numbers, token_labels, number_labels)
+            mse = self.calculate_mse_xval(predictions, predicted_numbers, token_labels, number_labels)
             nan_count = -1  # TODO
         elif self.number_encoding == "rt":
             predicted_numbers = self.parse_rt(predictions)
