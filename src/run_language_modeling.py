@@ -8,6 +8,7 @@ The file is an adaptation of https://github.com/huggingface/transformers/blob/v3
 import sys
 
 from src.trainer import CustomSeq2SeqTrainer
+from src.transformer_backbone.t5.t5_vanilla_for_number_token_loss import T5VanillaForNumberTokenLoss
 
 sys.path.append("..")
 
@@ -256,9 +257,12 @@ def main():
         model_class = T5RegressionModelXval
         tokenizer_class = XvalTokenizer
     elif model_args.number_encoding.lower() == "none":
-        model_class = T5ForConditionalGeneration
-        # TODO only use for custom loss, else use default T5 tokenizer
-        tokenizer_class = T5Custom_Tokenizer
+        if model_args.number_token_loss is not None:
+            model_class = T5VanillaForNumberTokenLoss
+            tokenizer_class = T5Custom_Tokenizer
+        else:
+            model_class = T5ForConditionalGeneration
+            tokenizer_class = transformers.AutoTokenizer
     else:
         raise ValueError(f"Unknown number encoding: {model_args.number_encoding}")
 
