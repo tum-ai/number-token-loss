@@ -5,7 +5,7 @@ from typing import Optional, Tuple, Union
 from src.number_token_loss import NumberTokenLoss
 
 
-class T5Default(T5ForConditionalGeneration):
+class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
     def __init__(self, config, number_token_loss: NumberTokenLoss = None):
         super().__init__(config)
 

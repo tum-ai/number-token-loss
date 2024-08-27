@@ -2,14 +2,17 @@ import torch
 import torch.nn.functional as F
 from torch._tensor import Tensor
 from src.encoding_decoding.numerical_encodings import encoding_to_number
+from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
+
+
 class NumberTokenLoss:
-    def __init__(self, tokenizer, device, loss_order=2, weight=0.5):
+    def __init__(self, tokenizer: NumberEncodingTokenizer, device, loss_order=2, weight=0.5):
         self.tokenizer = tokenizer
         self.order = loss_order
         self.weight = weight
-        hashed_num_tokens = set(self.tokenizer.num_tokens)
+        hashed_num_tokens = set(self.tokenizer.get_num_tokens())
         self.nvocab = torch.tensor(
-            [encoding_to_number(token) if token in hashed_num_tokens else float('nan') for token in self.tokenizer.get_vocab()],
+            [self.tokenizer.decode_number_token(token) if token in hashed_num_tokens else float('nan') for token in self.tokenizer.get_vocab()],
             dtype=torch.float32,
             device=device
         )
