@@ -29,5 +29,5 @@ class NumberTokenLoss:
         y = self.nvocab[labels]
 
         # Compute the final loss function
-        loss = torch.nanmean((torch.abs(y - yhat) ** self.order)) ** (1 / self.order)
+        loss = torch.nanmean((torch.abs(y - yhat) ** self.order))
         return float(loss)
