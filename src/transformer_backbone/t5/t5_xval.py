@@ -833,7 +833,7 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
             #######################
             # Customized code start
             #######################
-            # This does not work, as the number embeddings can also come from just one beam. The decision is made in the beam_scorer and outputted in the beam_index. 
+            # Next number_embeddings should be "number_predictions" from model output
             next_number_embeddings = torch.where(
                 beam_next_tokens == self.tokenizer.get_num_token_ids()[0],
                 outputs["number_predictions"].squeeze(),
