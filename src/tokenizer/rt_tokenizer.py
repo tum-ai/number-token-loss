@@ -15,12 +15,6 @@ class RtTokenizer(NumberEncodingTokenizer):
 
         num_tokens = [line.strip() for line in lines]
 
-
-        # TODO remove NEG token?
-        self.add_special_tokens({"additional_special_tokens": ["[NEG]"]})
-            #"pad_token": "[PAD]",
-            #"mask_token": "[MASK]",
-        #})
         # TODO mask token should not be needed
         mask_token = "[MASK]"
         self.add_tokens([mask_token])
@@ -52,15 +46,12 @@ class RtTokenizer(NumberEncodingTokenizer):
 def extract(text):
     #r"\s*[\s]*?(\+|\-)?(\d+)(\.)?(\d+)?\s*" with r"(\+|\-)?(\d+)(\.)?(\d+)?" to maintain spaces
     #Why are we not using the same strings as xval class (numbers are numbers after all) or the strings from RT?
-    pattern = r"(\+|\-)?(\d+)(\.)?(\d+)?"   
+    pattern = r"(\d+)(\.)?(\d+)?"   
     numbers = []
 
     def replace(match):
         number = match.group(0).strip()
         tokens = []
-        is_negative = number.startswith('-')
-        if is_negative:
-            tokens.append('[NEG]')
         
         #Remove plus as previously we treated it like a digit
         number = number.lstrip('+-')
