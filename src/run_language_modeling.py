@@ -187,7 +187,10 @@ def main():
         (ModelArguments, CustomTrainingArguments)
     )
     model_args, training_args = parser.parse_args_into_dataclasses()
+
+    # Set generation arguments
     training_args.predict_with_generate = True
+    training_args.generation_num_beams = 4
 
     if (
             os.path.exists(training_args.output_dir)
