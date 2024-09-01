@@ -843,7 +843,7 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
             # select the number embeddings corresponding to the selected beams
             next_number_embeddings = next_number_embeddings[beam_idx]
 
-            input_ids = torch.cat([input_ids[beam_idx, :], beam_next_tokens.unsqueeze(-1)], dim=-1)#
+            input_ids = torch.cat([input_ids[beam_idx, :], beam_next_tokens.unsqueeze(-1)], dim=-1)
             model_kwargs["decoder_number_embeddings"] = torch.cat([model_kwargs["decoder_number_embeddings"], next_number_embeddings[:, None]], dim=-1)
 
             #####################
@@ -895,7 +895,24 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
         #######################
         # Customized code start
         #######################
-        sequence_outputs["number_embeddings"] = model_kwargs["decoder_number_embeddings"][sequence_outputs["beam_indices"],:][:,-2]
+
+        # As the finalize method of the beam_scorer does not return the index of the highest scoring beam, we need to extract it manually again.
+        # Alternatively, the beam scorer and generate function could be overwritten to return the index of the highest scoring beam.
+        # The follwoing code is copied from the finalize method of the beam scorer and adapted to return the index of the highest scoring beam.
+        # The beams should already be finalized and we just have to retrieve the best again.
+
+        idx_final_beams = []
+        for i in range(batch_size):
+            beam_hyps_in_batch = beam_scorer._beam_hyps[i * beam_scorer.num_beam_groups : (i + 1) * beam_scorer.num_beam_groups]
+            candidate_beams = [beam for beam_hyp in beam_hyps_in_batch for beam in beam_hyp.beams]
+
+            # get the index of the highest scoring beam
+            best_beam_idx = max(enumerate(candidate_beams), key=lambda x: x[1][0])[0]
+            idx_final_beams.append(best_beam_idx+i*num_beams)
+
+        # extract the number embeddings corresponding to the highest scoring beams
+        sequence_outputs['number_embeddings'] = model_kwargs["decoder_number_embeddings"][idx_final_beams]
+
         #######################
         # Customized code end
         #######################
