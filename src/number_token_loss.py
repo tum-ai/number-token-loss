@@ -18,6 +18,10 @@ class NumberTokenLoss:
         )
 
     def forward(self, logits: Tensor, labels: Tensor):
+        if logits.numel() == 0:
+            raise Exception("Logits passed to the NumberTokenLoss are empty!")
+        if labels.numel() == 0:
+            raise Exception("Labels passed to the NumberTokenLoss are empty!")
 
         # Create a mask to filter out non-digit tokens
         number_tokens = ~torch.isnan(self.nvocab)
