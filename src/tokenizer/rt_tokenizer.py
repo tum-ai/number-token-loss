@@ -3,7 +3,7 @@ import re
 from typing import List
 
 from src.encoding_decoding.numerical_encodings import encoding_to_number
-from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
+from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer, NUMBER_REGEX
 
 
 class RtTokenizer(NumberEncodingTokenizer):
@@ -42,11 +42,17 @@ class RtTokenizer(NumberEncodingTokenizer):
         )
         return out
 
+    def t5_tokenize(self, text: str, **kwargs) -> List[str]:
+        return super().tokenize(
+            text, **kwargs
+        )
+
 
 def extract(text):
     #r"\s*[\s]*?(\+|\-)?(\d+)(\.)?(\d+)?\s*" with r"(\+|\-)?(\d+)(\.)?(\d+)?" to maintain spaces
     #Why are we not using the same strings as xval class (numbers are numbers after all) or the strings from RT?
-    pattern = r"(\d+)(\.)?(\d+)?"   
+    # TODO new pattern
+    # pattern = r"(\d+)(\.)?(\d+)?"
     numbers = []
 
     def replace(match):
@@ -73,6 +79,6 @@ def extract(text):
 
         return " ".join(tokens)
 
-    nonum_text = re.sub(pattern, replace, text)
+    nonum_text = re.sub(NUMBER_REGEX, replace, text)
     return nonum_text, numbers
 

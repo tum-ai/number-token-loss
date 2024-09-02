@@ -8,7 +8,7 @@ from transformers.tokenization_utils_base import TruncationStrategy, BatchEncodi
     PreTokenizedInput, PreTokenizedInputPair, EncodedInput, EncodedInputPair
 from transformers.utils import PaddingStrategy
 
-from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
+from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer, NUMBER_REGEX
 
 
 class XvalTokenizer(NumberEncodingTokenizer):
@@ -528,7 +528,6 @@ def extract(text, num_token="[NUM]"):
     # this regular expression is intended to match numerical values in various forms
     # like integers, floating-point numbers, or scientific notation, while avoiding
     # matching numbers that are part of strings.
-    pattern = r"(?<!\')-?\d+(\.\d+)?([eE][-+]?\d+)?(?!\'|\d)"
 
     numbers = []
 
@@ -536,7 +535,7 @@ def extract(text, num_token="[NUM]"):
         numbers.append(match.group())
         return "¬"
 
-    nonum_text = re.sub(pattern, replace, text)
+    nonum_text = re.sub(NUMBER_REGEX, replace, text)
     return compress_matrix(nonum_text).replace("¬", num_token), numbers
 
 
