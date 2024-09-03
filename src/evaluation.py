@@ -25,7 +25,7 @@ SURELY_NUMERIC_TOKEN_BOUND = 5000
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def convert_token_to_check_validity(token: str) -> float:
+def convert_token_to_check_validity(token: str) -> int:
     """
     Validates a token and extracts its numeric value if valid. Uses number encoding to allow usage with numpy
     
@@ -58,6 +58,7 @@ def is_valid_numeric_token_sequence(validation_array: np.ndarray) -> bool:
     # Make a copy of the array to work with
     output = np.array(validation_array, dtype=float)
     output = np.where(output == NON_NUMERIC_TOKEN, np.nan, output)
+    output = np.where(output == MALFORMED_RT_TOKEN, np.nan, output)
 
     # Find indices of non-NaN numbers
     valid_mask = ~np.isnan(output)
@@ -74,7 +75,7 @@ def is_valid_numeric_token_sequence(validation_array: np.ndarray) -> bool:
     invalid_transitions = (valid_mask & ~valid_decreases)
 
     # Count invalid transitions
-    invalid_count = np.sum(invalid_transitions)
+    invalid_count = np.sum(invalid_transitions) + np.sum(validation_array == MALFORMED_RT_TOKEN)
 
     # Set invalid sequence starts to NaN
     output[invalid_transitions] = np.nan
@@ -126,7 +127,7 @@ def convert_tokens_to_num_rt(token_array: np.ndarray, tokenizer: NumberEncodingT
 
     number_token_array = copy.deepcopy(token_array)
     number_token_array[~valid_sequence_mask] = np.nan
-    number_token_array = np.vectorize(functools.partial(encoding_to_number, invalid_strict=False))(number_token_array)
+    number_token_array = np.vectorize(functools.partial(encoding_to_number, invalid_strict=False), otypes=[float])(number_token_array)
     number_token_array = np.where(~valid_sequence_mask, np.nan, number_token_array)
     number_token_array = np.array(list(map(sum_sequences, number_token_array)))
 
@@ -145,6 +146,8 @@ def convert_tokens_to_num_rt(token_array: np.ndarray, tokenizer: NumberEncodingT
             else:
                 token = token_array[row][idx]
                 is_negative = token == "[NEG]"
+                if is_negative:
+                    continue
                 result[row].append(token)
 
     return result, invalid_count
@@ -187,29 +190,6 @@ class CustomMetrics:
         decoded = [self.tokenizer.convert_tokens_to_string(tokens) if len(tokens) else "" for tokens in converted_numbers]
 
         return decoded, invalid_count
-
-    def calculate_mse_rt(self, predicted: List[float], groundtruth: List[float]) -> Tuple[float, int]:
-        """
-            Calculates the mean squared error for valid predicted-ground truth pairs.
-            
-            Args:
-                predicted: A list of predicted float numbers.
-                groundtruth: A list of ground truth float numbers.
-            
-            Returns:
-                The mean squared error for valid pairs and the count of valid pairs.
-            """
-        mse = 0.0
-        valid_count = 0
-
-        for pred, gt in zip(predicted, groundtruth):
-            if not math.isnan(pred) and not math.isnan(gt):
-                mse += (pred - gt) ** 2
-                valid_count += 1
-
-        if valid_count == 0:
-            return float('nan'), 0
-        return mse / valid_count, valid_count
 
     def calculate_mse_xval(self, token_predictions, number_predictions, token_labels, number_labels):
         gt_num_mask = torch.isin(token_labels, torch.tensor(self.tokenizer.get_num_token_ids(), device=DEVICE))
