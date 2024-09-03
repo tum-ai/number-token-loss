@@ -406,7 +406,7 @@ def main():
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         tokenizer=tokenizer,
-        callbacks=[early_stopping_callback],
+        # callbacks=[early_stopping_callback],
         compute_metrics=custom_metrics,
     )
 
