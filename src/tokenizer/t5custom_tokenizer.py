@@ -15,12 +15,6 @@ class T5Custom_Tokenizer(NumberEncodingTokenizer):
 
         num_tokens = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
 
-        # TODO mask token should not be needed
-        mask_token = "[MASK]"
-        self.add_tokens([mask_token])
-        self.mask_token = mask_token
-        self.mask_token_id = self.convert_tokens_to_ids(mask_token)
-
         self.num_tokens = num_tokens
         self.num_token_ids = [self.convert_tokens_to_ids(num_token) for num_token in num_tokens]
         self.embedding_dim = embedding_dim
