@@ -15,12 +15,6 @@ class RtTokenizer(NumberEncodingTokenizer):
 
         num_tokens = [line.strip() for line in lines]
 
-        # TODO mask token should not be needed
-        mask_token = "[MASK]"
-        self.add_tokens([mask_token])
-        self.mask_token = mask_token
-        self.mask_token_id = self.convert_tokens_to_ids(mask_token)
-
         self.add_tokens(num_tokens)
         self.num_tokens = num_tokens
         self.num_token_ids = [self.convert_tokens_to_ids(num_token) for num_token in num_tokens]
@@ -49,10 +43,6 @@ class RtTokenizer(NumberEncodingTokenizer):
 
 
 def extract(text):
-    #r"\s*[\s]*?(\+|\-)?(\d+)(\.)?(\d+)?\s*" with r"(\+|\-)?(\d+)(\.)?(\d+)?" to maintain spaces
-    #Why are we not using the same strings as xval class (numbers are numbers after all) or the strings from RT?
-    # TODO new pattern
-    # pattern = r"(\d+)(\.)?(\d+)?"
     numbers = []
 
     def replace(match):
