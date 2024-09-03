@@ -257,7 +257,7 @@ def main():
         model_class = T5RegressionModelXval
         tokenizer_class = XvalTokenizer
     elif model_args.number_encoding.lower() == "none":
-        if model_args.number_token_loss is not None:
+        if model_args.number_token_loss:
             model_class = T5VanillaForNumberTokenLoss
             tokenizer_class = T5Custom_Tokenizer
         else:
@@ -290,10 +290,10 @@ def main():
     else:
         model_init_kwargs = {}
 
-    if model_args.number_encoding == "xval" and model_args.number_token_loss is not None:
+    if model_args.number_encoding == "xval" and model_args.number_token_loss:
         raise Exception("Xval does not accept NumberTokenLoss")
 
-    if model_args.number_token_loss is not None:
+    if model_args.number_token_loss:
         model_init_kwargs["number_token_loss"] = NumberTokenLoss(
             tokenizer,
             training_args.device,

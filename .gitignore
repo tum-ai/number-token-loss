@@ -3,3 +3,4 @@ data/
 *.pyc
 launch.json
 wandb
+.idea/
