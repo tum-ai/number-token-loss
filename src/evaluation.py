@@ -12,6 +12,7 @@ from transformers import EvalPrediction
 from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer, NUMBER_REGEX
 from src.encoding_decoding.numerical_encodings import encoding_to_number
 from src.utils.helper_functionality import print_structure, write_debug_log
+import logging
 import evaluate
 import nltk
 
@@ -161,6 +162,7 @@ class CustomMetrics:
         self.rouge_metric = evaluate.load("rouge")
         self.bleu_metric = evaluate.load("sacrebleu")
         nltk.download('punkt_tab')
+        nltk.download("punkt")
 
         if self.number_encoding == "none":
             # ▁ is necessary as T5 Tokenizes white spaces like this and it has tokens for 1 and ▁1
@@ -242,7 +244,11 @@ class CustomMetrics:
         label_number = float(label_number)
 
         # Calculate the mean squared error
-        mse = (prediction_number - label_number) ** 2
+        try:
+            mse = (prediction_number - label_number) ** 2
+        except Exception as e:
+            logging.error(f"Error calculating MSE: {e} with numbers {prediction_number} and {label_number}")
+            mse = np.nan
         return mse
 
 
