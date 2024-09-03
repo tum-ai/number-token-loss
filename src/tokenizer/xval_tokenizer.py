@@ -29,6 +29,12 @@ class XvalTokenizer(NumberEncodingTokenizer):
     def get_num_token_ids(self):
         return [self.num_token_id]
 
+    def get_num_tokens(self):
+        return [self.num_token]
+
+    def decode_number_token(self, token, number: float = None):
+        return number
+
     def _encode_plus(
             self,
             text: Union[TextInput, PreTokenizedInput, EncodedInput],

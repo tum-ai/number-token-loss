@@ -32,6 +32,12 @@ class T5Custom_Tokenizer(NumberEncodingTokenizer):
     def get_num_token_ids(self):
         return self.num_token_ids
 
+    def get_num_tokens(self):
+        return self.num_tokens
+
+    def decode_number_token(self, token):
+        return float(token)
+
     def tokenize(self, text: str, add_special_tokens=False, **kwargs) -> List[str]:
         out = super().tokenize(
             text, **kwargs
