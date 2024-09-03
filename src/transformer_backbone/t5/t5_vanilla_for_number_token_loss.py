@@ -1,35 +1,16 @@
-from typing import Optional, Tuple, Union
-from transformers import T5Tokenizer, T5Model, T5ForConditionalGeneration
+from transformers import T5ForConditionalGeneration
 from transformers.modeling_outputs import Seq2SeqLMOutput
 import torch
-import torch.nn as nn
-from src.encoding_decoding.numerical_encodings import FloatEncoding
-import copy
+from typing import Optional, Tuple, Union
 from src.number_token_loss import NumberTokenLoss
-V_MAX = 3000000000
 
 
-class T5RegressionModelRT(T5ForConditionalGeneration):
-    _tied_weights_keys = [
-        "encoder.embed_tokens.token_embeddings.weight",
-        "encoder.embed_tokens.number_embeddings.weight",
-        'encoder.embed_tokens.number_embeddings.embedding.weight',
-        "decoder.embed_tokens.token_embeddings.weight",
-        "decoder.embed_tokens.number_embeddings.weight",
-        "decoder.embed_tokens.number_embeddings.embedding.weight",
-        "lm_head.weight",
-    ]
-
+class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
     def __init__(self, config, number_token_loss: NumberTokenLoss = None):
         super().__init__(config)
-        super()._resize_token_embeddings(config.vocab_size)
-        number_embeds = FloatEncoding(num_embeddings=config.vocab_size, embedding_dim=self.config.d_model,
-                                      vocab=config.added_vocab, vmax=V_MAX)
-        combined_embeddings = RTEmbeddings(self.shared, number_embeds)
-        # Set the new embedding for encoder and decoder.
-        self.set_input_embeddings(combined_embeddings)
-        self.number_token_loss = number_token_loss
 
+        # Initialize NumberTokenLoss
+        self.number_token_loss = number_token_loss
 
     def forward(
             self,
@@ -71,27 +52,9 @@ class T5RegressionModelRT(T5ForConditionalGeneration):
             return_dict=return_dict,
         )
 
-        # If labels are provided, calculate the NumberTokenLoss
+        # If labels are provided, calculate and combine the NumberTokenLoss
         if labels is not None and self.number_token_loss is not None:
             number_token_loss = self.number_token_loss.forward(outputs.logits, labels)
             outputs.loss = (1.0 - self.number_token_loss.weight) * outputs.loss + \
-                        self.number_token_loss.weight * number_token_loss
+                           self.number_token_loss.weight * number_token_loss
         return outputs
-
-
-class RTEmbeddings(nn.Module):
-    def __init__(self, token_embeddings, number_embeddings):
-        super().__init__()
-        self.token_embeddings = copy.deepcopy(token_embeddings)
-        self.number_embeddings = number_embeddings
-
-    def forward(self, input_ids):
-        # Compute token embeddings
-        token_embeds = self.token_embeddings(input_ids)
-
-        # Compute number embeddings
-        number_embeds = self.number_embeddings(input_ids)
-
-        # Combine embeddings by addition
-        combined_embeds = token_embeds + number_embeds
-        return combined_embeds

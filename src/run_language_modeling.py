@@ -8,6 +8,7 @@ The file is an adaptation of https://github.com/huggingface/transformers/blob/v3
 import sys
 
 from src.trainer import CustomSeq2SeqTrainer
+from src.transformer_backbone.t5.t5_vanilla_for_number_token_loss import T5VanillaForNumberTokenLoss
 
 sys.path.append("..")
 
@@ -42,6 +43,7 @@ from src.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
 from src.transformer_backbone.t5.t5_rt import T5RegressionModelRT
 from src.transformer_backbone.t5.t5_xval import T5RegressionModelXval
 from src.evaluation import CustomMetrics
+from src.number_token_loss import NumberTokenLoss
 
 transformers.logging.set_verbosity_info()
 logger = logging.getLogger(__name__)
@@ -150,6 +152,24 @@ class ModelArguments:
             "help": "Chose either xval or rt or None for number encodings"
         },
     )
+    number_token_loss: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "Adds NumberTokenLoss object"
+        },
+    )
+    number_token_loss_weight: Optional[float] = field(
+        default=0.5,
+        metadata={
+            "help": "Weight of the number_token_loss in reference to other loss"
+        },
+    )
+    number_token_loss_order: Optional[int] = field(
+        default=2,
+        metadata={
+            "help": "Sets the order of the NTL. For example 2 -> MSE, 3 -> Mean Cubic Error etc."
+        },
+    )
 
 
 def main():
@@ -237,9 +257,12 @@ def main():
         model_class = T5RegressionModelXval
         tokenizer_class = XvalTokenizer
     elif model_args.number_encoding.lower() == "none":
-        model_class = T5ForConditionalGeneration
-        # TODO only use for custom loss, else use default T5 tokenizer
-        tokenizer_class = T5Custom_Tokenizer
+        if model_args.number_token_loss:
+            model_class = T5VanillaForNumberTokenLoss
+            tokenizer_class = T5Custom_Tokenizer
+        else:
+            model_class = T5ForConditionalGeneration
+            tokenizer_class = transformers.AutoTokenizer
     else:
         raise ValueError(f"Unknown number encoding: {model_args.number_encoding}")
 
@@ -267,6 +290,16 @@ def main():
     else:
         model_init_kwargs = {}
 
+    if model_args.number_encoding == "xval" and model_args.number_token_loss:
+        raise Exception("Xval does not accept NumberTokenLoss")
+
+    if model_args.number_token_loss:
+        model_init_kwargs["number_token_loss"] = NumberTokenLoss(
+            tokenizer,
+            training_args.device,
+            loss_order=model_args.number_token_loss_order,
+            weight=model_args.number_token_loss_weight
+        )
 
     if model_args.model_name_or_path:
 
