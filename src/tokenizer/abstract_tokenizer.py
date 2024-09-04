@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
+from typing import List, Union
 
+import numpy as np
+import torch
 from transformers import T5Tokenizer
-from typing import List
 
 # NUMBER_REGEX = r"(\-)?(\d+)(\.)?(\d+)?"
 NUMBER_REGEX = r"(\d+)(\.)?(\d+)?"
@@ -21,4 +23,8 @@ class NumberEncodingTokenizer(T5Tokenizer, ABC):
 
     @abstractmethod
     def decode_number_token(self, token: str) -> float:
+        pass
+
+    @abstractmethod
+    def decode_into_human_readable(self, ids: Union[List[int], List[List[int]], "np.ndarray", "torch.Tensor"]) -> List[str]:
         pass
