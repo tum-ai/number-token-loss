@@ -158,10 +158,11 @@ class CustomMetrics:
     Compute custom metrics for the model with access to the vocab to compute MSE
     """
 
-    def __init__(self, tokenizer: NumberEncodingTokenizer, number_encoding: str):
+    def __init__(self, tokenizer: NumberEncodingTokenizer, number_encoding: str, output_dir: str):
         self.tokenizer = tokenizer
         self.index_to_token = {v: k for k, v in tokenizer.get_vocab().items()}
         self.number_encoding = number_encoding
+        self.output_dir = output_dir
         self.rouge_metric = evaluate.load("rouge")
         self.bleu_metric = evaluate.load("sacrebleu")
         nltk.download('punkt_tab')
@@ -177,6 +178,8 @@ class CustomMetrics:
 
         self.batch_stats = []
 
+        self.eval_count = 0
+
     def parse_rt(self, predictions):
         if predictions.is_cuda:
             predictions = predictions.cpu()
@@ -187,7 +190,11 @@ class CustomMetrics:
 
         converted_numbers, invalid_count = convert_tokens_to_num_rt(parsed_tokens, self.tokenizer)
         converted_numbers = [list(filter(lambda x: x not in self.tokenizer.all_special_tokens, decoded_id)) for decoded_id in converted_numbers]
-        decoded = [self.tokenizer.convert_tokens_to_string(tokens) if len(tokens) else "" for tokens in converted_numbers]
+        try:
+            decoded = [self.tokenizer.convert_tokens_to_string(tokens) if len(tokens) else "" for tokens in converted_numbers]
+        except Exception as e:
+            logging.error(f"Error converting tokens to string: {e} for tokens {converted_numbers}")
+            decoded = ["" for _ in range(len(converted_numbers))]
 
         return decoded, invalid_count
 
@@ -363,6 +370,15 @@ class CustomMetrics:
         else:
             decoded_preds = self.decode_ids(predictions)
             decoded_labels = self.decode_ids(token_labels)
+
+        if compute_result:
+            # save decoded predictions and labels for debugging
+            with open(f"{self.output_dir}/decoded_preds_{self.eval_count}.txt", "w") as f:
+                for idx in range(len(decoded_preds)):
+                    f.write(f"Prediction {idx}: {decoded_preds[idx]}\n")
+                    f.write(f"Label {idx}: {decoded_labels[idx]}\n")
+            self.eval_count += 1
+
 
         # compute perplexity
         perplexity_value = self.perplexity(logits, token_labels[:, :logits.size(1)])
