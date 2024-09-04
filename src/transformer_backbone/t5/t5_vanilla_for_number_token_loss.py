@@ -55,6 +55,8 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
         # If labels are provided, calculate and combine the NumberTokenLoss
         if labels is not None and self.number_token_loss is not None:
             number_token_loss = self.number_token_loss.forward(outputs.logits, labels)
+            outputs["number_loss"] = number_token_loss
+            outputs["token_loss"] = outputs.loss
             outputs.loss = (1.0 - self.number_token_loss.weight) * outputs.loss + \
                            self.number_token_loss.weight * number_token_loss
         return outputs
