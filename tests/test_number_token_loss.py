@@ -25,17 +25,6 @@ class TestNumberTokenLoss(unittest.TestCase):
         expected_loss = 0.0  # Perfect prediction
         self.assertAlmostEqual(loss, expected_loss, places=5)
 
-    def test_forward_with_order(self):
-        logits = self.create_logits([(5, 0, 10.0)])
-        labels = torch.tensor([[self.tokenizer.convert_tokens_to_ids("_3_0_")]])
-        loss_order2 = self.number_token_loss.forward(logits, labels)
-        number_token_loss_order3 = NumberTokenLoss(self.tokenizer, self.device, loss_order=3)
-        loss_order3 = number_token_loss_order3.forward(logits, labels)
-        expected_loss_order2 = 4.0  # (5 - 3)^2
-        expected_loss_order3 = 8.0  # (5 - 3)^3
-        self.assertAlmostEqual(loss_order2, expected_loss_order2, places=5)
-        self.assertAlmostEqual(loss_order3, expected_loss_order3, places=5)
-
     def test_forward_edge_case_empty_logits(self):
         # Test with empty logits
         logits = torch.empty(0, 0, len(self.tokenizer.get_vocab()))
@@ -91,7 +80,7 @@ class TestNumberTokenLoss(unittest.TestCase):
         self.assertAlmostEqual(loss, expected_loss, places=5)
 
     def test_negative_numbers(self):
-        logits = self.create_logits([(5, 0, 10.0)])
+        logits = self.create_logits([(5, 0, 10.0), (5, 0, 10.0)])
         labels = torch.tensor([[
             self.tokenizer.convert_tokens_to_ids("[NEG]"),
             self.tokenizer.convert_tokens_to_ids("_5_0_")

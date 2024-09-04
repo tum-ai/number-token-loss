@@ -76,7 +76,7 @@ class T5RegressionModelRT(T5ForConditionalGeneration):
         # If labels are provided, calculate the NumberTokenLoss
         if labels is not None and self.number_token_loss is not None:
             number_token_loss = self.number_token_loss.forward(outputs.logits, labels)
-            number_token_loss = torch.log10(number_token_loss + 1)
+            # number_token_loss = torch.log10(number_token_loss + 1)
             outputs["number_loss"] = number_token_loss
             outputs["token_loss"] = outputs.loss
             outputs.loss = (1.0 - self.number_token_loss.weight) * outputs.loss + \
