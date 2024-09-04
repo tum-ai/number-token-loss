@@ -2,9 +2,7 @@ name: Run Pytest
 
 on:
   push:
-    branches: [ kacper ]
   pull_request:
-    branches: [ kacper ]
 
 jobs:
   test:
