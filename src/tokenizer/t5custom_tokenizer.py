@@ -1,6 +1,9 @@
 import os
 import re
-from typing import List
+from typing import List, Union, Tuple
+
+import numpy as np
+import torch
 
 from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 
@@ -40,4 +43,7 @@ class T5Custom_Tokenizer(NumberEncodingTokenizer):
             else:
                 out_list.append(token)
 
-        return out_list    
+        return out_list
+
+    def decode_into_human_readable(self, ids: Union[List[int], List[List[int]], "np.ndarray", "torch.Tensor"]) -> List[str]:
+        return self.batch_decode(ids, skip_special_tokens=True)
