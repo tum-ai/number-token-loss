@@ -28,6 +28,12 @@ def preprocess_numbers(text: str):
     for match in matches:
         text = text.replace(match[0], match[0].replace(",", ""))
 
+    # add zero before decimal point in number like .5 with 0.5
+    number_decimal_regex = r"(\D)(\.\d+)"
+    matches = re.findall(number_decimal_regex, text)
+    for match in matches:
+        text = text.replace(match[1], "0" + match[1])
+
     return text
 
 
@@ -36,16 +42,16 @@ def main():
     print(os.getcwd())
 
     file_path = "data/"
-    file_name = "test_clean.jsonl"
 
-    for line in read_json(file_path + file_name):
-        question = preprocess_numbers(line['question'])
-        answer = preprocess_numbers(line['answer'])
-        line['question'] = question
-        line['answer'] = answer
+    for file_name in ["train_t_clean.jsonl", "val_t_clean.jsonl", "test_clean.jsonl"]:
+        for line in read_json(file_path + file_name):
+            question = preprocess_numbers(line['question'])
+            answer = preprocess_numbers(line['answer'])
+            line['question'] = question
+            line['answer'] = answer
 
-        with open(file_path + "preprocessed/" + file_name, 'a') as file:
-            file.write(json.dumps(line) + "\n")
+            with open(file_path + "preprocessed/" + file_name, 'a') as file:
+                file.write(json.dumps(line) + "\n")
 
 
 if __name__ == "__main__":
