@@ -3,6 +3,7 @@ import warnings
 from math import cos, inf, sin
 from typing import Dict, Optional, List
 
+import numpy as np
 import torch
 import torch.nn as nn
 import transformers
@@ -128,7 +129,7 @@ def encoding_to_number(token: str, invalid_strict=True) -> float:
         if invalid_strict:
             raise ValueError(f"no valid rt encoding {token}")
         else:
-            return 0
+            return np.nan
     digit = int(token[1])
     order = int(token.split("_")[-2])
     val = digit * 10 ** order
