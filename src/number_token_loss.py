@@ -1,14 +1,14 @@
 import torch
 import torch.nn.functional as F
 from torch._tensor import Tensor
-from src.encoding_decoding.numerical_encodings import encoding_to_number
+
 from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 
 
 class NumberTokenLoss:
-    def __init__(self, tokenizer: NumberEncodingTokenizer, device, loss_order=2, weight=0.5):
+    def __init__(self, tokenizer: NumberEncodingTokenizer, device, loss_function=F.mse_loss, weight=0.5):
         self.tokenizer = tokenizer
-        self.order = loss_order
+        self.loss_function = loss_function
         self.weight = weight
         hashed_num_tokens = set(self.tokenizer.get_num_tokens())
         self.nvocab = torch.tensor(
@@ -32,6 +32,5 @@ class NumberTokenLoss:
         yhat = torch.sum(softmaxed * self.nvocab[number_tokens], dim=-1)
         y = self.nvocab[labels]
 
-        # Compute the final loss function
-        loss = torch.nanmean((torch.abs(y - yhat) ** self.order))
-        return float(loss)
+        loss = self.loss_function(yhat[~torch.isnan(y)], y[~torch.isnan(y)])
+        return loss
