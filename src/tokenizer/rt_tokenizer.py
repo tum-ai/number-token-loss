@@ -69,6 +69,23 @@ def extract(text):
 
         return " ".join(tokens)
 
+    text = separate_space_seperated_numbers_by_comma(text)
     nonum_text = re.sub(NUMBER_REGEX, replace, text)
     return nonum_text, numbers
+
+
+def separate_space_seperated_numbers_by_comma(text):
+    # If two numbers are just seperated by whitespace or linebreak, we must clearly split them by comma for
+    # the tokenizer to recognize them as two different numbers
+    regex = r"(\d+\.?\d*)\s+(\d+\.?\d*)"
+    return re.sub(regex, r"\1, \2", text)
+
+
+if __name__ == "__main__":
+    tokenizer = RtTokenizer.from_pretrained("t5-small")
+    print(tokenizer.convert_tokens_to_string(tokenizer.tokenize("(3/2)x=54\n3x=108")))
+    # print(separate_space_seperated_numbers_by_comma("5.34\n4.45"))
+    # print(separate_space_seperated_numbers_by_comma("5.34 4.45"))
+    # print(separate_space_seperated_numbers_by_comma("5  4"))
+    # print(separate_space_seperated_numbers_by_comma("54 4"))
 
