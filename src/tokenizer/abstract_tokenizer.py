@@ -6,7 +6,7 @@ import torch
 from transformers import T5Tokenizer
 
 # NUMBER_REGEX = r"(\-)?(\d+)(\.)?(\d+)?"
-NUMBER_REGEX = r"(\d+)(\.)?(\d+)?"
+NUMBER_REGEX = r"(\d+)(\.\d+)?"
 
 
 class NumberEncodingTokenizer(T5Tokenizer, ABC):
