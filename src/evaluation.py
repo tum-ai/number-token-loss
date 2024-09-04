@@ -16,13 +16,13 @@ import nltk
 
 PADDING_TOKEN = -100
 MASKED_OUT = -1
-MALFORMED_RT_TOKEN = 100000
+MALFORMED_RT_TOKEN = 10001
 NON_NUMERIC_TOKEN = 10000
 SURELY_NUMERIC_TOKEN_BOUND = 5000
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def convert_token_to_check_validity(token: str) -> float:
+def convert_token_to_check_validity(token: str) -> int:
     """
     Validates a token and extracts its numeric value if valid. Uses number encoding to allow usage with numpy
     
@@ -30,7 +30,7 @@ def convert_token_to_check_validity(token: str) -> float:
         token (str): The token to be validated and converted.
     
     Returns:
-        float: The extracted numeric value if the token is valid, otherwise a predefined error code.
+        int: The extracted digit index if the token is numeric, 10000 for valid NON_NUMERIC_TOKEN and 10001 for MALFORMED_RT_TOKEN, i.e. numeric tokens.
     """
     if token.startswith("_") and token.endswith("_"):
         parts = token.strip("_").split("_")
@@ -50,14 +50,14 @@ def is_valid_numeric_token_sequence(validation_array: np.ndarray) -> bool:
         validation_array (np.ndarray): Array of numeric values derived from tokens.
     
     Returns:
-        bool: True if the array contains a valid decreasing sequence, otherwise False.
+        int: 0 if the array contains no numeric tokens, 1 if it contains a valid sequence, i.e. decreasing indices without interruption, 2 if sequence doesn't form valid sequence.
     """
     numeric_token_indices = np.where(validation_array < SURELY_NUMERIC_TOKEN_BOUND)[0]
     if len(numeric_token_indices) == 0:
-        return False
+        return 0
     # Numeric tokens are a) consequitive without interruption, b) encoded position form decreasing sequence
-    valid_sequence = np.all(np.diff(numeric_token_indices) == 1) and np.all(
-        np.diff(validation_array[numeric_token_indices]) == -1)
+    valid_sequence = 2 - (np.all(np.diff(numeric_token_indices) == 1) and np.all(
+        np.diff(validation_array[numeric_token_indices]) == -1))
     return valid_sequence
 
 
@@ -76,7 +76,10 @@ def convert_tokens_to_num_rt(token_array: np.ndarray) -> np.ndarray:
     validation_array = np.vectorize(convert_token_to_check_validity)(token_array)
 
     all_tokens_valid_per_row = np.all(validation_array != MALFORMED_RT_TOKEN, axis=1)
-    valid_numeric_token_sequence_per_row = np.apply_along_axis(is_valid_numeric_token_sequence, 1, validation_array)
+    valid_sequences_indicator_per_row = np.apply_along_axis(is_valid_numeric_token_sequence, 1, validation_array)
+    count_no_number_prediction = (valid_sequences_indicator_per_row==0).sum()
+    count_invalid_number_prediction = (valid_sequences_indicator_per_row==2).sum()
+    valid_numeric_token_sequence_per_row = valid_sequences_indicator_per_row==1
     valid_mask = all_tokens_valid_per_row & valid_numeric_token_sequence_per_row
 
     # We use a trick by converting non numeric tokens to zero and assuming there is only one numeric token
@@ -90,7 +93,7 @@ def convert_tokens_to_num_rt(token_array: np.ndarray) -> np.ndarray:
 
     value_array_with_nans = np.where(valid_mask, value_array, np.nan)
 
-    return value_array_with_nans, valid_mask
+    return value_array_with_nans, count_no_number_prediction, count_invalid_number_prediction
 
 
 class CustomMetrics:
@@ -124,8 +127,7 @@ class CustomMetrics:
 
         parsed_tokens = np.vectorize(lambda x: self.index_to_token.get(x, '<pad>'))(predictions_np)
 
-        converted_numbers, _ = convert_tokens_to_num_rt(parsed_tokens)
-        return converted_numbers
+        return convert_tokens_to_num_rt(parsed_tokens)
 
     def calculate_mse_rt(self, predicted: List[float], groundtruth: List[float]) -> Tuple[float, int]:
         """
@@ -140,7 +142,6 @@ class CustomMetrics:
             """
         mse = 0.0
         valid_count = 0
-
         for pred, gt in zip(predicted, groundtruth):
             if not math.isnan(pred) and not math.isnan(gt):
                 mse += (pred - gt) ** 2
@@ -151,19 +152,18 @@ class CustomMetrics:
         return mse / valid_count, valid_count
 
     def calculate_mse_xval(self,predictions, number_predictions, token_labels, number_labels):
-        num_mask = torch.isin(token_labels, torch.tensor(self.tokenizer.get_num_token_ids(), device=DEVICE))
+        true_num_mask  = torch.isin(token_labels, torch.tensor(self.tokenizer.get_num_token_ids(), device=DEVICE))
         mse = F.mse_loss(
-            number_predictions[num_mask],
-            number_labels[num_mask].reshape(-1, 1),
+            number_predictions[true_num_mask],
+            number_labels[true_num_mask].reshape(-1, 1),
             reduction="mean",
         )
         predicted_num_mask = predictions == 32100
-        true_num_mask = num_mask
-        # 1. Predict number but no number in true values
-        sum_incorrectly_predicted_nums = np.sum(predicted_num_mask & ~true_num_mask)
-        sum_incorrectly_predicted_text = np.sum(~predicted_num_mask & true_num_mask)
 
-        return mse.cpu().numpy(), sum_incorrectly_predicted_nums, sum_incorrectly_predicted_text
+        count_no_number_prediction = (~predicted_num_mask & true_num_mask).sum()
+        count_invalid_number_prediction = 0
+
+        return mse.cpu().numpy(), count_no_number_prediction.cpu().numpy(), count_invalid_number_prediction
 
     def perplexity(self, logits, labels):
         # Mask to ignore panumeric_tokening tokens (-100)
@@ -292,13 +292,11 @@ class CustomMetrics:
         accuracy = (torch.sum(correct_predictions) / torch.sum(mask)).item() if torch.sum(mask) > 0 else 0
 
         if self.number_encoding == "xval":
-            mse = self.calculate_mse_xval(predictions, predicted_numbers, token_labels, number_labels)
-            nan_count = -1  # TODO
+            mse, count_no_number_prediction, count_invalid_number_prediction = self.calculate_mse_xval(predictions, predicted_numbers, token_labels, number_labels)
         elif self.number_encoding == "rt":
-            predicted_numbers = self.parse_rt(predictions)
-            groundtruth_numbers = self.parse_rt(token_labels)
-            mse, _ = self.calculate_mse_rt(predicted_numbers, groundtruth_numbers)
-            nan_count = sum(math.isnan(num) for num in predicted_numbers)
+            predicted_numbers, count_no_number_prediction, count_invalid_number_prediction = self.parse_rt(predictions)
+            groundtruth_numbers, _, _ = self.parse_rt(token_labels)
+            mse = self.calculate_mse_rt(predicted_numbers, groundtruth_numbers)
         elif self.number_encoding.lower() == "none":
             num_mask = torch.isin(predictions, self.numeric_token_tensor).cpu().numpy()
 
@@ -315,27 +313,47 @@ class CustomMetrics:
 
             collapsed_predicted_text = np.apply_along_axis(''.join, 1, predicted_text)
             collapsed_groundtruth_text = np.apply_along_axis(''.join, 1, groundtruth_text)
-
-            def try_convert(s):
+            
+            def convert(s):
+                """Attempts to convert a string to a float. Returns NaN if it fails."""
                 try:
                     return float(s)
                 except ValueError:
                     return np.nan
 
-            vectorized_conversion = np.vectorize(try_convert)
+            def contains_digits(s):
+                """Check if the string contains any digits."""
+                return bool(re.search(r'\d', s))
+
+            def is_float(s):
+                """Check if the string matches the float regex pattern."""
+                #Official regex from python
+                float_pattern = re.compile(r'^[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?$')
+                return bool(float_pattern.match(s))
+            
+            vectorized_digit_checker = np.vectorize(contains_digits)
+            vectorized_float_checker = np.vectorize(is_float)
+            vectorized_conversion = np.vectorize(convert)
+
             predicted_numbers = vectorized_conversion(collapsed_predicted_text)
+            row_contains_digit = vectorized_digit_checker(collapsed_predicted_text)
+            row_contains_float = vectorized_float_checker(collapsed_predicted_text)
+
+            count_no_number_prediction = (~row_contains_digit).sum()
+            count_invalid_number_prediction = (row_contains_digit & ~row_contains_float).sum()
+
+            count_invalid_number_prediction
             groundtruth_numbers = vectorized_conversion(collapsed_groundtruth_text)
 
             mse, _ = self.calculate_mse_rt(predicted_numbers, groundtruth_numbers)
-            nan_count = sum(math.isnan(num) for num in predicted_numbers)
         else:
             raise NotImplementedError("Requesting evaluation for not supported number_encoding: {self.number_encoding}")
-
         self.batch_stats.append({
             'token_accuracy_whole': accuracy_w,
             'token_accuracy': accuracy,
             'MSE': mse,
-            'nan_count': nan_count,
+            'count_no_number_prediction': count_no_number_prediction,
+            'count_invalid_number_prediction': count_invalid_number_prediction,
             'token_perplexity': perplexity_value,
             'bleu': bleu['score'],
             'rouge': rouge['rougeLsum']
@@ -346,7 +364,8 @@ class CustomMetrics:
                 'token_accuracy_whole': np.mean([stat['token_accuracy_whole'] for stat in self.batch_stats]),
                 'token_accuracy': np.mean([stat['token_accuracy'] for stat in self.batch_stats]),
                 'MSE': np.mean([stat['MSE'] for stat in self.batch_stats]),
-                'nan_count': np.sum([stat['nan_count'] for stat in self.batch_stats]),
+                'count_no_number_prediction': np.sum([stat['count_no_number_prediction'] for stat in self.batch_stats]),
+                'count_invalid_number_prediction': np.sum([stat['count_invalid_number_prediction'] for stat in self.batch_stats]),
                 'token_perplexity': np.mean([stat['token_perplexity'] for stat in self.batch_stats]),
                 "bleu": np.mean([stat['bleu'] for stat in self.batch_stats]),
                 "rouge": np.mean([stat['rouge'] for stat in self.batch_stats]),
