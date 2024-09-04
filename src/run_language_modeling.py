@@ -15,13 +15,15 @@ sys.path.append("..")
 import json
 import logging
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Literal
 import wandb
 
 import numpy as np
 import pandas as pd
 import torch
+import torch.nn.functional as F
 import transformers
 from transformers import (
     CONFIG_MAPPING,
@@ -164,8 +166,8 @@ class ModelArguments:
             "help": "Weight of the number_token_loss in reference to other loss"
         },
     )
-    number_token_loss_order: Optional[int] = field(
-        default=2,
+    number_token_loss_function: Optional[Literal["mse", "huber", "mae"]] = field(
+        default="mse",
         metadata={
             "help": "Sets the order of the NTL. For example 2 -> MSE, 3 -> Mean Cubic Error etc."
         },
@@ -297,10 +299,19 @@ def main():
         raise Exception("Xval does not accept NumberTokenLoss")
 
     if model_args.number_token_loss:
+        if model_args.number_token_loss_function == "mse":
+            loss_function = F.mse_loss
+        elif model_args.number_token_loss_function == "huber":
+            loss_function = F.huber_loss
+        elif model_args.number_token_loss_function == "mae":
+            loss_function = F.l1_loss
+        else:
+            raise ValueError(f"Unknown loss function: {model_args.number_token_loss_function}")
+
         model_init_kwargs["number_token_loss"] = NumberTokenLoss(
             tokenizer,
             training_args.device,
-            loss_order=model_args.number_token_loss_order,
+            loss_function=loss_function,
             weight=model_args.number_token_loss_weight
         )
 
@@ -342,21 +353,25 @@ def main():
         config.added_vocab = tokenizer.get_added_vocab()  # Set added vocab for number encoding
         model = model_class(config=config, **model_init_kwargs)
 
+    # model.generation_config.num_beams = training_args.generation_num_beams
+    # model.generation_config.do_sample = True
+
     logger.info(f"PyTorch version: {torch.__version__}")
-    '''
-    #model.resize_token_embeddings(len(tokenizer))
-    # Set number embeddings for RT encoding
-    if model_args.number_encoding == "rt":
-        model.set_number_embeds(len(tokenizer), tokenizer.get_vocab())
-    '''
 
     # Get datasets
-    train_data_path = 'data/grade-school-math/grade_school_math/data/train_small.jsonl'
-    eval_data_path = 'data/grade-school-math/grade_school_math/data/train_small.jsonl'
-    test_data_path = 'data/grade-school-math/grade_school_math/data/train_small.jsonl'
+    train_data_path = 'data/grade-school-math/grade_school_math/data/train_t_clean.jsonl'
+    eval_data_path = 'data/grade-school-math/grade_school_math/data/val_t_clean.jsonl'
+    test_data_path = 'data/grade-school-math/grade_school_math/data/test_clean.jsonl'
     train_dataset = load_json_dataset(train_data_path)
     eval_dataset = load_json_dataset(eval_data_path)
     test_dataset = load_json_dataset(test_data_path)
+
+    # train_data_path = '../data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
+    # eval_data_path = '../data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
+    # test_data_path = '../data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
+    # train_dataset = load_txt_dataset(train_data_path)
+    # eval_dataset = load_txt_dataset(eval_data_path)
+    # test_dataset = load_txt_dataset(test_data_path)
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"Number of parameters {num_params} of type {type(model)}")
@@ -377,7 +392,7 @@ def main():
         )
 
     # Custom Metric
-    custom_metrics = CustomMetrics(tokenizer=tokenizer, number_encoding=model_args.number_encoding)
+    custom_metrics = CustomMetrics(tokenizer=tokenizer, number_encoding=model_args.number_encoding, output_dir=training_args.output_dir)
 
     # Early stopping
     early_stopping_callback = EarlyStoppingCallback(
@@ -387,18 +402,6 @@ def main():
     # custom_trainer_params = get_trainer_dict(model_params)
 
     # Initialize our Trainer
-    """trainer = CustomTrainer(
-        model=model,
-        args=training_args,
-        data_collator=data_collator,
-        train_dataset=train_dataset,
-        tokenizer=tokenizer,
-        use_numerical_encodings=True,
-        d_model=model.config.hidden_size,
-        model_type="t5-small", # TODO as parameter
-        vmax=10,
-        **custom_trainer_params,
-    )"""
     trainer = CustomSeq2SeqTrainer(
         model=model,
         args=training_args,
