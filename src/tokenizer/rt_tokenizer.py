@@ -1,9 +1,18 @@
+import copy
+import functools
 import os
 import re
-from typing import List
+from typing import List, Union
+import logging
+
+import numpy as np
+import torch
 
 from src.encoding_decoding.numerical_encodings import encoding_to_number
 from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer, NUMBER_REGEX
+
+MALFORMED_RT_TOKEN = 100000
+NON_NUMERIC_TOKEN = 10000
 
 
 class RtTokenizer(NumberEncodingTokenizer):
@@ -36,10 +45,92 @@ class RtTokenizer(NumberEncodingTokenizer):
         )
         return out
 
-    def t5_tokenize(self, text: str, **kwargs) -> List[str]:
-        return super().tokenize(
-            text, **kwargs
-        )
+    def decode_into_human_readable(self, ids: Union[List[int], List[List[int]], "np.ndarray", "torch.Tensor"]) -> List[str]:
+        if isinstance(ids, torch.Tensor):
+            ids = ids.cpu().numpy()
+
+        parsed_tokens = np.array([self.convert_ids_to_tokens(ids[i]) for i in range(len(ids))])
+        converted_numbers, invalid_count = self._convert_tokens_to_num_rt(parsed_tokens)
+
+        converted_numbers = [list(filter(lambda x: x not in self.all_special_tokens, decoded_id)) for decoded_id in converted_numbers]
+        try:
+            decoded = [self.convert_tokens_to_string(tokens) if len(tokens) else "" for tokens in converted_numbers]
+        except Exception as e:
+            logging.error(f"Error converting tokens to string: {e} for tokens {converted_numbers}")
+            decoded = ["" for _ in range(len(converted_numbers))]
+
+        return decoded# , invalid_count
+
+    def _convert_token_to_check_validity(self, token: str) -> int:
+        """
+        Validates a token and extracts its numeric value if valid. Uses number encoding to allow usage with numpy
+
+        Args:
+            token (str): The token to be validated and converted.
+
+        Returns:
+            float: The extracted numeric value if the token is valid, otherwise a predefined error code.
+        """
+        if token.startswith("_") and token.endswith("_"):
+            parts = token.strip("_").split("_")
+            if len(parts) == 2 and parts[0].isdigit():
+                return int(parts[1])
+            else:
+                return MALFORMED_RT_TOKEN
+        else:
+            return NON_NUMERIC_TOKEN
+
+    def _convert_tokens_to_num_rt(self, token_array: np.ndarray):
+        """
+        Converts an array of tokens into numeric values, checking for validity and applying transformations.
+
+        Args:
+            token_array (np.ndarray): Array of tokens to be converted.
+
+        Returns:
+            tuple: A tuple containing:
+                - A numpy array with the numeric values or NaNs for invalid sequences.
+                - A boolean mask indicating which rows contain valid sequences.
+        """
+        digit_position_array = np.vectorize(self._convert_token_to_check_validity)(token_array)
+        invalid_count = np.sum(digit_position_array == MALFORMED_RT_TOKEN)
+
+        number_token_array = copy.deepcopy(token_array)
+        number_token_array = np.vectorize(functools.partial(encoding_to_number, invalid_strict=False), otypes=[float])(number_token_array)
+
+        result = []
+
+        for row in range(token_array.shape[0]):
+            result.append([])
+            is_negative = False
+            current_number = 0
+            for idx in range(token_array.shape[1]):
+                # If number token
+                if not np.isnan(number_token_array[row][idx]):
+                    current_number += number_token_array[row][idx]
+
+                    # If the next token is no number or a number with bigger or equal digit position,
+                    # we have to add the current number to the result
+                    if idx + 1 == token_array.shape[1] \
+                            or np.isnan(number_token_array[row][idx + 1]) \
+                            or digit_position_array[row][idx + 1] >= digit_position_array[row][idx]:
+                        result[row].extend(super().tokenize(str(current_number * (-1 if is_negative else 1))))
+                        current_number = 0
+                        is_negative = False
+
+                        # if next token is indeed also a number, we have to add a whitespace
+                        if idx + 1 < token_array.shape[1] and not np.isnan(number_token_array[row][idx + 1]):
+                            result[row].append("▁")
+
+                # no number token
+                else:
+                    token = token_array[row][idx]
+                    is_negative = token == "[NEG]"
+                    if is_negative:
+                        continue
+                    result[row].append(token)
+
+        return result, invalid_count
 
 
 def extract(text):
@@ -69,23 +160,11 @@ def extract(text):
 
         return " ".join(tokens)
 
-    text = separate_space_seperated_numbers_by_comma(text)
     nonum_text = re.sub(NUMBER_REGEX, replace, text)
     return nonum_text, numbers
-
-
-def separate_space_seperated_numbers_by_comma(text):
-    # If two numbers are just seperated by whitespace or linebreak, we must clearly split them by comma for
-    # the tokenizer to recognize them as two different numbers
-    regex = r"(\d+\.?\d*)\s+(\d+\.?\d*)"
-    return re.sub(regex, r"\1, \2", text)
 
 
 if __name__ == "__main__":
     tokenizer = RtTokenizer.from_pretrained("t5-small")
     print(tokenizer.convert_tokens_to_string(tokenizer.tokenize("(3/2)x=54\n3x=108")))
-    # print(separate_space_seperated_numbers_by_comma("5.34\n4.45"))
-    # print(separate_space_seperated_numbers_by_comma("5.34 4.45"))
-    # print(separate_space_seperated_numbers_by_comma("5  4"))
-    # print(separate_space_seperated_numbers_by_comma("54 4"))
 
