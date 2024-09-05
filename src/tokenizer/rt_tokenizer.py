@@ -55,7 +55,6 @@ class RtTokenizer(NumberEncodingTokenizer):
             ids = ids.cpu().numpy()
 
         parsed_tokens = np.array([self.convert_ids_to_tokens(ids[i]) for i in range(len(ids))])
-        print(parsed_tokens)
         converted_numbers, count_invalid_number_prediction, count_no_number_prediction = self._convert_tokens_to_num_rt(parsed_tokens)
 
         converted_numbers = [list(filter(lambda x: x not in self.all_special_tokens, decoded_id)) for decoded_id in converted_numbers]
@@ -109,12 +108,10 @@ class RtTokenizer(NumberEncodingTokenizer):
             result.append([])
             is_negative = False
             current_number = 0
-            cache_numeric_tokens = []
             for idx in range(token_array.shape[1]):
                 # If number token
                 if not np.isnan(number_token_array[row][idx]):
                     current_number += number_token_array[row][idx]
-                    cache_numeric_tokens.append(token_array[row][idx])
                     # If the next token is no number or a number with bigger or equal digit position,
                     # we have to add the current number to the result
                     
@@ -137,7 +134,6 @@ class RtTokenizer(NumberEncodingTokenizer):
 
                 # no number token
                 else:
-                    cache_numeric_tokens = []
                     token = token_array[row][idx]
                     is_negative = token == "[NEG]"
                     if is_negative:
