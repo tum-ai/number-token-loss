@@ -11,7 +11,6 @@ import torch
 from src.encoding_decoding.numerical_encodings import encoding_to_number
 from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer, NUMBER_REGEX
 
-MALFORMED_RT_TOKEN = 100000
 NON_NUMERIC_TOKEN = 10000
 
 
@@ -56,7 +55,8 @@ class RtTokenizer(NumberEncodingTokenizer):
             ids = ids.cpu().numpy()
 
         parsed_tokens = np.array([self.convert_ids_to_tokens(ids[i]) for i in range(len(ids))])
-        converted_numbers, invalid_count = self._convert_tokens_to_num_rt(parsed_tokens)
+        print(parsed_tokens)
+        converted_numbers, count_invalid_number_prediction, count_no_number_prediction = self._convert_tokens_to_num_rt(parsed_tokens)
 
         converted_numbers = [list(filter(lambda x: x not in self.all_special_tokens, decoded_id)) for decoded_id in converted_numbers]
         try:
@@ -65,7 +65,7 @@ class RtTokenizer(NumberEncodingTokenizer):
             logging.error(f"Error converting tokens to string: {e} for tokens {converted_numbers}")
             decoded = ["" for _ in range(len(converted_numbers))]
 
-        return decoded# , invalid_count
+        return decoded, count_invalid_number_prediction, count_no_number_prediction
 
     def _convert_token_to_check_validity(self, token: str) -> int:
         """
@@ -75,14 +75,12 @@ class RtTokenizer(NumberEncodingTokenizer):
             token (str): The token to be validated and converted.
 
         Returns:
-            float: The extracted numeric value if the token is valid, otherwise a predefined error code.
+            int: The extracted digit index if the token is numeric, 10000 for valid NON_NUMERIC_TOKEN.
         """
+
         if token.startswith("_") and token.endswith("_"):
             parts = token.strip("_").split("_")
-            if len(parts) == 2 and parts[0].isdigit():
-                return int(parts[1])
-            else:
-                return MALFORMED_RT_TOKEN
+            return int(parts[1])
         else:
             return NON_NUMERIC_TOKEN
 
@@ -95,31 +93,40 @@ class RtTokenizer(NumberEncodingTokenizer):
 
         Returns:
             tuple: A tuple containing:
-                - A numpy array with the numeric values or NaNs for invalid sequences.
+                - A lists of RT array with the numeric values or NaNs for invalid sequences.
                 - A boolean mask indicating which rows contain valid sequences.
         """
         digit_position_array = np.vectorize(self._convert_token_to_check_validity)(token_array)
-        invalid_count = np.sum(digit_position_array == MALFORMED_RT_TOKEN)
+        #invalid_count = np.sum(digit_position_array == MALFORMED_RT_TOKEN)
 
         number_token_array = copy.deepcopy(token_array)
         number_token_array = np.vectorize(functools.partial(encoding_to_number, invalid_strict=False), otypes=[float])(number_token_array)
 
         result = []
-
+        count_invalid_number_prediction = 0
+        count_no_number_prediction = 0
         for row in range(token_array.shape[0]):
             result.append([])
             is_negative = False
             current_number = 0
+            cache_numeric_tokens = []
             for idx in range(token_array.shape[1]):
                 # If number token
                 if not np.isnan(number_token_array[row][idx]):
                     current_number += number_token_array[row][idx]
-
+                    cache_numeric_tokens.append(token_array[row][idx])
                     # If the next token is no number or a number with bigger or equal digit position,
                     # we have to add the current number to the result
+                    
                     if idx + 1 == token_array.shape[1] \
                             or np.isnan(number_token_array[row][idx + 1]) \
                             or digit_position_array[row][idx + 1] >= digit_position_array[row][idx]:
+                        
+                        #Model predicts e.g. (_1_2_, _2_1_) which implicitely denotes zeros / is not a well formed number.
+                        #We parse with on a best efforts base
+                        if digit_position_array[row][idx]>0:
+                            count_invalid_number_prediction+=1
+                        
                         result[row].extend(super().tokenize(str(current_number * (-1 if is_negative else 1))))
                         current_number = 0
                         is_negative = False
@@ -130,13 +137,14 @@ class RtTokenizer(NumberEncodingTokenizer):
 
                 # no number token
                 else:
+                    cache_numeric_tokens = []
                     token = token_array[row][idx]
                     is_negative = token == "[NEG]"
                     if is_negative:
                         continue
                     result[row].append(token)
-
-        return result, invalid_count
+        count_no_number_prediction = np.sum(np.all(np.isnan(number_token_array), axis=1))
+        return result, count_invalid_number_prediction, count_no_number_prediction
 
 
 def extract(text):
@@ -172,5 +180,5 @@ def extract(text):
 
 if __name__ == "__main__":
     tokenizer = RtTokenizer.from_pretrained("t5-small")
+    print(tokenizer._convert_tokens_to_num_rt(np.array([['_1_2_', '_2_1_', '_5_0_'],['_7_2_', '=', '_1_0_']])))
     print(tokenizer.convert_tokens_to_string(tokenizer.tokenize("(3/2)x=54\n3x=108")))
-
