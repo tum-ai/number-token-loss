@@ -97,7 +97,7 @@ class TestEvaluationMethods(unittest.TestCase):
         ]
 
         result = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
-        decoded = self.tokenizer.decode_into_human_readable(result["input_ids"], result["number_embeddings"])
+        decoded, _, _ = self.tokenizer.decode_into_human_readable(result["input_ids"], result["number_embeddings"])
         self.assertEqual(decoded, expected_result)
 
     def test_decoding_into_human_readable(self):
@@ -125,7 +125,7 @@ class TestEvaluationMethods(unittest.TestCase):
             'Test 12.0 - 12.0 = 0.0 wrong?',
             'Calculation: 12.0 + 12.0 = 24.0'
         ]
-        decoded = self.tokenizer.decode_into_human_readable(token_ids, number_embeddings)
+        decoded, _, _ = self.tokenizer.decode_into_human_readable(token_ids, number_embeddings)
         self.assertEqual(decoded, expected_result)
 
         string_array = [
@@ -143,7 +143,7 @@ class TestEvaluationMethods(unittest.TestCase):
             'Calculation: 12.0 + 12.0 = 24.0'
         ]
         tokenized = self.tokenizer(string_array, padding=True, truncation=True, return_tensors="pt")
-        result = self.tokenizer.decode_into_human_readable(tokenized["input_ids"], tokenized["number_embeddings"])
+        result, _, _ = self.tokenizer.decode_into_human_readable(tokenized["input_ids"], tokenized["number_embeddings"])
         self.assertEqual(result, expected_result)
 
 
