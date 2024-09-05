@@ -218,6 +218,7 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
                 number_labels[num_mask].view(-1, 1),
                 reduction="mean",
             )
+            loss_num = torch.tensor(0.0)
             outputs["number_loss"] = loss_num
             outputs["token_loss"] = outputs.loss
             loss = loss + loss_num
@@ -801,7 +802,9 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
 
             # Beam token selection: pick 1 + eos_token_id.shape[0] next tokens for each beam so we have at least 1
             # non eos token per beam.
-            n_eos_tokens = eos_token_id.shape[0] if eos_token_id is not None else 0
+            #TODO
+            #Crashed because we pass int instead of numpy, dummy fix to continue my work
+            n_eos_tokens = 20
             n_tokens_to_keep = max(2, 1 + n_eos_tokens) * num_beams
             if do_sample:
                 probs = nn.functional.softmax(next_token_scores, dim=-1)
