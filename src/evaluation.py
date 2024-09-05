@@ -1,7 +1,7 @@
 import logging
 import math
 import re
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 import evaluate
 import nltk
@@ -84,6 +84,29 @@ class CustomMetrics:
 
         return perplexity.item()
 
+    def check_number_predictions(self, decoded_preds: List[str]) -> Tuple[int, int]:
+        # Greedily match potential numbers with optional signs, digits, commas, and dots. I assumed that there are no dates in the data
+        number_pattern = r'[+-]?[\d,.]*\d'
+        
+        total_invalid_numbers = 0 
+        count_no_number_prediction = 0 
+        
+        for pred in decoded_preds:
+            matches = re.findall(number_pattern, pred)
+            
+            if not matches:
+                count_no_number_prediction += 1
+                continue
+            
+            for match in matches:
+                try:
+                    parsed_value = float(match)
+                except ValueError:
+                    print(match)
+                    total_invalid_numbers += 1
+
+        return total_invalid_numbers, count_no_number_prediction
+
     def compute_rouge(self, decoded_preds, decoded_labels):
         # rougeLSum expects newline after each sentence
         decoded_preds = ["\n".join(nltk.sent_tokenize(pred.strip())) for pred in decoded_preds]
@@ -119,6 +142,9 @@ class CustomMetrics:
                 Overall results if compute_result else None 
         
         """
+        if not self.number_encoding.lower() in ["xval", "rt", "none"]:
+            raise NotImplementedError("Requesting evaluation for not supported number_encoding: {self.number_encoding}")
+
         # Extract predictions and labels from pred tuple
         model_output, labels = pred
         logits, predictions = model_output
@@ -131,15 +157,22 @@ class CustomMetrics:
 
         if self.number_encoding == "xval":
             predictions, predicted_numbers = predictions
-            decoded_preds = self.tokenizer.decode_into_human_readable(predictions, predicted_numbers)
-            decoded_labels = self.tokenizer.decode_into_human_readable(token_labels, number_labels)
+            decoded_preds, count_invalid_number_prediction, count_no_number_prediction  = self.tokenizer.decode_into_human_readable(predictions, predicted_numbers)
+            decoded_labels, sanity_invalid_number_prediction, sanity_no_number_prediction = self.tokenizer.decode_into_human_readable(token_labels, number_labels)
         else:
             if hasattr(self.tokenizer, "decode_into_human_readable"):
-                decoded_preds = self.tokenizer.decode_into_human_readable(predictions)
-                decoded_labels = self.tokenizer.decode_into_human_readable(token_labels)
+                decoded_preds, count_invalid_number_prediction, count_no_number_prediction = self.tokenizer.decode_into_human_readable(predictions)
+                decoded_labels, sanity_invalid_number_prediction, sanity_no_number_prediction = self.tokenizer.decode_into_human_readable(token_labels)
             else:
                 decoded_preds = self.tokenizer.batch_decode(predictions, skip_special_tokens=True)
+                count_invalid_number_prediction, count_no_number_prediction = self.check_number_predictions(decoded_preds)
                 decoded_labels = self.tokenizer.batch_decode(token_labels, skip_special_tokens=True)
+                sanity_invalid_number_prediction, sanity_no_number_prediction = self.check_number_predictions(decoded_labels)
+        
+        #We should never observe invalid numbers and mostly likely never no number for gt
+        if max(sanity_invalid_number_prediction, sanity_no_number_prediction)>0:
+            print(sanity_invalid_number_prediction)
+            print(sanity_no_number_prediction)
 
         if compute_result:
             # save decoded predictions and labels for debugging
@@ -168,37 +201,14 @@ class CustomMetrics:
         correct_predictions = (predictions == token_labels) & mask
         accuracy = (torch.sum(correct_predictions) / torch.sum(mask)).item() if torch.sum(mask) > 0 else 0
 
-        if self.number_encoding == "xval":
-            gt_num_mask = torch.isin(token_labels, torch.tensor(self.tokenizer.get_num_token_ids(), device=DEVICE))
-            predicted_num_mask = torch.isin(predictions, torch.tensor(self.tokenizer.get_num_token_ids(), device=DEVICE))
-            # 1. Predict number but no number in true values
-            sum_incorrectly_predicted_nums = torch.sum(predicted_num_mask & ~gt_num_mask).item()
-            # 2. No number predicted but number in true values
-            sum_incorrectly_predicted_text = torch.sum(~predicted_num_mask & gt_num_mask).item()
-            mse = self.calculate_result_mse(decoded_preds, decoded_labels)
-        elif self.number_encoding == "rt":
-            mse = self.calculate_result_mse(decoded_preds, decoded_labels)
-
-            predicted_num_mask = torch.isin(predictions.cpu(),
-                                            torch.tensor(self.tokenizer.get_num_token_ids())).cpu().numpy()
-            gt_num_mask = torch.isin(token_labels.cpu(), torch.tensor(self.tokenizer.get_num_token_ids())).cpu().numpy()
-            sum_incorrectly_predicted_nums = np.sum(predicted_num_mask & ~gt_num_mask)
-            sum_incorrectly_predicted_text = np.sum(~predicted_num_mask & gt_num_mask)
-        elif self.number_encoding.lower() == "none":
-            gt_num_mask = torch.isin(token_labels, self.numeric_token_tensor).cpu().numpy()
-            predicted_num_mask = torch.isin(predictions, self.numeric_token_tensor).cpu().numpy()
-            mse = self.calculate_result_mse(decoded_preds, decoded_labels)
-            sum_incorrectly_predicted_nums = np.sum(predicted_num_mask & ~gt_num_mask).item()
-            sum_incorrectly_predicted_text = np.sum(~predicted_num_mask & gt_num_mask).item()
-        else:
-            raise NotImplementedError("Requesting evaluation for not supported number_encoding: {self.number_encoding}")
-
+        mse = self.calculate_result_mse(decoded_preds, decoded_labels)
         self.batch_stats.append({
             'token_accuracy_whole': accuracy_w,
             'token_accuracy': accuracy,
             'MSE': mse,
-            "count_incorrectly_predicted_nums": sum_incorrectly_predicted_nums,
-            "count_incorrectly_predicted_text": sum_incorrectly_predicted_text,
+            "total_count": predictions.shape[0],
+            "count_invalid_number_prediction": count_invalid_number_prediction,
+            "count_no_number_prediction": count_no_number_prediction,
             'token_perplexity': perplexity_value,
             'bleu': bleu['score'],
             'rouge1': rouge['rouge1'],
@@ -206,15 +216,22 @@ class CustomMetrics:
             'rougeL': rouge['rougeL'],
         })
 
+
         if compute_result:
+            #Are we doing an average of average with mse?
+            total_count = np.sum([stat['total_count'] for stat in self.batch_stats])
             computed_metrics = {
                 'token_accuracy_whole': np.mean([stat['token_accuracy_whole'] for stat in self.batch_stats]),
                 'token_accuracy': np.mean([stat['token_accuracy'] for stat in self.batch_stats]),
                 'MSE': np.nanmean([stat['MSE'] for stat in self.batch_stats]),
-                "count_incorrectly_predicted_nums": np.sum(
-                    [stat['count_incorrectly_predicted_nums'] for stat in self.batch_stats]),
-                "count_incorrectly_predicted_text": np.sum(
-                    [stat['count_incorrectly_predicted_text'] for stat in self.batch_stats]),
+                "count_invalid_number_prediction": np.sum(
+                    [stat['count_invalid_number_prediction'] for stat in self.batch_stats]),
+                "count_no_number_prediction": np.sum(
+                    [stat['count_no_number_prediction'] for stat in self.batch_stats]),
+                "average_invalid_number_prediction": np.sum(
+                    [stat['count_invalid_number_prediction'] for stat in self.batch_stats])/total_count,
+                "average_no_number_prediction": np.sum(
+                    [stat['count_no_number_prediction'] for stat in self.batch_stats])/total_count,
                 'token_perplexity': np.mean([stat['token_perplexity'] for stat in self.batch_stats]),
                 "bleu": np.mean([stat['bleu'] for stat in self.batch_stats]),
                 "rouge1": np.mean([stat['rouge1'] for stat in self.batch_stats]),
