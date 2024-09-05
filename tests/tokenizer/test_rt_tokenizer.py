@@ -75,7 +75,7 @@ class TestEvaluationMethods(unittest.TestCase):
         ]
 
         result = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
-        decoded = self.tokenizer.decode_into_human_readable(result["input_ids"])
+        decoded, _, _ = self.tokenizer.decode_into_human_readable(result["input_ids"])
         self.assertEqual(decoded, expected_result)
 
 
@@ -101,7 +101,8 @@ class TestEvaluationMethods(unittest.TestCase):
             'xy 20.0',
             'x 200.0 - 43.0'
         ]
-        result = self.tokenizer.decode_into_human_readable(token_ids)
+        result, _, _ = self.tokenizer.decode_into_human_readable(token_ids)
+        print(result)
         self.assertEqual(result, expected_result)
 
         string_array = [
@@ -119,7 +120,7 @@ class TestEvaluationMethods(unittest.TestCase):
             'Calculation: 12.0 + 12.0 = 24.0'
         ]
         token_ids = self.tokenizer(string_array, padding=True, truncation=True, return_tensors="pt")["input_ids"]
-        result = self.tokenizer.decode_into_human_readable(token_ids)
+        result, _, _  = self.tokenizer.decode_into_human_readable(token_ids)
         self.assertEqual(result, expected_result)
 
 
