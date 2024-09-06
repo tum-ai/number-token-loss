@@ -75,8 +75,10 @@ class TestEvaluationMethods(unittest.TestCase):
         ]
 
         result = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
-        decoded = self.tokenizer.decode_into_human_readable(result["input_ids"])
+        decoded, count_invalid_number_prediction, count_no_number_prediction = self.tokenizer.decode_into_human_readable(result["input_ids"])
         self.assertEqual(decoded, expected_result)
+        self.assertEqual(count_invalid_number_prediction, 0)
+        self.assertEqual(count_no_number_prediction, 0)
 
 
 
@@ -101,26 +103,32 @@ class TestEvaluationMethods(unittest.TestCase):
             'xy 20.0',
             'x 200.0 - 43.0'
         ]
-        result = self.tokenizer.decode_into_human_readable(token_ids)
+        result, count_invalid_number_prediction, count_no_number_prediction = self.tokenizer.decode_into_human_readable(token_ids)
         self.assertEqual(result, expected_result)
+        self.assertEqual(count_invalid_number_prediction, 3)
+        self.assertEqual(count_no_number_prediction, 0)
 
         string_array = [
             "First test 23.0 and -4.0",
             "Is 29.0 - 478.2 = 34.452 correct?",
             "Test text -34*65=78",
             "Test 12-12 = 0 wrong?",
-            "Calculation: 12 + 12 = 24"
+            "Calculation: 12 + 12 = 24",
+            "No Number",
         ]
         expected_result = [
             'First test 23.0 and - 4.0',
             'Is 29.0 - 478.2 = 34.452 correct?',
             'Test text - 34.0 * 65.0 = 78.0',
             'Test 12.0 - 12.0 = 0.0 wrong?',
-            'Calculation: 12.0 + 12.0 = 24.0'
+            'Calculation: 12.0 + 12.0 = 24.0',
+            "No Number",
         ]
         token_ids = self.tokenizer(string_array, padding=True, truncation=True, return_tensors="pt")["input_ids"]
-        result = self.tokenizer.decode_into_human_readable(token_ids)
+        result, count_invalid_number_prediction, count_no_number_prediction = self.tokenizer.decode_into_human_readable(token_ids)
         self.assertEqual(result, expected_result)
+        self.assertEqual(count_invalid_number_prediction, 0)
+        self.assertEqual(count_no_number_prediction, 1)
 
 
 if __name__ == "__main__":

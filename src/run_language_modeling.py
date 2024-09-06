@@ -110,6 +110,13 @@ class CustomTrainingArguments(Seq2SeqTrainingArguments):
         },
     )
 
+    do_only_eval: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "Only evaluate the model."
+        },
+    )
+
 
 @dataclass
 class ModelArguments:
@@ -420,18 +427,23 @@ def main():
            and os.path.isdir(model_args.model_name_or_path)
         else None
     )
-    trainer.train(model_path=model_path)
-    trainer.save_model()
-    # For convenience, we also re-save the tokenizer to the same directory,
-    # so that you can share your model easily on huggingface.co/models =)
-    if trainer.state.is_world_process_zero:
-        tokenizer.save_pretrained(training_args.output_dir)
 
+    if not training_args.do_only_eval:
+        trainer.train(model_path=model_path)
+        trainer.save_model()
+        # For convenience, we also re-save the tokenizer to the same directory,
+        # so that you can share your model easily on huggingface.co/models =)
+        if trainer.state.is_world_process_zero:
+            tokenizer.save_pretrained(training_args.output_dir)
+    else:
+        logger.info("Skipping training.")
+        logger.info("*** Evaluate on validation data ***")
+        eval_results = trainer.evaluate(eval_dataset=eval_dataset)
+        logger.info(f"eval_results: {eval_results}")
 
-    if training_args.do_eval:
-        logger.info("*** Evaluate ***")
-        trainer.evaluate(eval_dataset=test_dataset)
-        eval_results = trainer.evaluate()
+    if training_args.do_eval or training_args.do_only_eval:
+        logger.info("*** Evaluate on test set ***")
+        eval_results = trainer.evaluate(eval_dataset=test_dataset)
         logger.info(f"eval_results: {eval_results}")
 
 
