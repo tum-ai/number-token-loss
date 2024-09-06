@@ -34,7 +34,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
             self,
             ids: Union[List[int], List[List[int]], "np.ndarray", "torch.Tensor"],
             numbers: Union[List[int], List[List[int]], "np.ndarray", "torch.Tensor"] = None
-    ) -> List[str]:
+    ) -> Tuple[List[str], int, int]:
         if isinstance(ids, torch.Tensor):
             ids = ids.cpu().numpy()
         if isinstance(numbers, torch.Tensor):
@@ -42,6 +42,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
 
         numbers = list(map(lambda x: list(map(lambda y: self.tokenize(str(y)), x)), numbers))
         decoded_ids = np.array(list(map(lambda sample: self.convert_ids_to_tokens(sample), ids)))
+        count_no_number_prediction_at_all = np.sum(np.all(ids != 32100, axis=1))
 
         def replace_number_tokens_with_numbers(id, number, decoded_id):
             return number if id in self.get_num_token_ids() else decoded_id
@@ -56,15 +57,19 @@ class XvalTokenizer(NumberEncodingTokenizer):
             return flat_list
 
         decoded_ids = [
-            list(map(lambda id, number, decoded_id: replace_number_tokens_with_numbers(id, number, decoded_id), ids_row, numbers_row, decoded_ids_row))
+            list(map(lambda id, number, decoded_id: replace_number_tokens_with_numbers(id, number, decoded_id), ids_row,
+                     numbers_row, decoded_ids_row))
             for ids_row, numbers_row, decoded_ids_row in zip(ids, numbers, decoded_ids)
         ]
         decoded_ids = list(map(flatten, decoded_ids))
 
         # Remove padding tokens
-        decoded_ids = [list(filter(lambda x: x not in self.all_special_tokens, decoded_id)) for decoded_id in decoded_ids]
-        decoded_ids = list(map(lambda sample: self.convert_tokens_to_string(sample) if len(sample) else "", decoded_ids))
-        return decoded_ids
+        decoded_ids = [list(filter(lambda x: x not in self.all_special_tokens, decoded_id)) for decoded_id in
+                       decoded_ids]
+        decoded_ids = list(
+            map(lambda sample: self.convert_tokens_to_string(sample) if len(sample) else "", decoded_ids))
+
+        return decoded_ids, 0, count_no_number_prediction_at_all
 
     def _encode_plus(
             self,
