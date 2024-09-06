@@ -53,11 +53,13 @@ class CustomMetrics:
 
     def calculate_result_number_loss_per_sample(self, prediction: str, label: str, order: int):
         # Extract the last number of both strings and compare them
-        prediction_number = re.findall(NUMBER_REGEX, prediction)
+        # TODO only valid for this dataset, remove for other datasets
+
+        prediction_number = re.findall(r"#\s*(\d+)(\.\d+)?", prediction)
         if len(prediction_number) == 0:
             return np.nan
         prediction_number = "".join(prediction_number[-1])
-        label_number = "".join(re.findall(NUMBER_REGEX, label)[-1])
+        label_number = "".join(re.findall(r"#\s*(\d+)(\.\d+)?", label)[-1])
 
         # Convert the strings to floats
         prediction_number = float(prediction_number)
@@ -190,12 +192,14 @@ class CustomMetrics:
 
         mse = self.calculate_result_mse(decoded_preds, decoded_labels)
         mae = self.calculate_result_mae(decoded_preds, decoded_labels)
+        count_not_produced_valid_results = np.sum(np.isnan(mse))
 
         self.batch_stats.append({
             'token_accuracy_whole': accuracy_w,
             'token_accuracy': accuracy,
             'MSE': mse,
             'MAE': mae,
+            "count_not_produced_valid_results": count_not_produced_valid_results,
             "total_count": predictions.shape[0],
             "count_invalid_number_prediction": count_invalid_number_prediction,
             "count_no_number_prediction": count_no_number_prediction,
@@ -213,6 +217,10 @@ class CustomMetrics:
                 'token_accuracy': np.mean([stat['token_accuracy'] for stat in self.batch_stats]),
                 'MSE': np.nanmean(np.concatenate([stat['MSE'] for stat in self.batch_stats])),
                 'MAE': np.nanmean(np.concatenate([stat['MAE'] for stat in self.batch_stats])),
+                "count_not_produced_valid_results": np.sum(
+                    [stat['count_not_produced_valid_results'] for stat in self.batch_stats]),
+                "average_count_not_produced_valid_results": np.sum(
+                    [stat['count_not_produced_valid_results'] for stat in self.batch_stats]) / total_count,
                 "count_invalid_number_prediction": np.sum(
                     [stat['count_invalid_number_prediction'] for stat in self.batch_stats]),
                 "count_no_number_prediction": np.sum(
