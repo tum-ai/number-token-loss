@@ -26,17 +26,17 @@ class TestEvaluationMethods(unittest.TestCase):
 
     def test_calculate_result_mse(self):
         labels = [
-            "First test 23.0 and -4.0",
-            "Is 29.0 - 478.2 = 34.452 correct?",
-            "Test text -34*65=78",
-            "Test 12-12 = 0 wrong?",
-            "Calculation: 12 + 12 = 24"
+            "First test 23.0 and # -4.0",
+            "Is 29.0 - 478.2 = # 34.452 correct?",
+            "Test text -34*65=# 78",
+            "Test 12-12 = # 0 wrong?",
+            "Calculation: 12 + 12 = # 24"
         ]
         predictions = [
-            "First test 23.0 and -1.0",
-            "Is 29.0 - 478.2 = 34.452 correct?",
-            "Test text -34*65=80",
-            "Test 12-12 = -1 wrong?",
+            "First test 23.0 and # -1.0",
+            "Is 29.0 - 478.2 = # 34.452 correct?",
+            "Test text -34*65= # 80",
+            "Test 12-12 = # -1 wrong?",
             "Calculation: calculation calculation"
         ]
 

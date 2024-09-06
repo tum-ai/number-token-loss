@@ -16,14 +16,13 @@ def read_json(file_path):
 
 def preprocess_numbers(text: str):
     # replace whitespaces in number like 1 000 000 with 1000000
-    number_whitespace_regex = r"(^|\s)(\d{1,3})( \d{3})+(\.\d+)?"
+    number_whitespace_regex = r"(^|\s)((\d{1,3})( \d{3})+(\.\d+)?)"
     matches = re.findall(number_whitespace_regex, text)
     for match in matches:
-        match = "".join(match[1:])
-        text = text.replace(match, match.replace(" ", ""))
+        text = text.replace(match[1], match[1].replace(" ", ""))
 
     # replace commas in number like 1,000,000 with 1000000
-    number_comma_regex = r"\d{1,3}(,\d{3})+(\.\d+)?"
+    number_comma_regex = r"((\d{1,3})(,\d{3})+(\.\d+)?)"
     matches = re.findall(number_comma_regex, text)
     for match in matches:
         text = text.replace(match[0], match[0].replace(",", ""))

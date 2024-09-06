@@ -55,11 +55,11 @@ class CustomMetrics:
         # Extract the last number of both strings and compare them
         # TODO only valid for this dataset, remove for other datasets
 
-        prediction_number = re.findall(r"#\s*(\d+)(\.\d+)?", prediction)
+        prediction_number = re.findall(r"#\s*[+-]?\s*(\d+)(\.\d+)?", prediction)
         if len(prediction_number) == 0:
             return np.nan
         prediction_number = "".join(prediction_number[-1])
-        label_number = "".join(re.findall(r"#\s*(\d+)(\.\d+)?", label)[-1])
+        label_number = "".join(re.findall(r"#\s*[+-]?\s*(\d+)(\.\d+)?", label)[-1])
 
         # Convert the strings to floats
         prediction_number = float(prediction_number)
