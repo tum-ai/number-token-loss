@@ -183,7 +183,7 @@ def main():
     os.environ["COMET_MODE"] = "DISABLED"
 
     # Switch off WandB
-    os.environ["WANDB_DISABLED"] = "false"
+    os.environ["WANDB_DISABLED"] = "true"
 
     parser = HfArgumentParser(
         (ModelArguments, CustomTrainingArguments)
@@ -358,9 +358,9 @@ def main():
 
     logger.info(f"PyTorch version: {torch.__version__}")
 
-    train_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/reduced_debug.jsonl'
-    eval_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/reduced_debug.jsonl'
-    test_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/reduced_debug.jsonl'
+    train_data_path = '../data/grade-school-math/grade_school_math/data/train_small.jsonl'
+    eval_data_path = '../data/grade-school-math/grade_school_math/data/train_small.jsonl'
+    test_data_path = '../data/grade-school-math/grade_school_math/data/train_small.jsonl'
     train_dataset = load_json_dataset(train_data_path)
     eval_dataset = load_json_dataset(eval_data_path)
     test_dataset = load_json_dataset(test_data_path)

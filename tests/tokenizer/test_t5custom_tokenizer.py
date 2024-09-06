@@ -61,18 +61,24 @@ class TestEvaluationMethods(unittest.TestCase):
             "divide the minutes by 60. 1920 / 60 = 32 hours\n#### 32",
             "which is 40/100*$400 = $160\nThe total price",
             "Negativ number: -15.67",
+            "Invalid Number 1.111.1",
+            "No Number Prediction at all",
         ]
         expected_result = [
             '(3/2)x=54 3x=108',
             'Oranges = 12 * 150 = 1800 Nectarines = 16 * 30 = 480 1800 + 480 = 2280 There are 2280 pieces of fruit in total. #### 2280',
             'include 3 10-minute snack breaks each day', 'divide the minutes by 60. 1920 / 60 = 32 hours #### 32',
             'which is 40/100*$400 = $160 The total price',
-            'Negativ number: -15.67'
+            'Negativ number: -15.67',
+            'Invalid Number 1.111.1',
+            'No Number Prediction at all'
         ]
 
         result = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
-        decoded = self.tokenizer.decode_into_human_readable(result["input_ids"])
+        decoded, count_invalid_number_prediction, count_no_number_prediction = self.tokenizer.decode_into_human_readable(result["input_ids"])
         self.assertEqual(decoded, expected_result)
+        self.assertEqual(count_invalid_number_prediction, 1)
+        self.assertEqual(count_no_number_prediction, 1)
 
 
 if __name__ == "__main__":
