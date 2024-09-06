@@ -41,8 +41,8 @@ class TestEvaluationMethods(unittest.TestCase):
         ]
 
         mse = self.metrics_xval.calculate_result_mse(predictions, labels)
-        expected_mse = np.mean([(4 - 1)**2, 0, (78 - 80)**2, (0 - 1)**2])
-        self.assertAlmostEqual(mse, expected_mse, places=5)
+        expected_mse = np.array([(4 - 1)**2, 0, (78 - 80)**2, (0 - 1)**2, np.nan])
+        np.testing.assert_almost_equal(mse, expected_mse)
 
 
 if __name__ == "__main__":

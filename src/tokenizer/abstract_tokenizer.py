@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Union
+from typing import List, Union, Tuple
 
 import numpy as np
 import torch
@@ -26,5 +26,9 @@ class NumberEncodingTokenizer(T5Tokenizer, ABC):
         pass
 
     @abstractmethod
-    def decode_into_human_readable(self, ids: Union[List[int], List[List[int]], "np.ndarray", "torch.Tensor"]) -> List[str]:
+    def decode_into_human_readable(
+            self,
+            ids: Union[List[int],
+            List[List[int]], "np.ndarray", "torch.Tensor"]
+    ) -> Tuple[List[str], int, int]:
         pass
