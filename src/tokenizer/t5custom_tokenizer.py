@@ -45,5 +45,34 @@ class T5Custom_Tokenizer(NumberEncodingTokenizer):
 
         return out_list
 
-    def decode_into_human_readable(self, ids: Union[List[int], List[List[int]], "np.ndarray", "torch.Tensor"]) -> List[str]:
-        return self.batch_decode(ids, skip_special_tokens=True)
+    def decode_into_human_readable(
+            self,
+            ids: Union[List[int], List[List[int]], "np.ndarray", "torch.Tensor"]
+    ) -> Tuple[List[str], int, int]:
+        decoded = self.batch_decode(ids, skip_special_tokens=True)
+        total_invalid_numbers, count_no_number_prediction_at_all = check_number_predictions(decoded)
+        return decoded, total_invalid_numbers, count_no_number_prediction_at_all
+
+
+def check_number_predictions(decoded_preds: List[str]) -> Tuple[int, int]:
+    # Greedily match potential numbers with optional signs, digits, commas, and dots. I assumed that there are no dates in the data
+    number_pattern = r'[+-]?[\d,.]*\d'
+
+    total_invalid_numbers = 0
+    count_no_number_prediction = 0
+
+    for pred in decoded_preds:
+        matches = re.findall(number_pattern, pred)
+
+        if not matches:
+            count_no_number_prediction += 1
+            continue
+
+        for match in matches:
+            try:
+                parsed_value = float(match)
+            except ValueError:
+                print(match)
+                total_invalid_numbers += 1
+
+    return total_invalid_numbers, count_no_number_prediction

@@ -97,8 +97,10 @@ class TestEvaluationMethods(unittest.TestCase):
         ]
 
         result = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
-        decoded, _, _ = self.tokenizer.decode_into_human_readable(result["input_ids"], result["number_embeddings"])
+        decoded, count_invalid_number_prediction, count_no_number_prediction = self.tokenizer.decode_into_human_readable(result["input_ids"], result["number_embeddings"])
         self.assertEqual(decoded, expected_result)
+        self.assertEqual(count_invalid_number_prediction, 0)
+        self.assertEqual(count_no_number_prediction, 0)
 
     def test_decoding_into_human_readable(self):
         token_array = np.array([
@@ -125,26 +127,32 @@ class TestEvaluationMethods(unittest.TestCase):
             'Test 12.0 - 12.0 = 0.0 wrong?',
             'Calculation: 12.0 + 12.0 = 24.0'
         ]
-        decoded, _, _ = self.tokenizer.decode_into_human_readable(token_ids, number_embeddings)
+        decoded, count_invalid_number_prediction, count_no_number_prediction = self.tokenizer.decode_into_human_readable(token_ids, number_embeddings)
         self.assertEqual(decoded, expected_result)
+        self.assertEqual(count_invalid_number_prediction, 0)
+        self.assertEqual(count_no_number_prediction, 0)
 
         string_array = [
             "First test 23.0 and -4.0",
             "Is 29.0 - 478.2 = 34.452 correct?",
             "Test text -34*65=78",
             "Test 12-12 = 0 wrong?",
-            "Calculation: 12 + 12 = 24"
+            "Calculation: 12 + 12 = 24",
+            "No number",
         ]
         expected_result = [
             'First test 23.0 and - 4.0',
             'Is 29.0 - 478.2 = 34.452 correct?',
             'Test text - 34.0 * 65.0 = 78.0',
             'Test 12.0 - 12.0 = 0.0 wrong?',
-            'Calculation: 12.0 + 12.0 = 24.0'
+            'Calculation: 12.0 + 12.0 = 24.0',
+            "No number",
         ]
         tokenized = self.tokenizer(string_array, padding=True, truncation=True, return_tensors="pt")
-        result, _, _ = self.tokenizer.decode_into_human_readable(tokenized["input_ids"], tokenized["number_embeddings"])
+        result, count_invalid_number_prediction, count_no_number_prediction = self.tokenizer.decode_into_human_readable(tokenized["input_ids"], tokenized["number_embeddings"])
         self.assertEqual(result, expected_result)
+        self.assertEqual(count_invalid_number_prediction, 0)
+        self.assertEqual(count_no_number_prediction, 1)
 
 
 if __name__ == "__main__":
