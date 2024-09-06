@@ -87,8 +87,9 @@ class T5RegressionModelRT(T5ForConditionalGeneration):
 class RTEmbeddings(nn.Module):
     def __init__(self, token_embeddings, number_embeddings):
         super().__init__()
-        self.token_embeddings = copy.deepcopy(token_embeddings)
+        self.token_embeddings = token_embeddings
         self.number_embeddings = number_embeddings
+        self.weight = token_embeddings.weight
 
     def forward(self, input_ids):
         # Compute token embeddings
