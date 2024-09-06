@@ -46,9 +46,12 @@ class CustomMetrics:
         self.eval_count = 0
 
     def calculate_result_mse(self, prediction: List[str], label: List[str]) -> List[float]:
-        return [self.calculate_result_mse_per_sample(prediction[i], label[i]) for i in range(len(prediction))]
+        return [self.calculate_result_number_loss_per_sample(prediction[i], label[i], order=2) for i in range(len(prediction))]
 
-    def calculate_result_mse_per_sample(self, prediction: str, label: str):
+    def calculate_result_mae(self, prediction: List[str], label: List[str]) -> List[float]:
+        return [self.calculate_result_number_loss_per_sample(prediction[i], label[i], order=1) for i in range(len(prediction))]
+
+    def calculate_result_number_loss_per_sample(self, prediction: str, label: str, order: int):
         # Extract the last number of both strings and compare them
         prediction_number = re.findall(NUMBER_REGEX, prediction)
         if len(prediction_number) == 0:
@@ -62,7 +65,7 @@ class CustomMetrics:
 
         # Calculate the mean squared error
         try:
-            mse = (prediction_number - label_number) ** 2
+            mse = np.abs(prediction_number - label_number) ** order
         except Exception as e:
             logging.error(f"Error calculating MSE: {e} with numbers {prediction_number} and {label_number}")
             mse = np.nan
@@ -186,11 +189,13 @@ class CustomMetrics:
         accuracy = (torch.sum(correct_predictions) / torch.sum(mask)).item() if torch.sum(mask) > 0 else 0
 
         mse = self.calculate_result_mse(decoded_preds, decoded_labels)
+        mae = self.calculate_result_mae(decoded_preds, decoded_labels)
 
         self.batch_stats.append({
             'token_accuracy_whole': accuracy_w,
             'token_accuracy': accuracy,
             'MSE': mse,
+            'MAE': mae,
             "total_count": predictions.shape[0],
             "count_invalid_number_prediction": count_invalid_number_prediction,
             "count_no_number_prediction": count_no_number_prediction,
@@ -207,6 +212,7 @@ class CustomMetrics:
                 'token_accuracy_whole': np.mean([stat['token_accuracy_whole'] for stat in self.batch_stats]),
                 'token_accuracy': np.mean([stat['token_accuracy'] for stat in self.batch_stats]),
                 'MSE': np.nanmean(np.concatenate([stat['MSE'] for stat in self.batch_stats])),
+                'MAE': np.nanmean(np.concatenate([stat['MAE'] for stat in self.batch_stats])),
                 "count_invalid_number_prediction": np.sum(
                     [stat['count_invalid_number_prediction'] for stat in self.batch_stats]),
                 "count_no_number_prediction": np.sum(
