@@ -23,11 +23,18 @@ class CustomMetrics:
     Compute custom metrics for the model with access to the vocab to compute MSE
     """
 
-    def __init__(self, tokenizer: NumberEncodingTokenizer, number_encoding: str, output_dir: str):
+    def __init__(
+            self,
+            tokenizer: NumberEncodingTokenizer,
+            number_encoding: str,
+            output_dir: str,
+            save_all_output: bool = False
+    ):
         self.tokenizer = tokenizer
         self.index_to_token = {v: k for k, v in tokenizer.get_vocab().items()}
         self.number_encoding = number_encoding
         self.output_dir = output_dir
+        self.save_all_output = save_all_output
         self.rouge_metric = evaluate.load("rouge")
         self.bleu_metric = evaluate.load("sacrebleu")
         nltk.download('punkt_tab')
@@ -163,13 +170,14 @@ class CustomMetrics:
             print(sanity_invalid_number_prediction)
             print(sanity_no_number_prediction)
 
-        if compute_result:
+        if compute_result or self.save_all_output:
             # save decoded predictions and labels for debugging
-            with open(f"{self.output_dir}/decoded_preds_{self.eval_count}.txt", "w") as f:
+            with open(f"{self.output_dir}/decoded_preds_{self.eval_count}.txt", "a") as f:
                 for idx in range(len(decoded_preds)):
                     f.write(f"Prediction {idx}: {decoded_preds[idx]}\n")
                     f.write(f"Label {idx}: {decoded_labels[idx]}\n")
-            self.eval_count += 1
+            if compute_result:
+                self.eval_count += 1
 
         # compute perplexity
         perplexity_value = self.perplexity(logits, token_labels[:, :logits.size(1)])
