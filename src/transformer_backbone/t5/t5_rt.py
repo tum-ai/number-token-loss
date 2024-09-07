@@ -20,6 +20,10 @@ class T5RegressionModelRT(T5ForConditionalGeneration):
         "decoder.embed_tokens.number_embeddings.weight",
         "decoder.embed_tokens.number_embeddings.embedding.weight",
         "lm_head.weight",
+        'encoder.embed_tokens.weight',
+        'decoder.embed_tokens.weight',
+        'shared.weight',
+        'shared.token_embeddings.weight'
     ]
 
     def __init__(self, config, number_token_loss: NumberTokenLoss = None):
