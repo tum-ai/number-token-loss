@@ -399,7 +399,12 @@ def main():
         )
 
     # Custom Metric
-    custom_metrics = CustomMetrics(tokenizer=tokenizer, number_encoding=model_args.number_encoding, output_dir=training_args.output_dir)
+    custom_metrics = CustomMetrics(
+        tokenizer=tokenizer,
+        number_encoding=model_args.number_encoding,
+        output_dir=training_args.output_dir,
+        save_all_output=training_args.do_only_eval
+    )
 
     # Early stopping
     early_stopping_callback = EarlyStoppingCallback(
