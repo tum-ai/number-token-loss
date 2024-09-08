@@ -297,6 +297,10 @@ def main():
             "and load it from here, using --tokenizer_name"
         )
 
+    if model_args.number_encoding != "none" or model_args.number_token_loss:
+        config.vocab_size = len(tokenizer)  # Update vocab size
+        config.added_vocab = tokenizer.get_added_vocab()  # Set added vocab for number encoding
+
     if model_args.number_encoding == "xval":
         model_init_kwargs = {"tokenizer": tokenizer}
     else:
@@ -330,8 +334,6 @@ def main():
                 model_args.model_name_or_path,
                 must_contain="best",
             )
-        config.vocab_size = len(tokenizer)  # Update vocab size
-        config.added_vocab = tokenizer.get_added_vocab()  # Set added vocab for number encoding
         model = model_class.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -356,8 +358,6 @@ def main():
 
     else:
         logger.info("Training new model from scratch")
-        config.vocab_size = len(tokenizer)  # Update vocab size
-        config.added_vocab = tokenizer.get_added_vocab()  # Set added vocab for number encoding
         model = model_class(config=config, **model_init_kwargs)
 
     # model.generation_config.num_beams = training_args.generation_num_beams
