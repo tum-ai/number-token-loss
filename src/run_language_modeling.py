@@ -442,14 +442,18 @@ def main():
             tokenizer.save_pretrained(training_args.output_dir)
     else:
         logger.info("Skipping training.")
+        logger.info("*** Evaluate on training data ***")
+        eval_results = trainer.evaluate(eval_dataset=train_dataset)
+        logger.info(f"eval_results training data: {eval_results}")
+
         logger.info("*** Evaluate on validation data ***")
         eval_results = trainer.evaluate(eval_dataset=eval_dataset)
-        logger.info(f"eval_results: {eval_results}")
+        logger.info(f"eval_results validation data: {eval_results}")
 
     if training_args.do_eval or training_args.do_only_eval:
         logger.info("*** Evaluate on test set ***")
         eval_results = trainer.evaluate(eval_dataset=test_dataset)
-        logger.info(f"eval_results: {eval_results}")
+        logger.info(f"eval_results test data: {eval_results}")
 
 
 if __name__ == "__main__":

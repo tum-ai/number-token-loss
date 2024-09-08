@@ -25,6 +25,13 @@ class TestEvaluationMethods(unittest.TestCase):
         cls.metrics_rt = CustomMetrics(cls.tokenizer_rt, number_encoding="rt", output_dir="tests/test_output")
 
     def test_calculate_result_mse(self):
+        predictions = [
+            "First test 23.0 and # - 1.0",
+            "Is 29.0 - 478.2 = # 34.452 correct?",
+            "Test text -34*65= # 80",
+            "Test 12-12 = # -1 wrong?",
+            "Calculation: calculation calculation"
+        ]
         labels = [
             "First test 23.0 and # -4.0",
             "Is 29.0 - 478.2 = # 34.452 correct?",
@@ -32,17 +39,45 @@ class TestEvaluationMethods(unittest.TestCase):
             "Test 12-12 = # 0 wrong?",
             "Calculation: 12 + 12 = # 24"
         ]
-        predictions = [
-            "First test 23.0 and # -1.0",
-            "Is 29.0 - 478.2 = # 34.452 correct?",
-            "Test text -34*65= # 80",
-            "Test 12-12 = # -1 wrong?",
-            "Calculation: calculation calculation"
-        ]
 
-        mse = self.metrics_xval.calculate_result_mse(predictions, labels)
-        expected_mse = np.array([(4 - 1)**2, 0, (78 - 80)**2, (0 - 1)**2, np.nan])
-        np.testing.assert_almost_equal(mse, expected_mse)
+        expected_number_results = [
+            (-1.0, -4.0),
+            (34.452, 34.452),
+            (80, 78),
+            (-1, 0),
+            (np.nan, np.nan),
+            ]
+
+        number_results = self.metrics_xval.parse_number_result(predictions, labels)
+        self.assertEqual(number_results, expected_number_results)
+        number_results = np.concatenate([number_results])
+        (
+            mae,
+            mse,
+            r2,
+            number_accuracy,
+            count_not_produced_valid_results,
+            average_count_not_produced_valid_results
+        ) = self.metrics_xval.calculate_metrics(number_results, 5)
+
+        expected_mae = np.mean([abs(-1.0 - -4.0), abs(34.452 - 34.452), abs(80 - 78), abs(-1 - 0)])
+        expected_mse = np.mean([(4 - 1)**2, 0, (78 - 80)**2, (0 - 1)**2])
+
+        label_mean = np.mean([-4.0, 34.452, 78, 0])
+        ss_res = np.sum([(x - y)**2 for x, y in zip([-1.0, 34.452, 80, -1], [-4.0, 34.452, 78, 0])])
+        ss_tot = np.sum([(x - label_mean)**2 for x in [-4.0, 34.452, 78, 0]])
+        expected_r2 = 1 - (ss_res / ss_tot)
+
+        expected_number_accuracy = 1/5
+        expected_count_not_produced_valid_results = 1
+        expected_average_count_not_produced_valid_results = 1/5
+
+        self.assertEqual(mae, expected_mae)
+        self.assertEqual(mse, expected_mse)
+        self.assertEqual(r2, expected_r2)
+        self.assertEqual(number_accuracy, expected_number_accuracy)
+        self.assertEqual(count_not_produced_valid_results, expected_count_not_produced_valid_results)
+        self.assertEqual(average_count_not_produced_valid_results, expected_average_count_not_produced_valid_results)
 
 
 if __name__ == "__main__":
