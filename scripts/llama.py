@@ -63,29 +63,42 @@ class LLM:
         return full_text
 
 
-def augment_chunk(data_chunk, model):
+lock = multiprocessing.Lock()
+
+
+def augment_chunk(data_chunk, model, output_file):
     augmented_questions_chunk = []
-    for sample in tqdm(data_chunk, total=len(data_chunk)):
-        new_q = model(sample["question"])
-        augmented_questions_chunk.append(
-            {"question": new_q, "answer": sample["answer"]}
-        )
-    return augmented_questions_chunk
+
+    # Open the output file inside the function in append mode
+    with open(output_file, "a") as f:
+        for sample in tqdm(data_chunk, total=len(data_chunk)):
+            try:
+                # Process the question using the model
+                new_q = model(sample["question"])
+                augmented_question = {"question": new_q, "answer": sample["answer"]}
+                augmented_questions_chunk.append(augmented_question)
+
+                # Write each result immediately to the file (safely with a lock)
+                with lock:
+                    f.write(json.dumps(augmented_question) + "\n")
+
+            except Exception as e:
+                print(f"Error processing sample: {e}")
 
 
-def run_augmentation(data, n_proc, model, n_aug: int = 1):
-    augmented_questions = []
+def run_augmentation(
+    data, n_proc, model, n_aug: int = 1, output_file: str = "train_aug.jsonl"
+):
     for aug in tqdm(range(n_aug), desc=f"Looping all data {n_aug} times"):
         data_chunks = np.array_split(data, n_proc)
 
         with multiprocessing.Pool(processes=n_proc) as pool:
-            results = pool.starmap(
-                augment_chunk, [(chunk, model) for chunk in data_chunks]
+            # Pass the output file to each process along with the data chunk
+            pool.starmap(
+                augment_chunk, [(chunk, model, output_file) for chunk in data_chunks]
             )
-        for result in results:
-            augmented_questions.extend(result)
 
-    return augmented_questions
+    print(f"Augmentation completed and saved to {output_file}")
 
 
 if __name__ == "__main__":
@@ -102,11 +115,9 @@ if __name__ == "__main__":
 
     n_proc = multiprocessing.cpu_count()
 
-    augmented_questions = run_augmentation(data, n_proc, model)
-    print(f"Generated {len(augmented_questions)} new questions")
-
-    with open(
-        "data/grade-school-math/grade_school_math/data/train_aug.jsonl", "a"
-    ) as f:
-        for q in augmented_questions:
-            f.write(json.dumps(q) + "\n")
+    run_augmentation(
+        data,
+        n_proc,
+        model,
+        output_file="data/grade-school-math/grade_school_math/data/train_aug.jsonl",
+    )
