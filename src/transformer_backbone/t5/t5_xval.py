@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import CrossEntropyLoss
+import torch.nn.init as init
 from transformers import T5ForConditionalGeneration, LogitsProcessorList, StoppingCriteriaList, GenerationConfig
 from transformers.generation.streamers import BaseStreamer
 from transformers.generation.utils import GenerateNonBeamOutput, GenerateEncoderDecoderOutput, GenerateDecoderOnlyOutput
@@ -40,6 +41,13 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
             nn.GELU(),
             nn.Linear(dim_feedforward, 1, bias=numhead_bias),
         )
+
+    def initialize_num_head_weights(self):
+        for layer in self.num_head:
+            if isinstance(layer, nn.Linear):
+                init.xavier_uniform_(layer.weight)
+                if layer.bias is not None:
+                    init.zeros_(layer.bias)
 
     def forward(
             self,
@@ -217,7 +225,7 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
                 num_preds[num_mask],
                 number_labels[num_mask].view(-1, 1),
                 reduction="mean",
-            )
+            ) * 0.001
             outputs["number_loss"] = loss_num
             outputs["token_loss"] = outputs.loss
             loss = loss + loss_num
