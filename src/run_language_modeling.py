@@ -342,6 +342,10 @@ def main():
             ignore_mismatched_sizes=True,
             **model_init_kwargs,
         )
+
+        if model_args.number_encoding == "xval":
+            model.initialize_num_head_weights()
+
         logger.info("Model restored")
 
         # Get min loss so far
