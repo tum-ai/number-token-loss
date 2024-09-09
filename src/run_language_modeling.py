@@ -329,16 +329,17 @@ def main():
     if model_args.model_name_or_path:
 
         # Restore checkpoint if available
-        if "checkpoint" not in model_args.model_name_or_path:
-            model_args.model_name_or_path = get_latest_checkpoint(
-                model_args.model_name_or_path,
-                must_contain="best",
-            )
+        # if "checkpoint" not in model_args.model_name_or_path:
+        #     model_args.model_name_or_path = get_latest_checkpoint(
+        #         model_args.model_name_or_path,
+        #         must_contain="best",
+        #     )
         model = model_class.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
             config=config,
             cache_dir=model_args.cache_dir,
+            ignore_mismatched_sizes=True,
             **model_init_kwargs,
         )
         logger.info("Model restored")
