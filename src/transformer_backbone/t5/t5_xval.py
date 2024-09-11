@@ -225,7 +225,7 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
                 num_preds[num_mask],
                 number_labels[num_mask].view(-1, 1),
                 reduction="mean",
-            ) * 0.001
+            )
             outputs["number_loss"] = loss_num
             outputs["token_loss"] = outputs.loss
             loss = loss + loss_num
