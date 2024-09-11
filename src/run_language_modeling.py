@@ -298,8 +298,13 @@ def main():
         )
 
     if model_args.number_encoding != "none" or model_args.number_token_loss:
-        config.vocab_size = len(tokenizer)  # Update vocab size
-        config.added_vocab = tokenizer.get_added_vocab()  # Set added vocab for number encoding
+        n_new_tokens = len(tokenizer) - len(transformers.AutoTokenizer.from_pretrained("t5-small"))
+        logger.info(f"Number of new tokens: {n_new_tokens}")
+        logger.info(f"Old vocab size: {config.vocab_size}")
+        config.vocab_size = config.vocab_size + n_new_tokens
+        logger.info(f"New vocab size: {config.vocab_size}")
+
+        config.added_vocab = tokenizer.get_added_vocab()
 
     if model_args.number_encoding == "xval":
         model_init_kwargs = {"tokenizer": tokenizer}
@@ -321,7 +326,8 @@ def main():
 
         model_init_kwargs["number_token_loss"] = NumberTokenLoss(
             tokenizer,
-            training_args.device,
+            vocab_size=config.vocab_size,
+            device=training_args.device,
             loss_function=loss_function,
             weight=model_args.number_token_loss_weight
         )

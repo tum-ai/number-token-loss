@@ -6,16 +6,20 @@ from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 
 
 class NumberTokenLoss:
-    def __init__(self, tokenizer: NumberEncodingTokenizer, device, loss_function=F.mse_loss, weight=0.5):
+    def __init__(self, tokenizer: NumberEncodingTokenizer, vocab_size: int, device, loss_function=F.mse_loss, weight=0.5):
         self.tokenizer = tokenizer
         self.loss_function = loss_function
         self.weight = weight
         hashed_num_tokens = set(self.tokenizer.get_num_tokens())
-        self.nvocab = torch.tensor(
-            [self.tokenizer.decode_number_token(token) if token in hashed_num_tokens else float('nan') for token in self.tokenizer.get_vocab()],
-            dtype=torch.float32,
-            device=device
-        )
+
+        # create a tensor of shape (vocab_size,) with the number tokens replaced by their corresponding number
+        self.nvocab = torch.full((vocab_size,), float("nan"), device=device)
+
+        for token, id in self.tokenizer.get_vocab().items():
+            if token in hashed_num_tokens:
+                self.nvocab[id] = self.tokenizer.decode_number_token(token)
+
+
 
     def forward(self, logits: Tensor, labels: Tensor):
         if logits.numel() == 0:
