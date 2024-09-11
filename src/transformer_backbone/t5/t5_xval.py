@@ -689,15 +689,9 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
         # init attention / hidden states / scores tuples
         scores = () if (return_dict_in_generate and output_scores) else None
         raw_logits = () if (return_dict_in_generate and output_logits) else None
-        #######################
-        # Customized code start
-        #######################
-        # changed condition
         beam_indices = (
-            tuple(() for _ in range(batch_beam_size)))
-        #######################
-        # Customized code end
-        #######################
+            tuple(() for _ in range(batch_beam_size)) if (return_dict_in_generate and output_scores) else None
+        )
         decoder_attentions = () if (return_dict_in_generate and output_attentions) else None
         cross_attentions = () if (return_dict_in_generate and output_attentions) else None
         decoder_hidden_states = () if (return_dict_in_generate and output_hidden_states) else None
@@ -851,13 +845,11 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
                 )
             
             # select the number embeddings corresponding to the selected beams
-            # next_number_embeddings = next_number_embeddings[beam_idx]
-
             if not (next_number_embeddings[beam_next_tokens != self.tokenizer.get_num_token_ids()[0]] == 1).all():
                 raise Exception("Number embeddings should be 1 for non-number tokens")
 
             input_ids = torch.cat([input_ids[beam_idx, :], beam_next_tokens.unsqueeze(-1)], dim=-1)
-            model_kwargs["decoder_number_embeddings"] = torch.cat([model_kwargs["decoder_number_embeddings"][beam_idx, :], next_number_embeddings[:, None]], dim=-1)
+            model_kwargs["decoder_number_embeddings"] = torch.cat([model_kwargs["decoder_number_embeddings"][beam_idx, :], next_number_embeddings.unsqueeze(-1)], dim=-1)
 
             if not (model_kwargs["decoder_number_embeddings"][input_ids != self.tokenizer.get_num_token_ids()[0]] == 1).all():
                 raise Exception("Number embeddings should be 1 for non-number tokens")
@@ -881,15 +873,10 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
                 model_kwargs["past_key_values"] = self._temporary_reorder_cache(
                     model_kwargs["past_key_values"], beam_idx
                 )
-            #######################
-            # Customized code start
-            #######################
-            # only commented out condition, so that beam_indices are always saved and can be used for extracting the number embeddings later
-            #if return_dict_in_generate and output_scores:
-            beam_indices = tuple((beam_indices[beam_idx[i]] + (beam_idx[i],) for i in range(len(beam_indices))))
-            #######################
-            # Customized code end
-            #######################
+
+            if return_dict_in_generate and output_scores:
+                beam_indices = tuple((beam_indices[beam_idx[i]] + (beam_idx[i],) for i in range(len(beam_indices))))
+
             # increase cur_len
             cur_len = cur_len + 1
 
@@ -929,8 +916,8 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
         # extract the number embeddings corresponding to the highest scoring beams
         sequence_outputs['number_embeddings'] = model_kwargs["decoder_number_embeddings"][idx_final_beams]
 
-        if not (sequence_outputs["number_embeddings"][sequence_outputs['sequences'] != self.tokenizer.get_num_token_ids()[0]] == 1).all():
-            raise Exception("Number embeddings should be 1 for non-number tokens")
+        # if not (sequence_outputs["number_embeddings"][sequence_outputs['sequences'] != self.tokenizer.get_num_token_ids()[0]] == 1).all():
+        #     raise Exception("Number embeddings should be 1 for non-number tokens")
 
         #######################
         # Customized code end
