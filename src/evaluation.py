@@ -88,7 +88,23 @@ class CustomMetrics:
         count_not_produced_valid_results = np.sum(np.isnan([result[0] for result in number_results]))
         average_count_not_produced_valid_results = count_not_produced_valid_results / total_count
 
-        return mae, mse, r2, number_accuracy, count_not_produced_valid_results, average_count_not_produced_valid_results
+        median_absolute_error = np.median([np.abs(result[0] - result[1]) for result in number_results if not np.isnan(result[0])])
+        log_transformed_data = np.sign(number_results) * np.log10(np.abs(number_results) + 1)
+        log_r2 = 1 - np.nansum((log_transformed_data[:, 0] - log_transformed_data[:, 1]) ** 2) / np.nansum(
+            (log_transformed_data[:, 1] - np.nanmean(log_transformed_data[:, 1])) ** 2)
+        log_mae = np.mean([np.abs(result[0] - result[1]) for result in log_transformed_data if not np.isnan(result[0])])
+
+        return (
+            mae,
+            mse,
+            r2,
+            number_accuracy,
+            count_not_produced_valid_results,
+            average_count_not_produced_valid_results,
+            median_absolute_error,
+            log_mae,
+            log_r2,
+        )
 
     def perplexity(self, logits, labels):
         # Mask to ignore panumeric_tokening tokens (-100)
@@ -235,7 +251,10 @@ class CustomMetrics:
                 r2,
                 number_accuracy,
                 count_not_produced_valid_results,
-                average_count_not_produced_valid_results
+                average_count_not_produced_valid_results,
+                median_absolute_error,
+                log_mae,
+                log_r2,
             ) = self.calculate_metrics(number_results, total_count)
 
             computed_metrics = {
@@ -245,6 +264,9 @@ class CustomMetrics:
                 'MAE': mae,
                 'R2': r2,
                 'number_accuracy': number_accuracy,
+                'median_absolute_error': median_absolute_error,
+                'log_mae': log_mae,
+                'log_r2': log_r2,
                 "count_not_produced_valid_results": count_not_produced_valid_results,
                 "average_count_not_produced_valid_results": average_count_not_produced_valid_results,
                 "count_invalid_number_prediction": np.sum(

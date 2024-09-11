@@ -202,13 +202,8 @@ class FloatEncoding(nn.Embedding):
             raise ValueError(f"Can not work only with negative numbers (vmax = {vmax})")
 
         weights = torch.zeros(num_embeddings, embedding_dim)
-        for idx, (token, index) in enumerate(vocab.items()):
-            '''
-            assert (
-                idx == index
-            ), "Please sort vocab indexes in ascending order starting from 0"
-            '''
-            weights[idx, :] = get_float_encoding(token, embedding_dim, vmax)
+        for token, index in vocab.items():
+            weights[index, :] = get_float_encoding(token, embedding_dim, vmax)
         weights = weights.to(device=get_device())
         self.embedding = nn.Embedding.from_pretrained(weights, freeze=True)
         self.vocab = vocab
