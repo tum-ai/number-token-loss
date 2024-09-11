@@ -5,7 +5,7 @@ import os
 
 def read_json(file_path):
     data = []
-    with open(file_path, 'r') as file:
+    with open(file_path, 'r', encoding="utf-8") as file:
         for line in file:
             # Parse each line as a JSON object and append it to the list
             data.append(json.loads(line))
@@ -42,7 +42,7 @@ def main():
 
     file_path = "data/"
 
-    for file_name in ["train_t_clean.jsonl", "val_t_clean.jsonl", "test_clean.jsonl"]:
+    for file_name in ["train_t_clean.jsonl", "val_t_clean.jsonl", "test_clean.jsonl", "train_t_clean_with_augmented.jsonl"]:
         for line in read_json(file_path + file_name):
             question = preprocess_numbers(line['question'])
             answer = preprocess_numbers(line['answer'])
