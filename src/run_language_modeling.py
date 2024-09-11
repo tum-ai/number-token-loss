@@ -384,22 +384,22 @@ def main():
     logger.info(f"PyTorch version: {torch.__version__}")
 
     # Get datasets
-    if training_args.train_with_augmented_data:
-        train_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/train_t_clean_with_augmented.jsonl'
-    else:
-        train_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/train_t_clean.jsonl'
-    eval_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/val_t_clean.jsonl'
-    test_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/test_clean.jsonl'
-    train_dataset = load_json_dataset(train_data_path)
-    eval_dataset = load_json_dataset(eval_data_path)
-    test_dataset = load_json_dataset(test_data_path)
+    # if training_args.train_with_augmented_data:
+    #     train_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/train_t_clean_with_augmented.jsonl'
+    # else:
+    #     train_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/train_t_clean.jsonl'
+    # eval_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/val_t_clean.jsonl'
+    # test_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/test_clean.jsonl'
+    # train_dataset = load_json_dataset(train_data_path)
+    # eval_dataset = load_json_dataset(eval_data_path)
+    # test_dataset = load_json_dataset(test_data_path)
 
-    # train_data_path = '../data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
-    # eval_data_path = '../data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
-    # test_data_path = '../data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
-    # train_dataset = load_txt_dataset(train_data_path)
-    # eval_dataset = load_txt_dataset(eval_data_path)
-    # test_dataset = load_txt_dataset(test_data_path)
+    train_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/train.txt'
+    eval_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/val.txt'
+    test_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/test.txt'
+    train_dataset = load_txt_dataset(train_data_path)
+    eval_dataset = load_txt_dataset(eval_data_path)
+    test_dataset = load_txt_dataset(test_data_path)
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"Number of parameters {num_params} of type {type(model)}")
