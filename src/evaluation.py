@@ -61,7 +61,7 @@ class CustomMetrics:
         # Extract the last number of both strings and compare them
         # TODO only valid for this dataset, remove for other datasets
 
-        prediction_number = re.findall(r"#\s*([+-]?\s*(\d+)(\.\d+)?)", prediction)
+        prediction_number = re.findall(r"\s*([+-]?\s*(\d+)(\.\d+)?)", prediction)
         if len(prediction_number) == 0:
             return np.nan, np.nan
 
@@ -73,7 +73,7 @@ class CustomMetrics:
         # clip the predicted number to not produce an overflow
         prediction_number = max(min(prediction_number, 1e10), -1e10)
 
-        label_number = re.findall(r"#\s*([+-]?\s*(\d+)(\.\d+)?)", label)[-1][0]
+        label_number = re.findall(r"\s*([+-]?\s*(\d+)(\.\d+)?)", label)[-1][0]
         label_number = float(label_number.replace(" ", ""))
 
         return prediction_number, label_number
