@@ -117,6 +117,13 @@ class CustomTrainingArguments(Seq2SeqTrainingArguments):
         },
     )
 
+    train_with_augmented_data: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "Train with augmented data."
+        },
+    )
+
 
 @dataclass
 class ModelArguments:
@@ -377,7 +384,10 @@ def main():
     logger.info(f"PyTorch version: {torch.__version__}")
 
     # Get datasets
-    train_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/train_t_clean.jsonl'
+    if training_args.train_with_augmented_data:
+        train_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/train_t_clean_with_augmented.jsonl'
+    else:
+        train_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/train_t_clean.jsonl'
     eval_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/val_t_clean.jsonl'
     test_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/test_clean.jsonl'
     train_dataset = load_json_dataset(train_data_path)
