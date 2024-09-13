@@ -28,6 +28,7 @@ class RtQuestionAnswerCLMCollator(DataCollatorForLanguageModeling):
         # Masking the answers
         answer_input_ids = answer_encodings['input_ids']
         labels = answer_input_ids.clone()
+        labels[labels == self.tokenizer.pad_token_id] = -100
 
         # Generate number_labels for easier evaluation
         number_token_ids = self.tokenizer.get_num_token_ids()
