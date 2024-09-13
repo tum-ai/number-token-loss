@@ -32,7 +32,7 @@ V_MAX = 3000000000
 class T5RegressionModelXval(T5ForConditionalGeneration):
     def __init__(self, config, tokenizer: NumberEncodingTokenizer, dim_feedforward=1024, numhead_bias=True):
         super().__init__(config)
-        super()._resize_token_embeddings(config.vocab_size)
+        super()._resize_token_embeddings(config.vocab_size, pad_to_multiple_of=8 if torch.cuda.is_available() else 1)
 
         self.tokenizer = tokenizer
 
@@ -94,9 +94,10 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
             # Convert encoder inputs in embeddings if needed
             # Normalize embeddings
             number_locs = input_ids == self.tokenizer.num_token_id
-            input_number_embeddings[number_locs] = torch.sign(input_number_embeddings[number_locs]) * torch.log10(torch.abs(input_number_embeddings[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
+            input_number_embeddings_scaled = input_number_embeddings.clone()
+            input_number_embeddings_scaled[number_locs] = torch.sign(input_number_embeddings_scaled[number_locs]) * torch.log10(torch.abs(input_number_embeddings_scaled[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
             
-            inputs_embeds = self.shared(input_ids) * input_number_embeddings.unsqueeze(-1)
+            inputs_embeds = self.shared(input_ids) * input_number_embeddings_scaled.unsqueeze(-1)
             encoder_outputs = self.encoder(
                 attention_mask=attention_mask,
                 inputs_embeds=inputs_embeds,
@@ -150,10 +151,12 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
             # Convert encoder inputs in embeddings if needed
         # Normalize embeddings
         number_locs = decoder_input_ids == self.tokenizer.num_token_id
+        decoder_number_embeddings_scaled = decoder_number_embeddings.clone()
         if number_locs.any():
-            decoder_number_embeddings[number_locs] = torch.sign(decoder_number_embeddings[number_locs]) * torch.log10(torch.abs(decoder_number_embeddings[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
+            decoder_number_embeddings_scaled[number_locs] = torch.sign(decoder_number_embeddings_scaled[number_locs]) * torch.log10(torch.abs(decoder_number_embeddings_scaled[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
+
         
-        decoder_inputs_embeds = self.shared(decoder_input_ids) * decoder_number_embeddings.unsqueeze(-1)
+        decoder_inputs_embeds = self.shared(decoder_input_ids) * decoder_number_embeddings_scaled.unsqueeze(-1)
 
         # Decode
         decoder_outputs = self.decoder(
@@ -327,9 +330,10 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
         
         # Normalize embeddings
         number_locs = encoder_input_ids == self.tokenizer.num_token_id
-        encoder_input_number_embeddings[number_locs] = torch.sign(encoder_input_number_embeddings[number_locs]) * torch.log10(torch.abs(encoder_input_number_embeddings[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
+        encoder_input_number_embeddings_scaled = encoder_input_number_embeddings.clone()
+        encoder_input_number_embeddings_scaled[number_locs] = torch.sign(encoder_input_number_embeddings_scaled[number_locs]) * torch.log10(torch.abs(encoder_input_number_embeddings_scaled[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
         
-        encoder_kwargs["inputs_embeds"] = self.shared(encoder_input_ids) * encoder_input_number_embeddings.unsqueeze(-1)
+        encoder_kwargs["inputs_embeds"] = self.shared(encoder_input_ids) * encoder_input_number_embeddings_scaled.unsqueeze(-1)
         #######################
         # Customized code end
         #######################
