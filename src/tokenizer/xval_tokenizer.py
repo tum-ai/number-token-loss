@@ -1,4 +1,5 @@
 import itertools
+import logging
 import re
 from typing import List, Optional, Union, Tuple, Dict
 
@@ -66,6 +67,14 @@ class XvalTokenizer(NumberEncodingTokenizer):
         # Remove padding tokens
         decoded_ids = [list(filter(lambda x: x not in self.all_special_tokens, decoded_id)) for decoded_id in
                        decoded_ids]
+
+        try:
+            decoded_ids = list(
+                map(lambda sample: self.convert_tokens_to_string(sample) if len(sample) else "", decoded_ids))
+        except Exception as e:
+            logging.error(f"Error converting tokens to string: {e} for tokens {decoded_ids}")
+            decoded_ids = ["" for _ in range(len(decoded_ids))]
+
         decoded_ids = list(
             map(lambda sample: self.convert_tokens_to_string(sample) if len(sample) else "", decoded_ids))
 

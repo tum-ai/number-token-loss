@@ -25,6 +25,7 @@ class XvalQuestionAnswerCLMCollator(DataCollatorForLanguageModeling):
         # Masking the answers
         answer_input_ids = answer_encodings['input_ids']
         labels = answer_input_ids.clone()
+        labels[labels == self.tokenizer.pad_token_id] = -100
         number_labels = answer_encodings["number_embeddings"]
 
         return {

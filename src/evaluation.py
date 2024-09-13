@@ -171,6 +171,9 @@ class CustomMetrics:
         else:
             token_labels, number_labels = labels, None
 
+        # replace -100 with padding token
+        token_labels[token_labels == -100] = self.tokenizer.pad_token_id
+
         if self.number_encoding == "xval":
             predictions, predicted_numbers = predictions
             decoded_preds, count_invalid_number_prediction, count_no_number_prediction = self.tokenizer.decode_into_human_readable(
