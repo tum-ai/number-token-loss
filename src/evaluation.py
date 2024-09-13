@@ -172,25 +172,26 @@ class CustomMetrics:
             token_labels, number_labels = labels, None
 
         # replace -100 with padding token
-        token_labels[token_labels == -100] = self.tokenizer.pad_token_id
+        token_labels_for_decoding = token_labels.clone()
+        token_labels_for_decoding[token_labels_for_decoding == -100] = self.tokenizer.pad_token_id
 
         if self.number_encoding == "xval":
             predictions, predicted_numbers = predictions
             decoded_preds, count_invalid_number_prediction, count_no_number_prediction = self.tokenizer.decode_into_human_readable(
                 predictions, predicted_numbers)
             decoded_labels, sanity_invalid_number_prediction, sanity_no_number_prediction = self.tokenizer.decode_into_human_readable(
-                token_labels, number_labels)
+                token_labels_for_decoding, number_labels)
         else:
             if hasattr(self.tokenizer, "decode_into_human_readable"):
                 decoded_preds, count_invalid_number_prediction, count_no_number_prediction = self.tokenizer.decode_into_human_readable(
                     predictions)
                 decoded_labels, sanity_invalid_number_prediction, sanity_no_number_prediction = self.tokenizer.decode_into_human_readable(
-                    token_labels)
+                    token_labels_for_decoding)
             else:
                 decoded_preds = self.tokenizer.batch_decode(predictions, skip_special_tokens=True)
                 count_invalid_number_prediction, count_no_number_prediction = check_number_predictions(
                     decoded_preds)
-                decoded_labels = self.tokenizer.batch_decode(token_labels, skip_special_tokens=True)
+                decoded_labels = self.tokenizer.batch_decode(token_labels_for_decoding, skip_special_tokens=True)
                 sanity_invalid_number_prediction, sanity_no_number_prediction = check_number_predictions(
                     decoded_labels)
 

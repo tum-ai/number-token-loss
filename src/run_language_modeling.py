@@ -124,6 +124,13 @@ class CustomTrainingArguments(Seq2SeqTrainingArguments):
         },
     )
 
+    dataset_name: Literal["mathematics_dataset", "gsm8k"] = field(
+        default="mathematics_dataset",
+        metadata={
+            "help": "Name of the dataset."
+        },
+    )
+
 
 @dataclass
 class ModelArguments:
@@ -206,7 +213,11 @@ def main():
 
     # Set generation arguments
     training_args.predict_with_generate = True
-    training_args.generation_num_beams = 4
+    if model_args.number_encoding != "xval":
+        training_args.generation_num_beams = 4
+        logger.info("Setting generation_num_beams to 4")
+    else:
+        logger.info("Setting generation_num_beams to 1 for xval")
 
     if (
             os.path.exists(training_args.output_dir)
@@ -232,6 +243,7 @@ def main():
         training_args.n_gpu,
         bool(training_args.local_rank != -1),
     )
+    logger.info("Training on dataset: %s", training_args.dataset_name)
     logger.info("Training/evaluation parameters %s", training_args)
 
     # Set seed
@@ -341,6 +353,10 @@ def main():
 
     if model_args.model_name_or_path:
 
+        # delete generation config, as not deleting leads to model not being loadable
+        if os.path.isdir(model_args.model_name_or_path) and os.path.exists(os.path.join(model_args.model_name_or_path, "generation_config.json")):
+            os.remove(os.path.join(model_args.model_name_or_path, "generation_config.json"))
+
         # Restore checkpoint if available
         # if "checkpoint" not in model_args.model_name_or_path:
         #     model_args.model_name_or_path = get_latest_checkpoint(
@@ -378,28 +394,32 @@ def main():
         logger.info("Training new model from scratch")
         model = model_class(config=config, **model_init_kwargs)
 
-    # model.generation_config.num_beams = training_args.generation_num_beams
-    # model.generation_config.do_sample = True
-
     logger.info(f"PyTorch version: {torch.__version__}")
 
     # Get datasets
-    # if training_args.train_with_augmented_data:
-    #     train_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/train_t_clean_with_augmented.jsonl'
-    # else:
-    #     train_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/train_t_clean.jsonl'
-    # eval_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/val_t_clean.jsonl'
-    # test_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/test_clean.jsonl'
-    # train_dataset = load_json_dataset(train_data_path)
-    # eval_dataset = load_json_dataset(eval_data_path)
-    # test_dataset = load_json_dataset(test_data_path)
 
-    train_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/train.txt'
-    eval_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/val.txt'
-    test_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/test.txt'
-    train_dataset = load_txt_dataset(train_data_path)
-    eval_dataset = load_txt_dataset(eval_data_path)
-    test_dataset = load_txt_dataset(test_data_path)
+    if training_args.dataset_name == "gsm8k":
+        if training_args.train_with_augmented_data:
+            train_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/train_t_clean_with_augmented.jsonl'
+        else:
+            train_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/train_t_clean.jsonl'
+        eval_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/val_t_clean.jsonl'
+        test_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/test_clean.jsonl'
+        train_dataset = load_json_dataset(train_data_path)
+        eval_dataset = load_json_dataset(eval_data_path)
+        test_dataset = load_json_dataset(test_data_path)
+    elif training_args.dataset_name == "mathematics_dataset":
+        train_data_path = 'data/mathematics_dataset-v1.0/train.txt'
+        eval_data_path = 'data/mathematics_dataset-v1.0/val.txt'
+        test_interpolate_data_path = 'data/mathematics_dataset-v1.0/test_interpolate.txt'
+        test_extrapolate_data_path = 'data/mathematics_dataset-v1.0/test_extrapolate.txt'
+
+        train_dataset = load_txt_dataset(train_data_path)
+        eval_dataset = load_txt_dataset(eval_data_path)
+        test_interpolate_dataset = load_txt_dataset(test_interpolate_data_path)
+        test_extrapolate_dataset = load_txt_dataset(test_extrapolate_data_path)
+    else:
+        raise ValueError(f"Unknown dataset: {training_args.dataset_name}")
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"Number of parameters {num_params} of type {type(model)}")
@@ -424,7 +444,7 @@ def main():
         tokenizer=tokenizer,
         number_encoding=model_args.number_encoding,
         output_dir=training_args.output_dir,
-        save_all_output=training_args.do_only_eval
+        save_all_output=True,
     )
 
     # Early stopping
@@ -463,18 +483,29 @@ def main():
             tokenizer.save_pretrained(training_args.output_dir)
     else:
         logger.info("Skipping training.")
-        logger.info("*** Evaluate on training data ***")
-        eval_results = trainer.evaluate(eval_dataset=train_dataset)
-        logger.info(f"eval_results training data: {eval_results}")
 
-        logger.info("*** Evaluate on validation data ***")
-        eval_results = trainer.evaluate(eval_dataset=eval_dataset)
-        logger.info(f"eval_results validation data: {eval_results}")
 
-    if training_args.do_eval or training_args.do_only_eval:
+
+        # logger.info("*** Evaluate on training data ***")
+        # eval_results = trainer.evaluate(eval_dataset=train_dataset)
+        # logger.info(f"eval_results training data: {eval_results}")
+
+    logger.info("*** Evaluate on validation data ***")
+    eval_results = trainer.evaluate(eval_dataset=eval_dataset)
+    logger.info(f"eval_results validation data: {eval_results}")
+
+    if training_args.dataset_name == "gsm8k":
         logger.info("*** Evaluate on test set ***")
         eval_results = trainer.evaluate(eval_dataset=test_dataset)
         logger.info(f"eval_results test data: {eval_results}")
+    elif training_args.dataset_name == "mathematics_dataset":
+        logger.info("*** Evaluate on interpolate data ***")
+        eval_results = trainer.evaluate(eval_dataset=test_interpolate_dataset)
+        logger.info(f"eval_results interpolate data: {eval_results}")
+
+        logger.info("*** Evaluate on extrapolate data ***")
+        eval_results = trainer.evaluate(eval_dataset=test_extrapolate_dataset)
+        logger.info(f"eval_results extrapolate data: {eval_results}")
 
 
 if __name__ == "__main__":
