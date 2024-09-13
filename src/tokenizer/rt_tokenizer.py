@@ -86,6 +86,8 @@ class RtTokenizer(NumberEncodingTokenizer):
 
         if token.startswith("_") and token.endswith("_"):
             parts = token.strip("_").split("_")
+            if len(parts) < 2:
+                return NON_NUMERIC_TOKEN
             return int(parts[1])
         else:
             return NON_NUMERIC_TOKEN
