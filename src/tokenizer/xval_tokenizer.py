@@ -462,6 +462,11 @@ class XvalTokenizer(NumberEncodingTokenizer):
         ############################
         number_locs = np.array(sequence) == self.num_token_id
         num_embed = np.ones(len(sequence)).astype(np.float32)  # Use float32 instead of float16
+
+        if num_embed[number_locs].shape[0] < len(first_numbers):
+            # trunctuate first numbers
+            first_numbers = first_numbers[:len(num_embed[number_locs])]
+        
         num_embed[number_locs] = first_numbers + pair_numbers if pair_numbers else first_numbers
         encoded_inputs["number_embeddings"] = num_embed.tolist()
         ############################
