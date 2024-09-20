@@ -59,7 +59,7 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
             nn.Linear(dim_feedforward, 1, bias=numhead_bias),
         )
 
-        self.encoder_position_embed = nn.Embedding(512, config.d_model)
+        self.encoder_position_embed = nn.Embedding(512, config.d_model) # TODO not hardcode
         self.decoder_position_embed = nn.Embedding(512, config.d_model)
 
     def initialize_num_head_weights(self):
