@@ -227,29 +227,6 @@ def main():
 
 
 def run_language_modeling(model_args, training_args):
-    # Set generation arguments
-    training_args.predict_with_generate = True
-    if model_args.number_encoding != "xval":
-        training_args.generation_num_beams = 4
-        logger.info("Setting generation_num_beams to 4")
-    else:
-        logger.info("Setting generation_num_beams to 1 for xval")
-
-    if model_args.log_scale_embeddings:
-        if model_args.number_encoding in ["xval", "rt"]:
-            logger.info("Log scaling embeddings")
-        else:
-            raise ValueError("Log scaling only supported for xval and rt")
-    else:
-        if model_args.number_encoding in ["xval", "rt"]:
-            logger.info("Not log scaling embeddings")
-
-    if model_args.xval_bigger_language_head:
-        if model_args.number_encoding == "xval":
-            logger.info("Using bigger language head for xval")
-        else:
-            raise ValueError("Bigger language head only supported for xval")
-
     if (
             os.path.exists(training_args.output_dir)
             and os.listdir(training_args.output_dir)
@@ -276,6 +253,29 @@ def run_language_modeling(model_args, training_args):
     )
     logger.info("Training on dataset: %s", training_args.dataset_name)
     logger.info("Training/evaluation parameters %s", training_args)
+
+    # Set generation arguments
+    training_args.predict_with_generate = True
+    if model_args.number_encoding != "xval":
+        training_args.generation_num_beams = 4
+        logger.info("Setting generation_num_beams to 4")
+    else:
+        logger.info("Setting generation_num_beams to 1 for xval")
+
+    if model_args.log_scale_embeddings:
+        if model_args.number_encoding in ["xval", "rt"]:
+            logger.info("Log scaling embeddings")
+        else:
+            raise ValueError("Log scaling only supported for xval and rt")
+    else:
+        if model_args.number_encoding in ["xval", "rt"]:
+            logger.info("Not log scaling embeddings")
+
+    if model_args.xval_bigger_language_head:
+        if model_args.number_encoding == "xval":
+            logger.info("Using bigger language head for xval")
+        else:
+            raise ValueError("Bigger language head only supported for xval")
 
     # Set seed
     set_seed(training_args.seed)
