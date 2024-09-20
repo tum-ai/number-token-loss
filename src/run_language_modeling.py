@@ -380,7 +380,7 @@ def run_language_modeling(model_args, training_args):
 
         model_init_kwargs["number_token_loss"] = NumberTokenLoss(
             tokenizer,
-            vocab_size=config.vocab_size,  # TODO padded to multiple of 8
+            vocab_size=config.vocab_size,
             device=training_args.device,
             loss_function=loss_function,
             weight=model_args.number_token_loss_weight

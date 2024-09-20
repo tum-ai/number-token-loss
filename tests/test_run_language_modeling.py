@@ -26,7 +26,7 @@ class TestRunLanguageModeling(unittest.TestCase):
 
     def generate_model_args(self, number_encoding, number_token_loss, log_scale_embeddings, model_name_or_path=None):
         return ModelArguments(
-            model_name_or_path=model_name_or_path,  # Training from scratch # TODO
+            model_name_or_path=model_name_or_path,
             config_name="t5-small",
             cache_dir=None,
             number_encoding=number_encoding,
