@@ -17,9 +17,7 @@ class NumberTokenLoss:
 
         for token, id in self.tokenizer.get_vocab().items():
             if token in hashed_num_tokens:
-                self.nvocab[id] = self.tokenizer.decode_number_token(token)
-
-
+                self.nvocab[id] = self.tokenizer.decode_number_token(token, ignore_order=True)
 
     def forward(self, logits: Tensor, labels: Tensor):
         if logits.numel() == 0:

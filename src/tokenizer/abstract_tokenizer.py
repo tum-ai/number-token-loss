@@ -22,7 +22,7 @@ class NumberEncodingTokenizer(T5Tokenizer, ABC):
         pass
 
     @abstractmethod
-    def decode_number_token(self, token: str) -> float:
+    def decode_number_token(self, token: str, ignore_order: bool = True) -> float:
         pass
 
     @abstractmethod

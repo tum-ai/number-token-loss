@@ -28,13 +28,30 @@ GenerateBeamOutput = Union[GenerateBeamDecoderOnlyOutput, GenerateBeamEncoderDec
 # Set maximal value for normalization 
 V_MAX = 3000000000
 
-
 class T5RegressionModelXval(T5ForConditionalGeneration):
-    def __init__(self, config, tokenizer: NumberEncodingTokenizer, dim_feedforward=1024, numhead_bias=True):
+
+    def __init__(
+            self,
+            config,
+            tokenizer: NumberEncodingTokenizer,
+            bigger_language_head: bool,
+            log_scale_embeddings: bool,
+            dim_feedforward=1024,
+            numhead_bias=True
+    ):
         super().__init__(config)
-        super()._resize_token_embeddings(config.vocab_size, pad_to_multiple_of=8 if torch.cuda.is_available() else 1)
+        super().resize_token_embeddings(config.vocab_size, pad_to_multiple_of=64 if torch.cuda.is_available() else 1)
 
         self.tokenizer = tokenizer
+        self.log_scale_embeddings = log_scale_embeddings
+        self.bigger_language_head = bigger_language_head
+
+        if self.bigger_language_head:
+            self.lm_head = nn.Sequential(
+                nn.Linear(config.d_model, dim_feedforward, bias=False),
+                nn.GELU(),
+                nn.Linear(dim_feedforward, config.vocab_size, bias=False),
+            )
 
         self.num_head = nn.Sequential(
             nn.Linear(config.d_model, dim_feedforward, bias=numhead_bias),
@@ -42,12 +59,22 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
             nn.Linear(dim_feedforward, 1, bias=numhead_bias),
         )
 
+        self.encoder_position_embed = nn.Embedding(512, config.d_model)
+        self.decoder_position_embed = nn.Embedding(512, config.d_model)
+
     def initialize_num_head_weights(self):
         for layer in self.num_head:
             if isinstance(layer, nn.Linear):
                 init.xavier_uniform_(layer.weight)
                 if layer.bias is not None:
                     init.zeros_(layer.bias)
+
+        if self.bigger_language_head:
+            for layer in self.lm_head:
+                if isinstance(layer, nn.Linear):
+                    init.xavier_uniform_(layer.weight)
+                    if layer.bias is not None:
+                        init.zeros_(layer.bias)
 
     def forward(
             self,
@@ -95,9 +122,14 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
             # Normalize embeddings
             number_locs = input_ids == self.tokenizer.num_token_id
             input_number_embeddings_scaled = input_number_embeddings.clone()
-            input_number_embeddings_scaled[number_locs] = torch.sign(input_number_embeddings_scaled[number_locs]) * torch.log10(torch.abs(input_number_embeddings_scaled[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
-            
+            if self.log_scale_embeddings:
+                input_number_embeddings_scaled[number_locs] = torch.sign(input_number_embeddings_scaled[number_locs]) * torch.log10(torch.abs(input_number_embeddings_scaled[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
+            else:
+                input_number_embeddings_scaled[number_locs] = input_number_embeddings_scaled[number_locs] + 1
+
             inputs_embeds = self.shared(input_ids) * input_number_embeddings_scaled.unsqueeze(-1)
+            inputs_embeds = inputs_embeds + self.encoder_position_embed.weight[: input_ids.shape[1]].unsqueeze(0)
+
             encoder_outputs = self.encoder(
                 attention_mask=attention_mask,
                 inputs_embeds=inputs_embeds,
@@ -153,10 +185,13 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
         number_locs = decoder_input_ids == self.tokenizer.num_token_id
         decoder_number_embeddings_scaled = decoder_number_embeddings.clone()
         if number_locs.any():
-            decoder_number_embeddings_scaled[number_locs] = torch.sign(decoder_number_embeddings_scaled[number_locs]) * torch.log10(torch.abs(decoder_number_embeddings_scaled[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
-
+            if self.log_scale_embeddings:
+                decoder_number_embeddings_scaled[number_locs] = torch.sign(decoder_number_embeddings_scaled[number_locs]) * torch.log10(torch.abs(decoder_number_embeddings_scaled[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
+            else:
+                decoder_number_embeddings_scaled[number_locs] = decoder_number_embeddings_scaled[number_locs] + 1
         
         decoder_inputs_embeds = self.shared(decoder_input_ids) * decoder_number_embeddings_scaled.unsqueeze(-1)
+        decoder_inputs_embeds = decoder_inputs_embeds + self.decoder_position_embed.weight[: decoder_input_ids.shape[1]].unsqueeze(0)
 
         # Decode
         decoder_outputs = self.decoder(
@@ -224,14 +259,27 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
 
         if number_labels is not None:
             num_mask = labels == self.tokenizer.convert_tokens_to_ids(self.tokenizer.num_token)
+
+            # Extract only the predictions and labels that correspond to number tokens
+            selected_preds = num_preds[num_mask]
+            selected_labels = number_labels[num_mask].view(-1, 1)
+
+            # Perform Z-score normalization on both predictions and labels
+            combined = torch.cat((selected_preds, selected_labels), dim=0)
+            mean = combined.mean(dim=0, keepdim=True)
+            std = combined.std(dim=0, keepdim=True) + 1e-6  # Add small value to avoid division by zero
+
+            normalized_preds = (selected_preds - mean) / std
+            normalized_labels = (selected_labels - mean) / std
+
             loss_num = F.mse_loss(
-                num_preds[num_mask],
-                number_labels[num_mask].view(-1, 1),
+                normalized_preds,
+                normalized_labels,
                 reduction="mean",
             )
             outputs["number_loss"] = loss_num
             outputs["token_loss"] = outputs.loss
-            loss = loss + loss_num
+            loss = (loss + loss_num) / 2
             outputs.loss = loss
 
         outputs["number_predictions"] = num_preds
@@ -247,7 +295,7 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
         Overwritten to also shift the input_number_embeddings.
         """
         decoder_start_token_id = self.config.decoder_start_token_id
-        decoder_start_number_embedding = 1
+        decoder_start_number_embedding = 1.0
         pad_token_id = self.config.pad_token_id
 
         if decoder_start_token_id is None:
@@ -331,9 +379,13 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
         # Normalize embeddings
         number_locs = encoder_input_ids == self.tokenizer.num_token_id
         encoder_input_number_embeddings_scaled = encoder_input_number_embeddings.clone()
-        encoder_input_number_embeddings_scaled[number_locs] = torch.sign(encoder_input_number_embeddings_scaled[number_locs]) * torch.log10(torch.abs(encoder_input_number_embeddings_scaled[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
+        if self.log_scale_embeddings:
+            encoder_input_number_embeddings_scaled[number_locs] = torch.sign(encoder_input_number_embeddings_scaled[number_locs]) * torch.log10(torch.abs(encoder_input_number_embeddings_scaled[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
+        else:
+            encoder_input_number_embeddings_scaled[number_locs] = encoder_input_number_embeddings_scaled[number_locs] + 1
         
-        encoder_kwargs["inputs_embeds"] = self.shared(encoder_input_ids) * encoder_input_number_embeddings_scaled.unsqueeze(-1)
+        inputs_embeds = self.shared(encoder_input_ids) * encoder_input_number_embeddings_scaled.unsqueeze(-1)
+        encoder_kwargs["inputs_embeds"] = inputs_embeds + self.encoder_position_embed.weight[: encoder_input_ids.shape[1]].unsqueeze(0)
         #######################
         # Customized code end
         #######################
@@ -496,6 +548,7 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
         this_peer_finished = False
         unfinished_sequences = torch.ones(batch_size, dtype=torch.long, device=input_ids.device)
         model_kwargs = self._get_initial_cache_position(input_ids, model_kwargs)
+        output_numbers = model_kwargs.get("decoder_number_embeddings")
 
         while self._has_unfinished_sequences(this_peer_finished, synced_gpus, device=input_ids.device):
             # prepare model inputs
@@ -562,11 +615,12 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
             # finished sentences should have their next token be a padding token
             if has_eos_stopping_criteria:
                 next_tokens = next_tokens * unfinished_sequences + pad_token_id * (1 - unfinished_sequences)
-                next_number_embeddings = next_number_embeddings * unfinished_sequences + 1 * (1 - unfinished_sequences)
+                next_number_embeddings = next_number_embeddings * unfinished_sequences + 1.0 * (1 - unfinished_sequences)
 
             # update generated ids, model inputs, and length for next step
             input_ids = torch.cat([input_ids, next_tokens[:, None]], dim=-1)
-            model_kwargs["decoder_number_embeddings"] = torch.cat([model_kwargs["decoder_number_embeddings"], next_number_embeddings[:, None]], dim=-1)
+            output_numbers = torch.cat([output_numbers, next_number_embeddings[:, None]], dim=-1)
+            model_kwargs["decoder_number_embeddings"] = torch.ones_like(output_numbers)  # reset to 1 for next step
             #######################
             # Customized code end
             #######################
@@ -612,7 +666,7 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
                     past_key_values=model_kwargs.get("past_key_values"),
                 )
         else:
-            return input_ids, model_kwargs.get("decoder_number_embeddings")
+            return input_ids, output_numbers
 
         
 
