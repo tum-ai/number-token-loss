@@ -69,6 +69,9 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
                 if layer.bias is not None:
                     init.zeros_(layer.bias)
 
+        self.encoder_position_embed.weight.data.normal_(mean=0.0, std=0.02)
+        self.decoder_position_embed.weight.data.normal_(mean=0.0, std=0.02)
+
         if self.bigger_language_head:
             for layer in self.lm_head:
                 if isinstance(layer, nn.Linear):
