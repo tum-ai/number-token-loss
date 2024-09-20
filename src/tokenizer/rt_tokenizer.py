@@ -35,14 +35,8 @@ class RtTokenizer(NumberEncodingTokenizer):
     def get_num_tokens(self):
         return self.num_tokens
 
-    def decode_number_token(self, token):
-        if len(token) == 1 or not (
-                token.startswith("_") and token.endswith("_") and token.count("_") == 3
-        ):
-            raise ValueError(f"no valid rt encoding {token}")
-
-        digit = int(token[1])
-        return digit
+    def decode_number_token(self, token: str, ignore_order: bool = True) -> float:
+        return encoding_to_number(token, ignore_order=ignore_order)
 
     def tokenize(self, text: str, add_special_tokens=False, **kwargs) -> List[str]:
         nonum_text, number_tokens = extract(text)
@@ -133,6 +127,10 @@ class RtTokenizer(NumberEncodingTokenizer):
                         if digit_position_array[row][idx] > 0:
                             count_invalid_number_prediction += 1
 
+                        # when current numer is an int parse it as int to remove .0
+                        if current_number.is_integer():
+                            current_number = int(current_number)
+
                         result[row].extend(super().tokenize(str(current_number * (-1 if is_negative else 1))))
                         current_number = 0
                         is_negative = False
@@ -164,11 +162,18 @@ def extract(text):
     numbers = []
 
     def replace(match):
+        def str_to_number(s):
+            try:
+                return int(s)
+            except ValueError:
+                return float(s)
+
         number = match.group(0).strip()
         tokens = []
 
         # Remove plus as previously we treated it like a digit
         number = number.lstrip('+-')
+        number = str(round(str_to_number(number), 12))
 
         if "." in number:
             integer_part, _, fractional_part = number.partition('.')

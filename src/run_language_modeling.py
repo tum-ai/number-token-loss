@@ -15,6 +15,7 @@ sys.path.append("..")
 import json
 import logging
 import os
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 from dataclasses import dataclass, field
 from typing import Optional, Literal
@@ -193,6 +194,18 @@ class ModelArguments:
             "help": "Sets the order of the NTL. For example 2 -> MSE, 3 -> Mean Cubic Error etc."
         },
     )
+    log_scale_embeddings: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "Whether to log scale the embeddings. Only applicable for xval and rt."
+        },
+    )
+    xval_bigger_language_head: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "Whether to use a bigger language head for xval."
+        },
+    )
 
 
 def main():
@@ -210,7 +223,10 @@ def main():
         (ModelArguments, CustomTrainingArguments)
     )
     model_args, training_args = parser.parse_args_into_dataclasses()
+    run_language_modeling(model_args, training_args)
 
+
+def run_language_modeling(model_args, training_args):
     # Set generation arguments
     training_args.predict_with_generate = True
     if model_args.number_encoding != "xval":
@@ -218,6 +234,21 @@ def main():
         logger.info("Setting generation_num_beams to 4")
     else:
         logger.info("Setting generation_num_beams to 1 for xval")
+
+    if model_args.log_scale_embeddings:
+        if model_args.number_encoding in ["xval", "rt"]:
+            logger.info("Log scaling embeddings")
+        else:
+            raise ValueError("Log scaling only supported for xval and rt")
+    else:
+        if model_args.number_encoding in ["xval", "rt"]:
+            logger.info("Not log scaling embeddings")
+
+    if model_args.xval_bigger_language_head:
+        if model_args.number_encoding == "xval":
+            logger.info("Using bigger language head for xval")
+        else:
+            raise ValueError("Bigger language head only supported for xval")
 
     if (
             os.path.exists(training_args.output_dir)
@@ -320,15 +351,19 @@ def main():
         n_new_tokens = len(tokenizer) - len(transformers.AutoTokenizer.from_pretrained("t5-small"))
         logger.info(f"Number of new tokens: {n_new_tokens}")
         logger.info(f"Old vocab size: {config.vocab_size}")
-        config.vocab_size = config.vocab_size + n_new_tokens
+        pad_to_multiple_of = 64 if torch.cuda.is_available() else 1
+        config.vocab_size = len(tokenizer) + pad_to_multiple_of - (len(tokenizer) % pad_to_multiple_of)
+        config.added_vocab = tokenizer.get_added_vocab()
+        logger.info("Size of new tokenizer: %s", len(tokenizer))
         logger.info(f"New vocab size: {config.vocab_size}")
 
-        config.added_vocab = tokenizer.get_added_vocab()
-
     if model_args.number_encoding == "xval":
-        model_init_kwargs = {"tokenizer": tokenizer}
+        model_init_kwargs = {"tokenizer": tokenizer, "bigger_language_head": model_args.xval_bigger_language_head}
     else:
         model_init_kwargs = {}
+
+    if model_args.number_encoding in ["rt", "xval"]:
+        model_init_kwargs["log_scale_embeddings"] = model_args.log_scale_embeddings
 
     if model_args.number_encoding == "xval" and model_args.number_token_loss:
         raise Exception("Xval does not accept NumberTokenLoss")
@@ -345,7 +380,7 @@ def main():
 
         model_init_kwargs["number_token_loss"] = NumberTokenLoss(
             tokenizer,
-            vocab_size=config.vocab_size,
+            vocab_size=config.vocab_size,  # TODO padded to multiple of 8
             device=training_args.device,
             loss_function=loss_function,
             weight=model_args.number_token_loss_weight
@@ -354,7 +389,8 @@ def main():
     if model_args.model_name_or_path:
 
         # delete generation config, as not deleting leads to model not being loadable
-        if os.path.isdir(model_args.model_name_or_path) and os.path.exists(os.path.join(model_args.model_name_or_path, "generation_config.json")):
+        if os.path.isdir(model_args.model_name_or_path) and os.path.exists(
+                os.path.join(model_args.model_name_or_path, "generation_config.json")):
             os.remove(os.path.join(model_args.model_name_or_path, "generation_config.json"))
 
         # Restore checkpoint if available
@@ -372,7 +408,7 @@ def main():
             **model_init_kwargs,
         )
 
-        if model_args.number_encoding == "xval":
+        if model_args.number_encoding == "xval" and "checkpoint" not in model_args.model_name_or_path:
             model.initialize_num_head_weights()
 
         logger.info("Model restored")
@@ -484,28 +520,27 @@ def main():
     else:
         logger.info("Skipping training.")
 
-
-
-        # logger.info("*** Evaluate on training data ***")
-        # eval_results = trainer.evaluate(eval_dataset=train_dataset)
-        # logger.info(f"eval_results training data: {eval_results}")
-
     logger.info("*** Evaluate on validation data ***")
-    eval_results = trainer.evaluate(eval_dataset=eval_dataset)
-    logger.info(f"eval_results validation data: {eval_results}")
+    eval_results_val = trainer.evaluate(eval_dataset=eval_dataset)
+    logger.info(f"eval_results validation data: {eval_results_val}")
+
+    if not training_args.do_only_eval:
+        return eval_results_val, model
 
     if training_args.dataset_name == "gsm8k":
         logger.info("*** Evaluate on test set ***")
-        eval_results = trainer.evaluate(eval_dataset=test_dataset)
-        logger.info(f"eval_results test data: {eval_results}")
+        eval_results_test = trainer.evaluate(eval_dataset=test_dataset)
+        logger.info(f"eval_results test data: {eval_results_test}")
+        return eval_results_val, eval_results_test
     elif training_args.dataset_name == "mathematics_dataset":
         logger.info("*** Evaluate on interpolate data ***")
-        eval_results = trainer.evaluate(eval_dataset=test_interpolate_dataset)
-        logger.info(f"eval_results interpolate data: {eval_results}")
+        eval_results_test_interpolate = trainer.evaluate(eval_dataset=test_interpolate_dataset)
+        logger.info(f"eval_results interpolate data: {eval_results_test_interpolate}")
 
         logger.info("*** Evaluate on extrapolate data ***")
-        eval_results = trainer.evaluate(eval_dataset=test_extrapolate_dataset)
-        logger.info(f"eval_results extrapolate data: {eval_results}")
+        eval_results_test_extrapolate = trainer.evaluate(eval_dataset=test_extrapolate_dataset)
+        logger.info(f"eval_results extrapolate data: {eval_results_test_extrapolate}")
+        return eval_results_val, eval_results_test_interpolate, eval_results_test_extrapolate
 
 
 if __name__ == "__main__":

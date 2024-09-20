@@ -18,14 +18,18 @@ class TestEvaluationMethods(unittest.TestCase):
             "Oranges = 12 * 150 = 1800\nNectarines = 16 * 30 = 480\n1800 + 480 = 2280\nThere are 2280 pieces of fruit in total.\n#### 2280",
             "include 3 10-minute snack breaks each day",
             "divide the minutes by 60. 1920 / 60 = 32 hours\n#### 32",
-            "which is 40/100*$400 = $160\nThe total price"
+            "which is 40/100*$400 = $160\nThe total price",
+            "13.8703074063372",
+            "13.8703074063376",
         ]
         expected_result = [
             ['▁(', '_3_0_', '▁', '/', '_2_0_', '▁', ')', 'x', '=', '_5_1_', '_4_0_', '_3_0_', '▁', 'x', '=', '_1_2_', '_0_1_', '_8_0_'],
             ['▁Orange', 's', '▁=', '_1_1_', '_2_0_', '▁*', '_1_2_', '_5_1_', '_0_0_', '▁=', '_1_3_', '_8_2_', '_0_1_', '_0_0_', '▁Ne', 'c', 'tari', 'nes', '▁=', '_1_1_', '_6_0_', '▁*', '_3_1_', '_0_0_', '▁=', '_4_2_', '_8_1_', '_0_0_', '_1_3_', '_8_2_', '_0_1_', '_0_0_', '▁+', '_4_2_', '_8_1_', '_0_0_', '▁=', '_2_3_', '_2_2_', '_8_1_', '_0_0_', '▁There', '▁are', '_2_3_', '_2_2_', '_8_1_', '_0_0_', '▁pieces', '▁of', '▁fruit', '▁in', '▁total', '.', '▁', '##', '##', '_2_3_', '_2_2_', '_8_1_', '_0_0_'],
             ['▁include', '_3_0_', '_1_1_', '_0_0_', '▁', '-', 'minute', '▁snack', '▁breaks', '▁each', '▁day'],
             ['▁divide', '▁the', '▁minutes', '▁by', '_6_1_', '_0_0_',   '▁', '.', '_1_3_', '_9_2_', '_2_1_', '_0_0_', '▁', '/', '_6_1_', '_0_0_', '▁=', '_3_1_', '_2_0_', '▁hours', '▁', '##', '##', '_3_1_', '_2_0_'],
-            ['▁which', '▁is', '_4_1_', '_0_0_', '▁', '/', '_1_2_', '_0_1_', '_0_0_', '▁*', '$', '_4_2_', '_0_1_', '_0_0_', '▁=', '▁$', '_1_2_', '_6_1_', '_0_0_', '▁The', '▁total', '▁price']
+            ['▁which', '▁is', '_4_1_', '_0_0_', '▁', '/', '_1_2_', '_0_1_', '_0_0_', '▁*', '$', '_4_2_', '_0_1_', '_0_0_', '▁=', '▁$', '_1_2_', '_6_1_', '_0_0_', '▁The', '▁total', '▁price'],
+            ['_1_1_', '_3_0_', '_8_-1_', '_7_-2_', '_0_-3_', '_3_-4_', '_0_-5_', '_7_-6_', '_4_-7_', '_0_-8_', '_6_-9_', '_3_-10_', '_3_-11_', '_7_-12_'],
+            ['_1_1_', '_3_0_', '_8_-1_', '_7_-2_', '_0_-3_', '_3_-4_', '_0_-5_', '_7_-6_', '_4_-7_', '_0_-8_', '_6_-9_', '_3_-10_', '_3_-11_', '_8_-12_']
         ]
 
         result = [self.tokenizer.tokenize(text) for text in texts]
@@ -63,15 +67,21 @@ class TestEvaluationMethods(unittest.TestCase):
             "divide the minutes by 60. 1920 / 60 = 32 hours\n#### 32",
             "which is 40/100*$400 = $160\nThe total price",
             "Negativ number: -15.67",
+            "0.009",
+            "12",
+            "12.01",
         ]
 
         expected_result =[
-            '( 3.0 / 2.0 )x= 54.0  3.0 x= 108.0',
-            'Oranges = 12.0 * 150.0 = 1800.0 Nectarines = 16.0 * 30.0 = 480.0  1800.0 + 480.0 = 2280.0 There are 2280.0 pieces of fruit in total. #### 2280.0',
-            'include 3.0  10.0 -minute snack breaks each day',
-            'divide the minutes by 60.0 . 1920.0 / 60.0 = 32.0 hours #### 32.0',
-            'which is 40.0 / 100.0 *$ 400.0 = $ 160.0 The total price',
-            'Negativ number: - 15.67'
+            '( 3 / 2 )x= 54  3 x= 108',
+            'Oranges = 12 * 150 = 1800 Nectarines = 16 * 30 = 480  1800 + 480 = 2280 There are 2280 pieces of fruit in total. #### 2280',
+            'include 3  10 -minute snack breaks each day',
+            'divide the minutes by 60 . 1920 / 60 = 32 hours #### 32',
+            'which is 40 / 100 *$ 400 = $ 160 The total price',
+            'Negativ number: - 15.67',
+            "0.009",
+            "12",
+            "12.01",
         ]
 
         result = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
@@ -98,10 +108,10 @@ class TestEvaluationMethods(unittest.TestCase):
         token_ids = torch.tensor(token_ids).reshape(token_array.shape)
 
         expected_result = [
-            'ab 23.0 - 4.0',
-            '10.0  200.0 - 478.2',
-            'xy 20.0',
-            'x 200.0 - 43.0'
+            'ab 23 - 4',
+            '10  200 - 478.2',
+            'xy 20',
+            'x 200 - 43'
         ]
         result, count_invalid_number_prediction, count_no_number_prediction = self.tokenizer.decode_into_human_readable(token_ids)
         self.assertEqual(result, expected_result)
@@ -117,11 +127,11 @@ class TestEvaluationMethods(unittest.TestCase):
             "No Number",
         ]
         expected_result = [
-            'First test 23.0 and - 4.0',
-            'Is 29.0 - 478.2 = 34.452 correct?',
-            'Test text - 34.0 * 65.0 = 78.0',
-            'Test 12.0 - 12.0 = 0.0 wrong?',
-            'Calculation: 12.0 + 12.0 = 24.0',
+            'First test 23 and - 4',
+            'Is 29 - 478.2 = 34.452 correct?',
+            'Test text - 34 * 65 = 78',
+            'Test 12 - 12 = 0 wrong?',
+            'Calculation: 12 + 12 = 24',
             "No Number",
         ]
         token_ids = self.tokenizer(string_array, padding=True, truncation=True, return_tensors="pt")["input_ids"]

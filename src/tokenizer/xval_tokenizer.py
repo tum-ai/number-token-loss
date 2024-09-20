@@ -28,7 +28,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
     def get_num_tokens(self):
         return [self.num_token]
 
-    def decode_number_token(self, token, number: float = None):
+    def decode_number_token(self, token: str, number: float = None, ignore_order: bool = True) -> float:
         return number
 
     def decode_into_human_readable(
@@ -464,7 +464,8 @@ class XvalTokenizer(NumberEncodingTokenizer):
         num_embed = np.ones(len(sequence)).astype(np.float32)  # Use float32 instead of float16
 
         if num_embed[number_locs].shape[0] < len(first_numbers):
-            # trunctuate first numbers
+            # truncate first numbers
+            logging.warning(f"Truncating first numbers: {first_numbers} to {len(num_embed[number_locs])} to fit in sequence")
             first_numbers = first_numbers[:len(num_embed[number_locs])]
         
         num_embed[number_locs] = first_numbers + pair_numbers if pair_numbers else first_numbers

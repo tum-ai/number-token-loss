@@ -29,7 +29,7 @@ class T5Custom_Tokenizer(NumberEncodingTokenizer):
     def get_num_tokens(self):
         return self.num_tokens
 
-    def decode_number_token(self, token):
+    def decode_number_token(self, token: str, ignore_order: bool = True) -> float:
         return float(token)
 
     def tokenize(self, text: str, add_special_tokens=False, **kwargs) -> List[str]:

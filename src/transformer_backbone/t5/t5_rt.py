@@ -26,11 +26,11 @@ class T5RegressionModelRT(T5ForConditionalGeneration):
         'shared.token_embeddings.weight'
     ]
 
-    def __init__(self, config, number_token_loss: NumberTokenLoss = None):
+    def __init__(self, config, log_scale_embeddings: bool, number_token_loss: NumberTokenLoss = None):
         super().__init__(config)
-        super()._resize_token_embeddings(config.vocab_size, pad_to_multiple_of=8 if torch.cuda.is_available() else 1)
+        super().resize_token_embeddings(config.vocab_size, pad_to_multiple_of=64 if torch.cuda.is_available() else 1)
         number_embeds = FloatEncoding(num_embeddings=config.vocab_size, embedding_dim=self.config.d_model,
-                                      vocab=config.added_vocab, vmax=V_MAX)
+                                      vocab=config.added_vocab, vmax=V_MAX, log_scale_embeddings=log_scale_embeddings)
         combined_embeddings = RTEmbeddings(self.shared, number_embeds)
         # Set the new embedding for encoder and decoder.
         self.set_input_embeddings(combined_embeddings)
