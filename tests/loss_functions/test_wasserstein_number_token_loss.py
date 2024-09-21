@@ -23,8 +23,8 @@ class TestNumberTokenLoss(unittest.TestCase):
         n_new_tokens = len(self.rt_tokenizer) - len(transformers.AutoTokenizer.from_pretrained("t5-small"))
         self.vocab_size = self.config.vocab_size + n_new_tokens
 
-        self.rt_number_token_loss = WassersteinNumberTokenLoss(self.rt_tokenizer, self.vocab_size, self.device)
-        self.t5_number_token_loss = WassersteinNumberTokenLoss(self.t5_tokenizer, self.vocab_size, self.device)
+        self.rt_number_token_loss = WassersteinNumberTokenLoss(self.rt_tokenizer, self.vocab_size, self.device, order_numbers=False)
+        self.t5_number_token_loss = WassersteinNumberTokenLoss(self.t5_tokenizer, self.vocab_size, self.device, order_numbers=True)
 
 
     def create_logits(self, tokenizer, token_logit_value_dict_list: List[Dict[str, float]]) -> torch.Tensor:
@@ -43,9 +43,9 @@ class TestNumberTokenLoss(unittest.TestCase):
         logits = self.create_logits(
             self.rt_tokenizer,
             [
-                {"_1_0_": 1.0, "_2_0_": 1.0, "_0_0_": 0.5, "_3_0_": 1.5},
-                {"_1_0_": 1.5, "_2_0_": 1.0, "_0_0_": 0.5, "_3_0_": 1.5},
-                {"_1_0_": 1.0, "_2_0_": 1.5, "_0_0_": 0.5, "_3_0_": 1.5},
+                {"_1_0_": 1.0, "_2_0_": 1.2, "_0_0_": 0.5, "_3_0_": 1.5},
+                {"_1_0_": 1.5, "_2_0_": 1.2, "_0_0_": 0.5, "_3_0_": 1.5},
+                {"_1_0_": 1.0, "_2_0_": 1.2, "_0_0_": 0.5, "_3_0_": 1.5},
             ],
         )
 
@@ -55,142 +55,74 @@ class TestNumberTokenLoss(unittest.TestCase):
             self.rt_tokenizer.convert_tokens_to_ids("a")
         ]])
 
-        manual_numbers = [1, 2, 0, 3]
-        softmaxed = F.softmax(torch.tensor([1.0, 1.0, 0.5, 1.5]))
-        weighted_sum = sum([manual_numbers[i] * s for i, s in enumerate(softmaxed)])
-        target = 1.0
-        expected_loss = F.mse_loss(torch.tensor([weighted_sum]), torch.tensor([target]))
+        target_distribution = F.one_hot(torch.tensor([[1, 1]]), num_classes=4).float()
 
-        ntl_loss = self.rt_number_token_loss.forward(logits, labels)
+        softmaxed = F.softmax(torch.tensor([[[0.5, 1.0, 1.2, 1.5], [0.5, 1.5, 1.2, 1.5]]]), dim=-1)
+        expected_wasserstein = torch.mean(self.rt_number_token_loss._calculate_1d_wasserstein_dist(softmaxed, target_distribution))
 
-        print(f"Expected Loss: {expected_loss.item()}")
-        print(f"NumberTokenLoss: {ntl_loss.item()}")
+        wasserstein_loss = self.rt_number_token_loss.forward(logits, labels)
 
-        self.assertAlmostEqual(expected_loss.item(), ntl_loss.item(), places=5)
+        print(f"Expected Loss: {expected_wasserstein.item()}")
+        print(f"NumberTokenLoss: {wasserstein_loss.item()}")
 
-    def test_loss_with_negative_logits_rt(self):
-        logits = self.create_logits(
-            self.rt_tokenizer,
-            [
-                {"_1_0_": -1.0, "_2_0_": 1.0, "_0_0_": 0.5, "_3_0_": -1.5}
-            ]
-        )
-
-        labels = torch.tensor([[
-            self.rt_tokenizer.convert_tokens_to_ids("_2_0_")
-        ]])
-
-        manual_numbers = [1, 2, 0, 3]
-        softmaxed = F.softmax(torch.tensor([-1.0, 1.0, 0.5, -1.5]))
-        weighted_sum = sum([manual_numbers[i] * s for i, s in enumerate(softmaxed)])
-        target = 2.0
-        expected_loss = F.mse_loss(torch.tensor([weighted_sum]), torch.tensor([target]))
-
-        ntl_loss = self.rt_number_token_loss.forward(logits, labels)
-
-        print(f"Expected Loss: {expected_loss.item()}")
-        print(f"NumberTokenLoss: {ntl_loss.item()}")
-
-        self.assertAlmostEqual(expected_loss.item(), ntl_loss.item(), places=5)
-
-    def test_loss_with_fraction_rt(self):
-        logits = self.create_logits(
-            self.rt_tokenizer,
-            [
-                {"_5_-1_": 2.0, "_3_-1_": 1.0, "_2_-1_": 0.5, "_1_-1_": 1.5}
-            ]
-        )
-
-        labels = torch.tensor([[
-            self.rt_tokenizer.convert_tokens_to_ids("_3_-1_")
-        ]])
-
-        manual_numbers = [5, 3, 2, 1]
-        softmaxed = F.softmax(torch.tensor([2.0, 1.0, 0.5, 1.5]))
-        weighted_sum = sum([manual_numbers[i] * s for i, s in enumerate(softmaxed)])
-        target = 3
-        expected_loss = F.mse_loss(torch.tensor([weighted_sum]), torch.tensor([target]))
-
-        ntl_loss = self.rt_number_token_loss.forward(logits, labels)
-
-        print(f"Expected Loss: {expected_loss.item()}")
-        print(f"NumberTokenLoss: {ntl_loss.item()}")
-        self.assertAlmostEqual(expected_loss.item(), ntl_loss.item(), places=5)
-
-    def test_loss_multiple_simple_rt(self):
-        # this is 123 guess
-        logits = self.create_logits(
-            self.rt_tokenizer,
-            [
-                {"_1_2_": 6.0, "_2_2_": 5.0, "_3_2_": 3.0},
-                {"_1_1_": 5.0, "_2_1_": 7.0, "_3_1_": 3.0},
-                {"_1_0_": 5.0, "_2_0_": 3.0, "_3_0_": 7.5}
-            ]
-        )
-        # this is 123 label
-        labels = torch.tensor([[
-            self.rt_tokenizer.convert_tokens_to_ids("_1_2_"),
-            self.rt_tokenizer.convert_tokens_to_ids("_2_1_"),
-            self.rt_tokenizer.convert_tokens_to_ids("_3_0_")
-        ]])
-        manual_numbers1 = [1, 2, 3]
-        softmaxed1 = F.softmax(torch.tensor([6.0, 5.0, 3.0]))
-        weighted_sum1 = sum([manual_numbers1[i] * s for i, s in enumerate(softmaxed1)])
-
-        manual_numbers2 = [1, 2, 3]
-        softmaxed2 = F.softmax(torch.tensor([5.0, 7.0, 3.0]))
-        weighted_sum2 = sum([manual_numbers2[i] * s for i, s in enumerate(softmaxed2)])
-
-        manual_numbers3 = [1, 2, 3]
-        softmaxed3 = F.softmax(torch.tensor([5.0, 3.0, 7.5]))
-        weighted_sum3 = sum([manual_numbers3[i] * s for i, s in enumerate(softmaxed3)])
-
-        target = torch.tensor([1, 2, 3])
-        expected_loss = F.mse_loss(torch.tensor([weighted_sum1, weighted_sum2, weighted_sum3]), target)
-
-        ntl_loss = self.rt_number_token_loss.forward(logits, labels)
-
-        print(f"Expected Loss: {expected_loss.item()}")
-        print(f"NumberTokenLoss: {ntl_loss.item()}")
-        self.assertAlmostEqual(expected_loss.item(), ntl_loss.item(), places=5)
+        self.assertAlmostEqual(expected_wasserstein.item(), wasserstein_loss.item(), places=5)
 
     def test_loss_multiple_mixed_logits_rt(self):
         logits = self.create_logits(
             self.rt_tokenizer,
             [
-                {"_1_1_": 2.0, "_2_1_": -1.0},
-                {"_1_0_": 0.5, "_0_0_": 1.5},
-                {"_5_-1_": 1.0, "_3_-1_": -2.0},
+                {"_0_1_": -4.0, "_1_1_": 2.0, "_2_1_": -1.0},
+                {"_0_0_": 1.5, "_1_0_": 0.5, "_2_0_": 1.2},
+                {"_4_-1_": -2.0, "_5_-1_": 1.0, "_6_-1_": -2.5},
             ]
         )
 
         labels = torch.tensor([[
             self.rt_tokenizer.convert_tokens_to_ids("_2_1_"),
             self.rt_tokenizer.convert_tokens_to_ids("_1_0_"),
-            self.rt_tokenizer.convert_tokens_to_ids("_3_-1_")
+            self.rt_tokenizer.convert_tokens_to_ids("_4_-1_")
         ]])
 
-        # Manual calculation for each token
-        manual_numbers1 = [1, 2]
-        softmaxed1 = F.softmax(torch.tensor([2.0, -1.0]))
-        weighted_sum1 = sum([manual_numbers1[i] * s for i, s in enumerate(softmaxed1)])
+        target_distribution = F.one_hot(torch.tensor([[2, 1, 0]]), num_classes=3).float()
 
-        manual_numbers2 = [1, 0]
-        softmaxed2 = F.softmax(torch.tensor([0.5, 1.5]))
-        weighted_sum2 = sum([manual_numbers2[i] * s for i, s in enumerate(softmaxed2)])
+        softmaxed = F.softmax(torch.tensor([[[-4, 2.0, -1], [1.5, 0.5, 1.2], [-2, 1, -2.5]]]), dim=-1)
+        expected_wasserstein = torch.mean(self.rt_number_token_loss._calculate_1d_wasserstein_dist(softmaxed, target_distribution))
 
-        manual_numbers3 = [5, 3]
-        softmaxed3 = F.softmax(torch.tensor([1.0, -2.0]))
-        weighted_sum3 = sum([manual_numbers3[i] * s for i, s in enumerate(softmaxed3)])
+        wasserstein_loss = self.rt_number_token_loss.forward(logits, labels)
 
-        target = torch.tensor([2.0, 1.0, 3.0])
-        expected_loss = F.mse_loss(torch.tensor([weighted_sum1, weighted_sum2, weighted_sum3]), target)
+        print(f"Expected Loss: {expected_wasserstein.item()}")
+        print(f"NumberTokenLoss: {wasserstein_loss.item()}")
 
-        ntl_loss = self.rt_number_token_loss.forward(logits, labels)
+        self.assertAlmostEqual(expected_wasserstein.item(), wasserstein_loss.item(), places=5)
 
-        print(f"Expected Loss: {expected_loss.item()}")
-        print(f"NumberTokenLoss: {ntl_loss.item()}")
-        self.assertAlmostEqual(expected_loss.item(), ntl_loss.item(), places=5)
+    def test_loss_comparison_rt(self):
+        logits = self.create_logits(
+            self.rt_tokenizer,
+            [
+                {"_0_1_": 1.0, "_1_1_": 2.0, "_2_1_": 1.0, "_3_1_": 1.5},
+                {"_0_1_": 1.5, "_1_1_": 1.0, "_2_1_": 1.5, "_3_1_": 1},
+                {"_0_1_": 1.0, "_1_1_": 1.0, "_2_1_": 1.5, "_3_1_": 1.5},
+                {"_0_1_": 1.0, "_1_1_": 1.0, "_2_1_": 1.0, "_3_1_": 2},
+
+            ]
+        )
+
+        labels = torch.tensor([[
+            self.rt_tokenizer.convert_tokens_to_ids("_1_1_"),
+            self.rt_tokenizer.convert_tokens_to_ids("_1_1_"),
+            self.rt_tokenizer.convert_tokens_to_ids("_1_1_"),
+            self.rt_tokenizer.convert_tokens_to_ids("_1_1_"),
+        ]])
+
+        wasserstein_loss_1 = self.rt_number_token_loss.forward(logits[:, 0:1], labels[:, 0:1])
+        wasserstein_loss_2 = self.rt_number_token_loss.forward(logits[:, 1:2], labels[:, 1:2])
+        wasserstein_loss_3 = self.rt_number_token_loss.forward(logits[:, 2:3], labels[:, 2:3])
+        wasserstein_loss_4 = self.rt_number_token_loss.forward(logits[:, 3:4], labels[:, 3:4])
+
+        self.assertLess(wasserstein_loss_1.item(), wasserstein_loss_2.item())
+        self.assertLess(wasserstein_loss_2.item(), wasserstein_loss_3.item())
+        self.assertLess(wasserstein_loss_3.item(), wasserstein_loss_4.item())
+
 
     def test_nvocab_indexing_rt(self):
         # test if in nvocab nans or numbers
@@ -218,120 +150,37 @@ class TestNumberTokenLoss(unittest.TestCase):
         logits = self.create_logits(
             self.t5_tokenizer,
             [
-                {"1": 1.0, "2": 1.0, "0": 0.5, "3": 1.5}
-            ]
+                {"1": 1.0, "2": 1.2, "0": 0.5, "3": 1.5},
+                {"1": 1.5, "2": 1.2, "0": 0.5, "3": 1.5},
+                {"1": 1.0, "2": 1.2, "0": 0.5, "3": 1.5},
+            ],
         )
 
-        labels = torch.tensor([[
-            self.t5_tokenizer.convert_tokens_to_ids("1")
-        ]])
-
-        manual_numbers = [1, 2, 0, 3]
-        softmaxed = F.softmax(torch.tensor([1.0, 1.0, 0.5, 1.5]))
-        weighted_sum = sum([manual_numbers[i] * s for i, s in enumerate(softmaxed)])
-        target = 1.0
-        expected_loss = F.mse_loss(torch.tensor([weighted_sum]), torch.tensor([target]))
-
-        ntl_loss = self.t5_number_token_loss.forward(logits, labels)
-
-        print(f"Expected Loss: {expected_loss.item()}")
-        print(f"NumberTokenLoss: {ntl_loss.item()}")
-
-        self.assertAlmostEqual(expected_loss.item(), ntl_loss.item(), places=5)
-
-    def test_loss_with_negative_logits_t5(self):
-        logits = self.create_logits(
-            self.t5_tokenizer,
-            [
-                {"1": -1.0, "2": 1.0, "0": 0.5, "3": -1.5}
-            ]
-        )
-
-        labels = torch.tensor([[
-            self.t5_tokenizer.convert_tokens_to_ids("2")
-        ]])
-
-        manual_numbers = [1, 2, 0, 3]
-        softmaxed = F.softmax(torch.tensor([-1.0, 1.0, 0.5, -1.5]))
-        weighted_sum = sum([manual_numbers[i] * s for i, s in enumerate(softmaxed)])
-        target = 2.0
-        expected_loss = F.mse_loss(torch.tensor([weighted_sum]), torch.tensor([target]))
-
-        ntl_loss = self.t5_number_token_loss.forward(logits, labels)
-
-        print(f"Expected Loss: {expected_loss.item()}")
-        print(f"NumberTokenLoss: {ntl_loss.item()}")
-
-        self.assertAlmostEqual(expected_loss.item(), ntl_loss.item(), places=5)
-
-    def test_loss_with_fraction_t5(self):
-        logits = self.create_logits(
-            self.t5_tokenizer,
-            [
-                {"5": 2.0, "3": 1.0, "2": 0.5, "1": 1.5}
-            ]
-        )
-
-        labels = torch.tensor([[
-            self.t5_tokenizer.convert_tokens_to_ids("3")
-        ]])
-
-        manual_numbers = [5, 3, 2, 1]
-        softmaxed = F.softmax(torch.tensor([2.0, 1.0, 0.5, 1.5]))
-        weighted_sum = sum([manual_numbers[i] * s for i, s in enumerate(softmaxed)])
-        target = 3
-        expected_loss = F.mse_loss(torch.tensor([weighted_sum]), torch.tensor([target]))
-
-        ntl_loss = self.t5_number_token_loss.forward(logits, labels)
-
-        print(f"Expected Loss: {expected_loss.item()}")
-        print(f"NumberTokenLoss: {ntl_loss.item()}")
-        self.assertAlmostEqual(expected_loss.item(), ntl_loss.item(), places=5)
-
-    def test_loss_multiple_simple_t5(self):
-        # this is 123 guess
-        logits = self.create_logits(
-            self.t5_tokenizer,
-            [
-                {"1": 6.0, "2": 5.0, "3": 3.0},
-                {"1": 5.0, "2": 7.0, "3": 3.0},
-                {"1": 5.0, "2": 3.0, "3": 7.5}
-            ]
-        )
-        # this is 123 label
         labels = torch.tensor([[
             self.t5_tokenizer.convert_tokens_to_ids("1"),
-            self.t5_tokenizer.convert_tokens_to_ids("2"),
-            self.t5_tokenizer.convert_tokens_to_ids("3")
+            self.t5_tokenizer.convert_tokens_to_ids("1"),
+            self.t5_tokenizer.convert_tokens_to_ids("a")
         ]])
-        manual_numbers1 = [1, 2, 3]
-        softmaxed1 = F.softmax(torch.tensor([6.0, 5.0, 3.0]))
-        weighted_sum1 = sum([manual_numbers1[i] * s for i, s in enumerate(softmaxed1)])
 
-        manual_numbers2 = [1, 2, 3]
-        softmaxed2 = F.softmax(torch.tensor([5.0, 7.0, 3.0]))
-        weighted_sum2 = sum([manual_numbers2[i] * s for i, s in enumerate(softmaxed2)])
+        target_distribution = F.one_hot(torch.tensor([[1, 1]]), num_classes=4).float()
 
-        manual_numbers3 = [1, 2, 3]
-        softmaxed3 = F.softmax(torch.tensor([5.0, 3.0, 7.5]))
-        weighted_sum3 = sum([manual_numbers3[i] * s for i, s in enumerate(softmaxed3)])
+        softmaxed = F.softmax(torch.tensor([[[0.5, 1.0, 1.2, 1.5], [0.5, 1.5, 1.2, 1.5]]]), dim=-1)
+        expected_wasserstein = torch.mean(self.t5_number_token_loss._calculate_1d_wasserstein_dist(softmaxed, target_distribution))
 
-        target = torch.tensor([1, 2, 3])
-        expected_loss = F.mse_loss(torch.tensor([weighted_sum1, weighted_sum2, weighted_sum3]), target)
+        wasserstein_loss = self.t5_number_token_loss.forward(logits, labels)
 
-        ntl_loss = self.t5_number_token_loss.forward(logits, labels)
+        print(f"Expected Loss: {expected_wasserstein.item()}")
+        print(f"NumberTokenLoss: {wasserstein_loss.item()}")
 
-        print(f"Expected Loss: {expected_loss.item()}")
-        print(f"NumberTokenLoss: {ntl_loss.item()}")
-        self.assertAlmostEqual(expected_loss.item(), ntl_loss.item(), places=5)
+        self.assertAlmostEqual(expected_wasserstein.item(), wasserstein_loss.item(), places=5)
 
     def test_loss_multiple_mixed_logits_t5(self):
         logits = self.create_logits(
             self.t5_tokenizer,
             [
-                {"1": 2.0, "2": -1.0},
-                {"1": 0.5, "0": 1.5},
-                {"5": 1.0, "3": -2.0},
+                {"0": -4.0, "1": 2.0, "2": -1.0},
+                {"0": 1.5, "1": 0.5, "2": 1.2},
+                {"3": -2.0, "4": 1.0, "5": -2.5},
             ]
         )
 
@@ -341,27 +190,45 @@ class TestNumberTokenLoss(unittest.TestCase):
             self.t5_tokenizer.convert_tokens_to_ids("3")
         ]])
 
-        # Manual calculation for each token
-        manual_numbers1 = [1, 2]
-        softmaxed1 = F.softmax(torch.tensor([2.0, -1.0]))
-        weighted_sum1 = sum([manual_numbers1[i] * s for i, s in enumerate(softmaxed1)])
+        target_distribution = F.one_hot(torch.tensor([[2, 1, 0]]), num_classes=3).float()
 
-        manual_numbers2 = [1, 0]
-        softmaxed2 = F.softmax(torch.tensor([0.5, 1.5]))
-        weighted_sum2 = sum([manual_numbers2[i] * s for i, s in enumerate(softmaxed2)])
+        softmaxed = F.softmax(torch.tensor([[[-4, 2.0, -1], [1.5, 0.5, 1.2], [-2, 1, -2.5]]]), dim=-1)
+        expected_wasserstein = torch.mean(self.t5_number_token_loss._calculate_1d_wasserstein_dist(softmaxed, target_distribution))
 
-        manual_numbers3 = [5, 3]
-        softmaxed3 = F.softmax(torch.tensor([1.0, -2.0]))
-        weighted_sum3 = sum([manual_numbers3[i] * s for i, s in enumerate(softmaxed3)])
+        wasserstein_loss = self.t5_number_token_loss.forward(logits, labels)
 
-        target = torch.tensor([2.0, 1.0, 3.0])
-        expected_loss = F.mse_loss(torch.tensor([weighted_sum1, weighted_sum2, weighted_sum3]), target)
+        print(f"Expected Loss: {expected_wasserstein.item()}")
+        print(f"NumberTokenLoss: {wasserstein_loss.item()}")
 
-        ntl_loss = self.t5_number_token_loss.forward(logits, labels)
+        self.assertAlmostEqual(expected_wasserstein.item(), wasserstein_loss.item(), places=5)
 
-        print(f"Expected Loss: {expected_loss.item()}")
-        print(f"NumberTokenLoss: {ntl_loss.item()}")
-        self.assertAlmostEqual(expected_loss.item(), ntl_loss.item(), places=5)
+    def test_loss_comparison_t5(self):
+        logits = self.create_logits(
+            self.t5_tokenizer,
+            [
+                {"0": 1.0, "1": 2.0, "2": 1.0, "3": 1.5},
+                {"0": 1.5, "1": 1.0, "2": 1.5, "3": 1},
+                {"0": 1.0, "1": 1.0, "2": 1.5, "3": 1.5},
+                {"0": 1.0, "1": 1.0, "2": 1.0, "3": 2},
+
+            ]
+        )
+
+        labels = torch.tensor([[
+            self.t5_tokenizer.convert_tokens_to_ids("1"),
+            self.t5_tokenizer.convert_tokens_to_ids("1"),
+            self.t5_tokenizer.convert_tokens_to_ids("1"),
+            self.t5_tokenizer.convert_tokens_to_ids("1"),
+        ]])
+
+        wasserstein_loss_1 = self.t5_number_token_loss.forward(logits[:, 0:1], labels[:, 0:1])
+        wasserstein_loss_2 = self.t5_number_token_loss.forward(logits[:, 1:2], labels[:, 1:2])
+        wasserstein_loss_3 = self.t5_number_token_loss.forward(logits[:, 2:3], labels[:, 2:3])
+        wasserstein_loss_4 = self.t5_number_token_loss.forward(logits[:, 3:4], labels[:, 3:4])
+
+        self.assertLess(wasserstein_loss_1.item(), wasserstein_loss_2.item())
+        self.assertLess(wasserstein_loss_2.item(), wasserstein_loss_3.item())
+        self.assertLess(wasserstein_loss_3.item(), wasserstein_loss_4.item())
 
     def test_nvocab_indexing_t5(self):
         vocab_to_id = self.t5_tokenizer.get_vocab()

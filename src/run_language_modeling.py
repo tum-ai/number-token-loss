@@ -383,6 +383,7 @@ def run_language_modeling(model_args, training_args):
             tokenizer,
             vocab_size=config.vocab_size,
             device=training_args.device,
+            order_numbers=model_args.number_encoding != "rt",
             loss_function=loss_function,
             weight=model_args.number_token_loss_weight
         )
