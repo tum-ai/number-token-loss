@@ -1,13 +1,13 @@
 import torch
 import torch.nn.functional as F
 from torch._tensor import Tensor
-
+import logging
 from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 
 
 class WassersteinNumberTokenLoss:
-    def __init__(self, tokenizer: NumberEncodingTokenizer, vocab_size: int, device, loss_function=F.mse_loss,
-                 weight=0.5):
+    def __init__(self, tokenizer: NumberEncodingTokenizer, vocab_size: int, device, order_numbers: bool,
+                 loss_function=F.mse_loss, weight=0.5):
         self.tokenizer = tokenizer
         self.loss_function = loss_function
         self.weight = weight
@@ -23,7 +23,14 @@ class WassersteinNumberTokenLoss:
         # Extract indices and values of number tokens
         number_token_mask = ~torch.isnan(self.nvocab)
         self.number_token_indices = torch.nonzero(number_token_mask, as_tuple=False).squeeze()
-        self.number_token_values = self.nvocab[self.number_token_indices]
+
+        if order_numbers:
+            logging.info("Sorting number tokens by numerical value...")
+            # Sort the number tokens by their numerical values
+            self.number_token_values = self.nvocab[self.number_token_indices]
+            sorted_values, sorted_indices = torch.sort(self.number_token_values)
+            self.number_token_values = sorted_values
+            self.number_token_indices = self.number_token_indices[sorted_indices]
 
     def forward(self, logits: Tensor, labels: Tensor):
         if logits.numel() == 0:
