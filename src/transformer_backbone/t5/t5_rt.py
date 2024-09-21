@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from src.encoding_decoding.numerical_encodings import FloatEncoding
 import copy
-from src.number_token_loss import NumberTokenLoss
+from src.loss_functions.number_token_loss import NumberTokenLoss
 
 # Set maximal value for normalization
 V_MAX = 3000000000

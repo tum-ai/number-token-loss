@@ -46,7 +46,8 @@ from src.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
 from src.transformer_backbone.t5.t5_rt import T5RegressionModelRT
 from src.transformer_backbone.t5.t5_xval import T5RegressionModelXval
 from src.evaluation import CustomMetrics
-from src.number_token_loss import NumberTokenLoss
+from src.loss_functions.number_token_loss import NumberTokenLoss
+from src.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
 
 transformers.logging.set_verbosity_info()
 logger = logging.getLogger(__name__)
@@ -378,7 +379,7 @@ def run_language_modeling(model_args, training_args):
         else:
             raise ValueError(f"Unknown loss function: {model_args.number_token_loss_function}")
 
-        model_init_kwargs["number_token_loss"] = NumberTokenLoss(
+        model_init_kwargs["number_token_loss"] = WassersteinNumberTokenLoss(
             tokenizer,
             vocab_size=config.vocab_size,
             device=training_args.device,
