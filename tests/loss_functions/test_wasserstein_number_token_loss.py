@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 import transformers
 
-from src.number_token_loss import NumberTokenLoss
+from src.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
 from src.tokenizer.rt_tokenizer import RtTokenizer
 from src.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
 import numpy as np
@@ -23,8 +23,8 @@ class TestNumberTokenLoss(unittest.TestCase):
         n_new_tokens = len(self.rt_tokenizer) - len(transformers.AutoTokenizer.from_pretrained("t5-small"))
         self.vocab_size = self.config.vocab_size + n_new_tokens
 
-        self.rt_number_token_loss = NumberTokenLoss(self.rt_tokenizer, self.vocab_size, self.device)
-        self.t5_number_token_loss = NumberTokenLoss(self.t5_tokenizer, self.vocab_size, self.device)
+        self.rt_number_token_loss = WassersteinNumberTokenLoss(self.rt_tokenizer, self.vocab_size, self.device)
+        self.t5_number_token_loss = WassersteinNumberTokenLoss(self.t5_tokenizer, self.vocab_size, self.device)
 
 
     def create_logits(self, tokenizer, token_logit_value_dict_list: List[Dict[str, float]]) -> torch.Tensor:
@@ -43,12 +43,16 @@ class TestNumberTokenLoss(unittest.TestCase):
         logits = self.create_logits(
             self.rt_tokenizer,
             [
-                {"_1_0_": 1.0, "_2_0_": 1.0, "_0_0_": 0.5, "_3_0_": 1.5}
-            ]
+                {"_1_0_": 1.0, "_2_0_": 1.0, "_0_0_": 0.5, "_3_0_": 1.5},
+                {"_1_0_": 1.5, "_2_0_": 1.0, "_0_0_": 0.5, "_3_0_": 1.5},
+                {"_1_0_": 1.0, "_2_0_": 1.5, "_0_0_": 0.5, "_3_0_": 1.5},
+            ],
         )
 
         labels = torch.tensor([[
-            self.rt_tokenizer.convert_tokens_to_ids("_1_0_")
+            self.rt_tokenizer.convert_tokens_to_ids("_1_0_"),
+            self.rt_tokenizer.convert_tokens_to_ids("_1_0_"),
+            self.rt_tokenizer.convert_tokens_to_ids("a")
         ]])
 
         manual_numbers = [1, 2, 0, 3]

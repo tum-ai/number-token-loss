@@ -25,6 +25,8 @@ class NumberTokenLoss:
         if labels.numel() == 0:
             raise ValueError("Labels passed to the NumberTokenLoss are empty!")
 
+        labels = labels.masked_fill(labels == -100, 0)
+
         # Create a mask to filter out non-digit tokens
         number_tokens = ~torch.isnan(self.nvocab)
         logits = logits[:, :, number_tokens]
