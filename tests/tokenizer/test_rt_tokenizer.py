@@ -73,6 +73,7 @@ class TestEvaluationMethods(unittest.TestCase):
             "0.0221",
             "-0.000042",
             "10035.2",
+            "13987028330851034.9999881",
         ]
 
         expected_result =[
@@ -88,6 +89,7 @@ class TestEvaluationMethods(unittest.TestCase):
             "0.0221",
             "- 0.000042",
             "10035.2",
+            "13987028330851034.9999881",
         ]
 
         result = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt")

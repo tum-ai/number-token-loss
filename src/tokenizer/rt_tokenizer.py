@@ -2,7 +2,7 @@ import copy
 import functools
 import os
 import re
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, localcontext
 from typing import List, Union, Tuple
 import logging
 
@@ -175,12 +175,18 @@ def extract(text):
 
         # Remove plus as previously we treated it like a digit
         number = number.lstrip('+-')
+
+        total_digits = len(number.replace('.', ''))
+        required_precision = total_digits + 12  # Add 12 for decimal places
         number = Decimal(number)
 
-        # Round the number to 12 decimal places
-        precision = Decimal('1.000000000000')
-        number = number.quantize(precision, rounding=ROUND_HALF_UP)
-        number = str("{0:.12f}".format(number.normalize()).rstrip('0').rstrip('.'))
+        # set local context to required precision to avoid floating point errors during rounding
+        with localcontext() as ctx:
+            ctx.prec = required_precision
+            # Round the number to 12 decimal places
+            precision = Decimal('1.000000000000')
+            number = number.quantize(precision, rounding=ROUND_HALF_UP)
+            number = str("{0:.12f}".format(number.normalize()).rstrip('0').rstrip('.'))
 
         if "." in number:
             integer_part, _, fractional_part = number.partition('.')
