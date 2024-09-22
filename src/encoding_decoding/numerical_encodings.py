@@ -1,7 +1,7 @@
 import numbers
 import warnings
 from math import cos, inf, sin
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
 import numpy as np
 import torch
@@ -126,7 +126,7 @@ def get_int_encoding(token: str, embedding_size: int) -> torch.Tensor:
     return vals
 
 
-def encoding_to_number(token: str, invalid_strict=True, ignore_order: bool = False) -> float:
+def encoding_to_number(token: str, invalid_strict=True, ignore_order: bool = False, return_as_decimal: bool = False) -> Union[float, Decimal]:
     if len(token) == 1 or not (
             token.startswith("_") and token.endswith("_") and token.count("_") == 3
     ):
@@ -141,6 +141,8 @@ def encoding_to_number(token: str, invalid_strict=True, ignore_order: bool = Fal
 
     order = int(token.split("_")[-2])
     val = Decimal(digit) * (Decimal(10) ** Decimal(order))
+    if return_as_decimal:
+        return val
     return float(val)
 
 
