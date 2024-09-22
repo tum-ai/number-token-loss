@@ -2,6 +2,7 @@ import copy
 import functools
 import os
 import re
+from decimal import Decimal, ROUND_HALF_UP
 from typing import List, Union, Tuple
 import logging
 
@@ -101,7 +102,7 @@ class RtTokenizer(NumberEncodingTokenizer):
         digit_position_array = np.vectorize(self._convert_token_to_check_validity)(token_array)
 
         number_token_array = copy.deepcopy(token_array)
-        number_token_array = np.vectorize(functools.partial(encoding_to_number, invalid_strict=False), otypes=[float])(
+        number_token_array = np.vectorize(functools.partial(encoding_to_number, invalid_strict=False, return_as_decimal=True), otypes=[Decimal])(
             number_token_array)
 
         result = []
@@ -110,16 +111,16 @@ class RtTokenizer(NumberEncodingTokenizer):
         for row in range(token_array.shape[0]):
             result.append([])
             is_negative = False
-            current_number = 0
+            current_number = Decimal(0)
             for idx in range(token_array.shape[1]):
                 # If number token
-                if not np.isnan(number_token_array[row][idx]):
+                if isinstance(number_token_array[row][idx], Decimal):
                     current_number += number_token_array[row][idx]
 
                     # If the next token is no number or a number with bigger or equal digit position,
                     # we have to add the current number to the result
                     if idx + 1 == token_array.shape[1] \
-                            or np.isnan(number_token_array[row][idx + 1]) \
+                            or not isinstance(number_token_array[row][idx + 1], Decimal) \
                             or digit_position_array[row][idx + 1] >= digit_position_array[row][idx]:
 
                         # Model predicts e.g. (_1_2_, _2_1_) which implicitely denotes zeros / is not a well formed number.
@@ -127,22 +128,23 @@ class RtTokenizer(NumberEncodingTokenizer):
                         if digit_position_array[row][idx] > 0:
                             count_invalid_number_prediction += 1
 
-                        # when current numer is an int parse it as int to remove .0
-                        if current_number.is_integer():
-                            current_number = int(current_number)
+                        current_number = current_number * (-1 if is_negative else 1)
+                        # Normalize the Decimal to remove any trailing zeros
+                        current_number = str("{0:.12f}".format(current_number.normalize()).rstrip('0').rstrip('.'))
 
-                        result[row].extend(super().tokenize(str(current_number * (-1 if is_negative else 1))))
-                        current_number = 0
+                        result[row].extend(super().tokenize(current_number))
+
+                        current_number = Decimal(0)
                         is_negative = False
 
                         # if next token is indeed also a number, we have to add a whitespace
-                        if idx + 1 < token_array.shape[1] and not np.isnan(number_token_array[row][idx + 1]):
+                        if idx + 1 < token_array.shape[1] and isinstance(number_token_array[row][idx + 1], Decimal):
                             result[row].append("▁")
 
                     # if the next token is a number with digit position smaller than the current one -1, we also
                     # have to count it as invalid
                     elif idx + 1 < token_array.shape[1] \
-                            and not np.isnan(number_token_array[row][idx + 1]) \
+                            and isinstance(number_token_array[row][idx + 1], Decimal) \
                             and digit_position_array[row][idx + 1] < digit_position_array[row][idx] - 1:
                         count_invalid_number_prediction += 1
 
@@ -154,7 +156,7 @@ class RtTokenizer(NumberEncodingTokenizer):
                         continue
                     result[row].append(token)
 
-        count_no_number_prediction_at_all = np.sum(np.all(np.isnan(number_token_array), axis=1))
+        count_no_number_prediction_at_all = np.sum(np.all(np.isnan(number_token_array.astype(float)), axis=1))
         return result, count_invalid_number_prediction, count_no_number_prediction_at_all
 
 
@@ -173,7 +175,12 @@ def extract(text):
 
         # Remove plus as previously we treated it like a digit
         number = number.lstrip('+-')
-        number = str(round(str_to_number(number), 12))
+        number = Decimal(number)
+
+        # Round the number to 12 decimal places
+        precision = Decimal('1.000000000000')
+        number = number.quantize(precision, rounding=ROUND_HALF_UP)
+        number = str("{0:.12f}".format(number.normalize()).rstrip('0').rstrip('.'))
 
         if "." in number:
             integer_part, _, fractional_part = number.partition('.')
