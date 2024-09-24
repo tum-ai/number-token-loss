@@ -183,6 +183,12 @@ class ModelArguments:
             "help": "Adds NumberTokenLoss object"
         },
     )
+    number_token_loss_with_wasserstein: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "Adds NumberTokenLoss object with Wasserstein distance"
+        },
+    )
     number_token_loss_weight: Optional[float] = field(
         default=0.5,
         metadata={
@@ -379,14 +385,25 @@ def run_language_modeling(model_args, training_args):
         else:
             raise ValueError(f"Unknown loss function: {model_args.number_token_loss_function}")
 
-        model_init_kwargs["number_token_loss"] = WassersteinNumberTokenLoss(
-            tokenizer,
-            vocab_size=config.vocab_size,
-            device=training_args.device,
-            order_numbers=model_args.number_encoding != "rt",
-            loss_function=loss_function,
-            weight=model_args.number_token_loss_weight
-        )
+        if model_args.number_token_loss_with_wasserstein:
+            logger.info("Using Wasserstein distance for number token loss")
+            model_init_kwargs["number_token_loss"] = WassersteinNumberTokenLoss(
+                tokenizer,
+                vocab_size=config.vocab_size,
+                device=training_args.device,
+                order_numbers=model_args.number_encoding != "rt",
+                loss_function=loss_function,
+                weight=model_args.number_token_loss_weight
+            )
+        else:
+            logger.info("Using normal number token loss")
+            model_init_kwargs["number_token_loss"] = NumberTokenLoss(
+                tokenizer,
+                vocab_size=config.vocab_size,
+                device=training_args.device,
+                loss_function=loss_function,
+                weight=model_args.number_token_loss_weight
+            )
 
     if model_args.model_name_or_path:
 
