@@ -1,0 +1,16 @@
+training_args:
+  trial: debug
+  special_name:
+  max_steps: 10000
+  save_total_limit: 1
+  save_steps: 500
+  eval_steps: 500
+  per_device_train_batch_size: 8
+  per_device_eval_batch_size: 8
+  logging_steps: 10
+  report_to: none
+  eval_on_start: false
+
+model_args:
+  config_name: t5-small
+  model_name_or_path: google-t5/t5-small

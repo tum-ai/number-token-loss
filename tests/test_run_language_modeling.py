@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from datasets import Dataset
 
-from src.run_language_modeling import ModelArguments, CustomTrainingArguments
+from src.args import ModelArguments, TrainingArguments, DatasetArguments
 from src.run_language_modeling import run_language_modeling
 from src.tokenizer.rt_tokenizer import RtTokenizer
 
@@ -34,8 +34,13 @@ class TestRunLanguageModeling(unittest.TestCase):
             log_scale_embeddings=log_scale_embeddings,
         )
 
+    def generate_dataset_args(self):
+        return DatasetArguments(
+            dataset_name="gsm8k",  # Using gsm8k for faster tests
+        )
+
     def generate_training_args(self, output_dir, do_only_eval=False):
-        return CustomTrainingArguments(
+        return TrainingArguments(
             output_dir=output_dir,
             overwrite_output_dir=True,
             per_device_train_batch_size=1,
@@ -47,7 +52,6 @@ class TestRunLanguageModeling(unittest.TestCase):
             learning_rate=1e-4,
             logging_steps=10,
             report_to="none",
-            dataset_name="gsm8k",  # Using gsm8k for faster tests
             remove_unused_columns=False,
             batch_eval_metrics=True,
             do_only_eval=do_only_eval,
@@ -105,7 +109,7 @@ class TestRunLanguageModeling(unittest.TestCase):
                             )
 
                             training_args = self.generate_training_args(output_dir=self.temp_dir)
-
+                            dataset_args = self.generate_dataset_args()
                             model_eval_args = self.generate_model_args(
                                 number_encoding=number_encoding,
                                 number_token_loss=number_token_loss,
@@ -122,6 +126,7 @@ class TestRunLanguageModeling(unittest.TestCase):
                                     eval_results_expected, _ = run_language_modeling(
                                         model_args=model_training_args,
                                         training_args=training_args,
+                                        dataset_args=dataset_args,
                                     )
                                 except Exception as e:
                                     logging.error(f"Training failed with exception: {e}", exc_info=True)
@@ -135,6 +140,7 @@ class TestRunLanguageModeling(unittest.TestCase):
                                     eval_results_val, eval_results_test = run_language_modeling(
                                         model_args=model_eval_args,
                                         training_args=eval_args,
+                                        dataset_args=dataset_args,
                                     )
                                 except Exception as e:
                                     logging.error(f"Loading model from checkpoint failed with exception: {e}", exc_info=True)
@@ -163,6 +169,7 @@ class TestRunLanguageModeling(unittest.TestCase):
             number_token_loss=False,
             log_scale_embeddings=True,
         )
+        dataset_args = self.generate_dataset_args()
         training_args = self.generate_training_args(output_dir=self.temp_dir)
 
         # Run training
@@ -170,6 +177,7 @@ class TestRunLanguageModeling(unittest.TestCase):
             eval_results_expected, model = run_language_modeling(
                 model_args=model_args,
                 training_args=training_args,
+                dataset_args=dataset_args,
             )
         except Exception as e:
             self.fail(f"Training with log scale embeddings failed with exception: {e}")
@@ -203,6 +211,7 @@ class TestRunLanguageModeling(unittest.TestCase):
             eval_results_expected, model_no_log = run_language_modeling(
                 model_args=model_args_no_log,
                 training_args=training_args_no_log,
+                dataset_args=dataset_args,
             )
         except Exception as e:
             self.fail(f"Training without log scale embeddings failed with exception: {e}")

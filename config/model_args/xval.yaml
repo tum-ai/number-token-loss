@@ -1,0 +1,4 @@
+name: xval
+config_name: t5-base
+number_encoding: xval
+log_scale_embeddings: true

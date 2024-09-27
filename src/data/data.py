@@ -2,7 +2,7 @@ from datasets import Dataset
 import json
 import os
 
-from src.get_cooking_data import download_cooking
+from src.data.get_cooking_data import download_cooking
 
 # Define a function to read the text file and yield examples
 def read_txt(file_path):
