@@ -1,0 +1,4 @@
+name: rt
+config_name: t5-base
+number_encoding: rt
+log_scale_embeddings: true

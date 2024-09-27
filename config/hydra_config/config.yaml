@@ -1,0 +1,6 @@
+# Disable hydra saving the output directory
+
+hydra:
+  output_subdir: null
+  run:
+    dir: ${training_args.output_dir}

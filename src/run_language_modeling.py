@@ -7,10 +7,12 @@ The file is an adaptation of https://github.com/huggingface/transformers/blob/v3
 """
 import sys
 
+from src.args import ModelArguments, TrainingArguments, DatasetArguments
+
+sys.path.append(".")
+
 from src.trainer import CustomSeq2SeqTrainer
 from src.transformer_backbone.t5.t5_vanilla_for_number_token_loss import T5VanillaForNumberTokenLoss
-
-sys.path.append("..")
 
 import json
 import logging
@@ -18,8 +20,7 @@ import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 from dataclasses import dataclass, field
-from typing import Optional, Literal
-import wandb
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -30,13 +31,11 @@ from transformers import (
     CONFIG_MAPPING,
     MODEL_WITH_LM_HEAD_MAPPING,
     AutoConfig,
-    AutoModelWithLMHead,
-    HfArgumentParser,
     set_seed,
     EarlyStoppingCallback, T5ForConditionalGeneration, Seq2SeqTrainingArguments
 )
 
-from src.data import load_txt_dataset, load_json_dataset
+from src.data.data import load_txt_dataset, load_json_dataset
 from src.collators.rt_question_answer_collator import RtQuestionAnswerCLMCollator
 from src.collators.xval_question_answer_collator import XvalQuestionAnswerCLMCollator
 from src.collators.vanilla_question_answer_collator import VanillaQuestionAnswerCLMCollator
@@ -48,6 +47,8 @@ from src.transformer_backbone.t5.t5_xval import T5RegressionModelXval
 from src.evaluation import CustomMetrics
 from src.loss_functions.number_token_loss import NumberTokenLoss
 from src.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
+import hydra
+from omegaconf import DictConfig, OmegaConf
 
 transformers.logging.set_verbosity_info()
 logger = logging.getLogger(__name__)
@@ -57,183 +58,20 @@ MODEL_CONFIG_CLASSES = list(MODEL_WITH_LM_HEAD_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
 
 
-def get_latest_checkpoint(model_path: str, must_contain: str = "best") -> str:
-    """
-    Given a path to the model folder it searches the latest saved checkpoint
-    and returns the path to it.
-    Args:
-        model_path (str): Path to model folder. Has to contain folders called
-            'checkpoint-best-STEP' and 'checkpoint-latest-STEP' where STEP is
-            a positive integer.
-        must_contain (str, optional): Subselect checkpoints that contain a
-            certain query. Defaults to 'best'.
-    Returns:
-        str: Path to latest checkpoint
-    """
-
-    # Finding checkpoints
-    checkpoints = [f for f in os.listdir(model_path) if f.startswith("checkpoint")]
-    if must_contain is not None:
-        checkpoints = list(filter(lambda x: must_contain in x, checkpoints))
-
-    if len(checkpoints) == 0:
-        logger.warning(
-            f"No checkpoints found that contain {must_contain} in {model_path}."
-        )
-        # Relax criteria and retry
-        next_try = "checkpoint" if must_contain != "checkpoint" else ""
-        return get_latest_checkpoint(model_path, must_contain=next_try)
-
-    # Sorting
-    try:
-        idx = np.argsort([int(c.split("-")[-1]) for c in checkpoints])[-1]
-    except ValueError:
-        raise ValueError(f"Checkpoints dont seem to follow format: {checkpoints}.")
-
-    return os.path.join(model_path, checkpoints[idx])
-
-
-@dataclass
-class CustomTrainingArguments(Seq2SeqTrainingArguments):
-    """
-    NOTE: Expanding TrainingArguments class from transformers with custom arguments.
-
-    eval_accumulation_steps (:obj:`int`, `optional`):
-            Number of predictions steps to accumulate the output tensors for, before moving the results to the CPU. If
-            left unset, the whole predictions are accumulated on GPU/TPU before being moved to the CPU (faster but
-            requires more memory).
-    """
-
-    # Was introduced only in transformers 3.4.0
-    eval_accumulation_steps: Optional[int] = field(
-        default=None,
-        metadata={
-            "help": "Number of predictions steps to accumulate before moving the tensors to the CPU."
-        },
-    )
-
-    do_only_eval: Optional[bool] = field(
-        default=False,
-        metadata={
-            "help": "Only evaluate the model."
-        },
-    )
-
-    train_with_augmented_data: Optional[bool] = field(
-        default=False,
-        metadata={
-            "help": "Train with augmented data."
-        },
-    )
-
-    dataset_name: Literal["mathematics_dataset", "gsm8k"] = field(
-        default="mathematics_dataset",
-        metadata={
-            "help": "Name of the dataset."
-        },
-    )
-
-
-@dataclass
-class ModelArguments:
-    """
-    Arguments pertaining to which model/config/tokenizer we are going to fine-tune, or train from scratch.
-    """
-
-    model_name_or_path: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "The model checkpoint for weights initialization. Leave None if you want to train a model from scratch."
-        },
-    )
-    model_type: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "If training from scratch, pass a model type from the list: "
-                    + ", ".join(MODEL_TYPES)
-        },
-    )
-    config_name: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "Pretrained config name or path if not the same as model_name"
-        },
-    )
-    tokenizer_name: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "Pretrained tokenizer name or path if not the same as model_name"
-        },
-    )
-    cache_dir: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "Where do you want to store the pretrained models downloaded from s3"
-        },
-    )
-    number_encoding: Optional[str] = field(
-        default="rt",
-        metadata={
-            "help": "Chose either xval or rt or None for number encodings"
-        },
-    )
-    number_token_loss: Optional[bool] = field(
-        default=False,
-        metadata={
-            "help": "Adds NumberTokenLoss object"
-        },
-    )
-    number_token_loss_with_wasserstein: Optional[bool] = field(
-        default=False,
-        metadata={
-            "help": "Adds NumberTokenLoss object with Wasserstein distance"
-        },
-    )
-    number_token_loss_weight: Optional[float] = field(
-        default=0.5,
-        metadata={
-            "help": "Weight of the number_token_loss in reference to other loss"
-        },
-    )
-    number_token_loss_function: Optional[Literal["mse", "huber", "mae"]] = field(
-        default="mse",
-        metadata={
-            "help": "Sets the order of the NTL. For example 2 -> MSE, 3 -> Mean Cubic Error etc."
-        },
-    )
-    log_scale_embeddings: Optional[bool] = field(
-        default=False,
-        metadata={
-            "help": "Whether to log scale the embeddings. Only applicable for xval and rt."
-        },
-    )
-    xval_bigger_language_head: Optional[bool] = field(
-        default=False,
-        metadata={
-            "help": "Whether to use a bigger language head for xval."
-        },
-    )
-
-
-def main():
-    # See all possible arguments in src/transformers/training_args.py
-    # or by passing the --help flag to this script.
-    # We now keep distinct sets of args, for a cleaner separation of concerns.
-
-    # Switch off comet
+@hydra.main(version_base=None, config_path="../config", config_name="config")
+def main(cfg: DictConfig):
     os.environ["COMET_MODE"] = "DISABLED"
 
-    # Switch off WandB
-    os.environ["WANDB_DISABLED"] = "false"
+    store_config(cfg)
 
-    parser = HfArgumentParser(
-        (ModelArguments, CustomTrainingArguments)
-    )
-    model_args, training_args = parser.parse_args_into_dataclasses()
-    run_language_modeling(model_args, training_args)
+    model_args = ModelArguments(**cfg.model_args)
+    training_args = TrainingArguments(**cfg.training_args)
+    dataset_args = DatasetArguments(**cfg.dataset_args)
+
+    run_language_modeling(model_args, training_args, dataset_args)
 
 
-def run_language_modeling(model_args, training_args):
+def run_language_modeling(model_args: ModelArguments, training_args: TrainingArguments, dataset_args: DatasetArguments):
     if (
             os.path.exists(training_args.output_dir)
             and os.listdir(training_args.output_dir)
@@ -243,7 +81,6 @@ def run_language_modeling(model_args, training_args):
         raise ValueError(
             f"Output directory ({training_args.output_dir}) already exists and is not empty. Use --overwrite_output_dir to overcome."
         )
-    os.makedirs(training_args.output_dir, exist_ok=True)
 
     # Setup logging
     logging.basicConfig(
@@ -258,7 +95,7 @@ def run_language_modeling(model_args, training_args):
         training_args.n_gpu,
         bool(training_args.local_rank != -1),
     )
-    logger.info("Training on dataset: %s", training_args.dataset_name)
+    logger.info("Training on dataset: %s", dataset_args.dataset_name)
     logger.info("Training/evaluation parameters %s", training_args)
 
     # Set generation arguments
@@ -383,7 +220,8 @@ def run_language_modeling(model_args, training_args):
         elif model_args.number_token_loss_function == "mae":
             loss_function = F.l1_loss
         else:
-            raise ValueError(f"Unknown loss function: {model_args.number_token_loss_function}")
+            raise ValueError(
+                f"Unknown number_token_loss_function: {model_args.number_token_loss_function}. Allowed: mse, huber, mae.")
 
         if model_args.number_token_loss_with_wasserstein:
             logger.info("Using Wasserstein distance for number token loss")
@@ -453,8 +291,8 @@ def run_language_modeling(model_args, training_args):
 
     # Get datasets
 
-    if training_args.dataset_name == "gsm8k":
-        if training_args.train_with_augmented_data:
+    if dataset_args.dataset_name == "gsm8k":
+        if dataset_args.train_with_augmented_data:
             train_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/train_t_clean_with_augmented.jsonl'
         else:
             train_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/train_t_clean.jsonl'
@@ -463,7 +301,7 @@ def run_language_modeling(model_args, training_args):
         train_dataset = load_json_dataset(train_data_path)
         eval_dataset = load_json_dataset(eval_data_path)
         test_dataset = load_json_dataset(test_data_path)
-    elif training_args.dataset_name == "mathematics_dataset":
+    elif dataset_args.dataset_name == "mathematics_dataset":
         train_data_path = 'data/mathematics_dataset-v1.0/train.txt'
         eval_data_path = 'data/mathematics_dataset-v1.0/val.txt'
         test_interpolate_data_path = 'data/mathematics_dataset-v1.0/test_interpolate.txt'
@@ -474,7 +312,7 @@ def run_language_modeling(model_args, training_args):
         test_interpolate_dataset = load_txt_dataset(test_interpolate_data_path)
         test_extrapolate_dataset = load_txt_dataset(test_extrapolate_data_path)
     else:
-        raise ValueError(f"Unknown dataset: {training_args.dataset_name}")
+        raise ValueError(f"Unknown dataset: {dataset_args.dataset_name}. Allowed: gsm8k, mathematics_dataset")
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"Number of parameters {num_params} of type {type(model)}")
@@ -546,12 +384,12 @@ def run_language_modeling(model_args, training_args):
     if not training_args.do_only_eval:
         return eval_results_val, model
 
-    if training_args.dataset_name == "gsm8k":
+    if dataset_args.dataset_name == "gsm8k":
         logger.info("*** Evaluate on test set ***")
         eval_results_test = trainer.evaluate(eval_dataset=test_dataset)
         logger.info(f"eval_results test data: {eval_results_test}")
         return eval_results_val, eval_results_test
-    elif training_args.dataset_name == "mathematics_dataset":
+    elif dataset_args.dataset_name == "mathematics_dataset":
         logger.info("*** Evaluate on interpolate data ***")
         eval_results_test_interpolate = trainer.evaluate(eval_dataset=test_interpolate_dataset)
         logger.info(f"eval_results interpolate data: {eval_results_test_interpolate}")
@@ -560,6 +398,49 @@ def run_language_modeling(model_args, training_args):
         eval_results_test_extrapolate = trainer.evaluate(eval_dataset=test_extrapolate_dataset)
         logger.info(f"eval_results extrapolate data: {eval_results_test_extrapolate}")
         return eval_results_val, eval_results_test_interpolate, eval_results_test_extrapolate
+
+
+def store_config(cfg: DictConfig):
+    output_dir = cfg.training_args.output_dir
+    os.makedirs(output_dir, exist_ok=True)
+    with open(os.path.join(output_dir, "config.yaml"), "w") as f:
+        f.write(OmegaConf.to_yaml(cfg))
+
+
+def get_latest_checkpoint(model_path: str, must_contain: str = "best") -> str:
+    """
+    Given a path to the model folder it searches the latest saved checkpoint
+    and returns the path to it.
+    Args:
+        model_path (str): Path to model folder. Has to contain folders called
+            'checkpoint-best-STEP' and 'checkpoint-latest-STEP' where STEP is
+            a positive integer.
+        must_contain (str, optional): Subselect checkpoints that contain a
+            certain query. Defaults to 'best'.
+    Returns:
+        str: Path to latest checkpoint
+    """
+
+    # Finding checkpoints
+    checkpoints = [f for f in os.listdir(model_path) if f.startswith("checkpoint")]
+    if must_contain is not None:
+        checkpoints = list(filter(lambda x: must_contain in x, checkpoints))
+
+    if len(checkpoints) == 0:
+        logger.warning(
+            f"No checkpoints found that contain {must_contain} in {model_path}."
+        )
+        # Relax criteria and retry
+        next_try = "checkpoint" if must_contain != "checkpoint" else ""
+        return get_latest_checkpoint(model_path, must_contain=next_try)
+
+    # Sorting
+    try:
+        idx = np.argsort([int(c.split("-")[-1]) for c in checkpoints])[-1]
+    except ValueError:
+        raise ValueError(f"Checkpoints dont seem to follow format: {checkpoints}.")
+
+    return os.path.join(model_path, checkpoints[idx])
 
 
 if __name__ == "__main__":
