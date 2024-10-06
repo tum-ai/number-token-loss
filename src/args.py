@@ -77,7 +77,7 @@ class ModelArguments:
     number_encoding: Optional[str] = field(
         default="rt",
         metadata={
-            "help": "Chose either xval or rt or None for number encodings"
+            "help": "Choose either xval or rt or None, or none_regression_head for number encodings"
         },
     )
     number_token_loss: Optional[bool] = field(
