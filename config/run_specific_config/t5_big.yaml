@@ -7,5 +7,5 @@ training_args:
   report_to: none
 
 model_args:
-  config_name: t5-large
-  model_name_or_path: google-t5/t5-large
+  config_name: t5-11b
+  model_name_or_path: google-t5/t5-11b

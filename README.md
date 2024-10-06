@@ -24,6 +24,7 @@
   - The Arguments are configured via Hydra (Yadan, Omry. *Hydra - A framework for elegantly configuring complex applications*. Github, 2019. Available at: [https://github.com/facebookresearch/hydra](https://github.com/facebookresearch/hydra).)
   - Therefore the script can be called via 
     ```bash
+    export PYTHONPATH=".:src/"
     python src/run_language_modeling.py dataset_args=<gsm8k or mathematics_dataset, default mathematics_dataset>
                                         model_args=<rt, rt_ntl, vanilla_t5, vanilla_t5_ntl, xval>
                                         training_args=<eval or train>
