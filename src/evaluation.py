@@ -157,7 +157,7 @@ class CustomMetrics:
                 Overall results if compute_result else None 
         
         """
-        if not self.number_encoding.lower() in ["xval", "rt", "none"]:
+        if not self.number_encoding.lower() in ["xval", "rt", "none", "none_regression_head"]:
             raise NotImplementedError(
                 f"Requesting evaluation for not supported number_encoding: {self.number_encoding}")
 
@@ -165,40 +165,35 @@ class CustomMetrics:
         model_output, labels = pred
         logits, predictions = model_output
 
-        if self.number_encoding in ["xval", "rt"]:
-            token_labels, number_labels = labels
-
-        else:
-            token_labels, number_labels = labels, None
-
-        # replace -100 with padding token
-        token_labels_for_decoding = token_labels.clone()
-        token_labels_for_decoding[token_labels_for_decoding == -100] = self.tokenizer.pad_token_id
-
         if self.number_encoding == "xval":
-            predictions, predicted_numbers = predictions
-            decoded_preds, count_invalid_number_prediction, count_no_number_prediction = self.tokenizer.decode_into_human_readable(
-                predictions, predicted_numbers)
-            decoded_labels, sanity_invalid_number_prediction, sanity_no_number_prediction = self.tokenizer.decode_into_human_readable(
-                token_labels_for_decoding, number_labels)
+            token_labels, number_labels = labels
         else:
-            if hasattr(self.tokenizer, "decode_into_human_readable"):
-                decoded_preds, count_invalid_number_prediction, count_no_number_prediction = self.tokenizer.decode_into_human_readable(
-                    predictions)
-                decoded_labels, sanity_invalid_number_prediction, sanity_no_number_prediction = self.tokenizer.decode_into_human_readable(
-                    token_labels_for_decoding)
-            else:
-                decoded_preds = self.tokenizer.batch_decode(predictions, skip_special_tokens=True)
-                count_invalid_number_prediction, count_no_number_prediction = check_number_predictions(
-                    decoded_preds)
-                decoded_labels = self.tokenizer.batch_decode(token_labels_for_decoding, skip_special_tokens=True)
-                sanity_invalid_number_prediction, sanity_no_number_prediction = check_number_predictions(
-                    decoded_labels)
+            token_labels = labels
+            number_labels = None
 
-        # We should never observe invalid numbers and mostly likely never no number for gt
-        if max(sanity_invalid_number_prediction, sanity_no_number_prediction) > 0:
-            print(sanity_invalid_number_prediction)
-            print(sanity_no_number_prediction)
+        if self.number_encoding != "none_regression_head":
+            # replace -100 with padding token
+            token_labels_for_decoding = token_labels.clone()
+            token_labels_for_decoding[token_labels_for_decoding == -100] = self.tokenizer.pad_token_id
+
+            (
+                count_invalid_number_prediction, count_no_number_prediction,
+                decoded_labels,
+                decoded_preds,
+                predictions,
+                sanity_invalid_number_prediction,
+                sanity_no_number_prediction
+            ) = self._decode_preds_and_labels(number_labels, predictions, token_labels_for_decoding)
+
+            # We should never observe invalid numbers and mostly likely never no number for gt
+            if max(sanity_invalid_number_prediction, sanity_no_number_prediction) > 0:
+                print(sanity_invalid_number_prediction)
+                print(sanity_no_number_prediction)
+        else:
+            decoded_labels = [str("{0:.12f}".format(label).rstrip('0').rstrip('.')) for label in labels.squeeze(-1).tolist()]
+            decoded_preds = [str("{0:.12f}".format(logit).rstrip('0').rstrip('.')) for logit in logits.squeeze(-1).tolist()]
+            count_invalid_number_prediction = 0
+            count_no_number_prediction = 0
 
         if compute_result or self.save_all_output:
             # save decoded predictions and labels for debugging
@@ -209,26 +204,31 @@ class CustomMetrics:
             if compute_result:
                 self.eval_count += 1
 
-        # compute perplexity
-        perplexity_value = self.perplexity(logits, token_labels[:, :logits.size(1)])
+        if self.number_encoding != "none_regression_head":
+            # compute perplexity
+            perplexity_value = self.perplexity(logits, token_labels[:, :logits.size(1)])
+
+            # Mask to ignore panumeric_tokening tokens (-100)
+            mask = token_labels != PADDING_TOKEN
+
+            # Apply mask to predictions and labels
+            masked_predictions = torch.where(mask, predictions, MASKED_OUT)
+            masked_labels = torch.where(mask, token_labels, MASKED_OUT)
+
+            # compute whole number accuracy and token accuracy
+            correct_predictions_w = torch.all(masked_predictions == masked_labels, dim=1)
+            accuracy_w = torch.mean(correct_predictions_w.float()).item()
+            correct_predictions = (predictions == token_labels) & mask
+            accuracy = (torch.sum(correct_predictions) / torch.sum(mask)).item() if torch.sum(mask) > 0 else 0
+        else:
+            perplexity_value = 0
+            accuracy_w = 0
+            accuracy = 0
+
+
 
         bleu = self.compute_bleu(decoded_preds, decoded_labels)
         rouge = self.compute_rouge(decoded_preds, decoded_labels)
-
-        # Mask to ignore panumeric_tokening tokens (-100)
-        mask = token_labels != PADDING_TOKEN
-
-        # Apply mask to predictions and labels
-        masked_predictions = torch.where(mask, predictions, MASKED_OUT)
-        masked_labels = torch.where(mask, token_labels, MASKED_OUT)
-
-        # compute whole number accuracy and token accuracy
-        correct_predictions_w = torch.all(masked_predictions == masked_labels, dim=1)
-        accuracy_w = torch.mean(correct_predictions_w.float()).item()
-        correct_predictions = (predictions == token_labels) & mask
-        accuracy = (torch.sum(correct_predictions) / torch.sum(mask)).item() if torch.sum(mask) > 0 else 0
-
-
 
         number_results = self.parse_number_result(decoded_preds, decoded_labels)
 
@@ -289,3 +289,33 @@ class CustomMetrics:
             }
             self.batch_stats = []
             return computed_metrics
+
+    def _decode_preds_and_labels(self, number_labels, predictions, token_labels_for_decoding):
+        if self.number_encoding == "xval":
+            predictions, predicted_numbers = predictions
+            decoded_preds, count_invalid_number_prediction, count_no_number_prediction \
+                = self.tokenizer.decode_into_human_readable(predictions, predicted_numbers)
+            decoded_labels, sanity_invalid_number_prediction, sanity_no_number_prediction \
+                = self.tokenizer.decode_into_human_readable(token_labels_for_decoding, number_labels)
+        else:
+            if hasattr(self.tokenizer, "decode_into_human_readable"):
+                decoded_preds, count_invalid_number_prediction, count_no_number_prediction \
+                    = self.tokenizer.decode_into_human_readable(predictions)
+                decoded_labels, sanity_invalid_number_prediction, sanity_no_number_prediction \
+                    = self.tokenizer.decode_into_human_readable(token_labels_for_decoding)
+            else:
+                decoded_preds = self.tokenizer.batch_decode(predictions, skip_special_tokens=True)
+                count_invalid_number_prediction, count_no_number_prediction = check_number_predictions(
+                    decoded_preds)
+                decoded_labels = self.tokenizer.batch_decode(token_labels_for_decoding, skip_special_tokens=True)
+                sanity_invalid_number_prediction, sanity_no_number_prediction = check_number_predictions(
+                    decoded_labels)
+        return (
+            count_invalid_number_prediction,
+            count_no_number_prediction,
+            decoded_labels,
+            decoded_preds,
+            predictions,
+            sanity_invalid_number_prediction,
+            sanity_no_number_prediction
+        )

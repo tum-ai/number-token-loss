@@ -8,6 +8,7 @@ The file is an adaptation of https://github.com/huggingface/transformers/blob/v3
 import sys
 
 from src.args import ModelArguments, TrainingArguments, DatasetArguments
+from src.collators.regression_head_question_answer_collator import RegressionHeadQuestionAnswerCLMCollator
 
 sys.path.append(".")
 
@@ -19,8 +20,6 @@ import logging
 import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-from dataclasses import dataclass, field
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -32,7 +31,7 @@ from transformers import (
     MODEL_WITH_LM_HEAD_MAPPING,
     AutoConfig,
     set_seed,
-    EarlyStoppingCallback, T5ForConditionalGeneration, Seq2SeqTrainingArguments
+    EarlyStoppingCallback, T5ForConditionalGeneration, T5ForSequenceClassification, Trainer
 )
 
 from src.data.data import load_txt_dataset, load_json_dataset
@@ -156,6 +155,8 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         model_params = config.__dict__
         logger.warning("You are instantiating a new config instance from scratch.")
 
+    trainer_class = CustomSeq2SeqTrainer
+
     if model_args.number_encoding == "rt":
         model_class = T5RegressionModelRT
         tokenizer_class = RtTokenizer
@@ -169,6 +170,11 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         else:
             model_class = T5ForConditionalGeneration
             tokenizer_class = transformers.AutoTokenizer
+    elif model_args.number_encoding.lower() == "none_regression_head":
+        trainer_class = Trainer
+        config.num_labels = 1
+        model_class = T5ForSequenceClassification
+        tokenizer_class = transformers.AutoTokenizer
     else:
         raise ValueError(f"Unknown number encoding: {model_args.number_encoding}")
 
@@ -331,6 +337,10 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         data_collator = VanillaQuestionAnswerCLMCollator(
             tokenizer=tokenizer
         )
+    elif model_args.number_encoding.lower() == "none_regression_head":
+        data_collator = RegressionHeadQuestionAnswerCLMCollator(
+            tokenizer=tokenizer
+        )
 
     # Custom Metric
     custom_metrics = CustomMetrics(
@@ -347,8 +357,10 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
 
     # custom_trainer_params = get_trainer_dict(model_params)
 
+    logger.info("Trainer class: %s", trainer_class)
+
     # Initialize our Trainer
-    trainer = CustomSeq2SeqTrainer(
+    trainer = trainer_class(
         model=model,
         args=training_args,
         data_collator=data_collator,

@@ -76,7 +76,7 @@ class TestRunLanguageModeling(unittest.TestCase):
         mock_load_json_dataset_fn.side_effect = self.mock_load_json_dataset
         mock_load_txt_dataset_fn.side_effect = self.mock_load_txt_dataset
 
-        number_encodings = ["rt", "xval", "none"]
+        number_encodings = ["rt", "xval", "none", "none_regression_head"]
         number_token_losses = [True, False]
         log_scale_embeddings_options = [True, False]
         model_names_or_paths = [None, "google-t5/t5-small"]
@@ -89,13 +89,13 @@ class TestRunLanguageModeling(unittest.TestCase):
                         for xval_bigger_language_head in xval_bigger_language_heads:
 
                             # Skip invalid combinations
-                            if number_encoding == "xval" and number_token_loss:
+                            if number_encoding in ["xval", "none_regression_head"] and number_token_loss:
                                 continue  # NumberTokenLoss is only applicable when number_encoding is not 'xval'
 
                             if number_encoding != "xval" and xval_bigger_language_head:
                                 continue
 
-                            if number_encoding == "none" and log_scale_embeddings:
+                            if number_encoding in ["none", "none_regression_head"] and log_scale_embeddings:
                                 continue  # Log scaling is only applicable for 'rt' and 'xval' encodings
 
                             checkpoint_dir = os.path.join(self.temp_dir, "checkpoint-10")
