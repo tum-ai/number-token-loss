@@ -1,11 +1,12 @@
 import numbers
 import warnings
 from math import cos, inf, sin
-from typing import Dict, Optional, List
+from typing import Dict, Optional, Union
 
+import numpy as np
 import torch
 import torch.nn as nn
-import transformers
+from decimal import Decimal
 from torch import Tensor
 
 
@@ -18,7 +19,7 @@ def cuda():
 
 
 def get_float_encoding(
-        token: str, embedding_size: int, vmax: float = 1.0
+        token: str, embedding_size: int, vmax: float = 1.0, log_scale: bool = False
 ) -> torch.Tensor:
     """Convert a token representing a float into a _fixed_ embedding vector.
     NOTE: This can be used for *any* range of numbers > 0.
@@ -31,6 +32,7 @@ def get_float_encoding(
             values to be in the range ~ [-10, 10].
             NOTE: If remaining nn.embeddings in model use `max_norm`, this might result
             in large range discrepancies.
+        log_scale (bool, optional): Whether to use log scaling for the embeddings.
 
     Returns:
         torch.Tensor: Tensor of length embedding_size containing the embedding.
@@ -52,7 +54,10 @@ def get_float_encoding(
         vals[i] = val / (i + 1)
         vals[i + 1] = -val / (i + 1)
 
-    return vals / (vmax / 10)
+    if log_scale:
+        return torch.sign(vals)*torch.log10(torch.abs(vals)+1) / (torch.log10(torch.tensor(vmax)) / 10)
+    else:
+        return vals / (vmax / 10)
 
 
 def get_full_float_encoding(
@@ -121,17 +126,23 @@ def get_int_encoding(token: str, embedding_size: int) -> torch.Tensor:
     return vals
 
 
-def encoding_to_number(token: str, invalid_strict=True) -> float:
+def encoding_to_number(token: str, invalid_strict=True, ignore_order: bool = False, return_as_decimal: bool = False) -> Union[float, Decimal]:
     if len(token) == 1 or not (
             token.startswith("_") and token.endswith("_") and token.count("_") == 3
     ):
         if invalid_strict:
             raise ValueError(f"no valid rt encoding {token}")
         else:
-            return 0
+            return np.nan
     digit = int(token[1])
+
+    if ignore_order:
+        return digit
+
     order = int(token.split("_")[-2])
-    val = digit * 10 ** order
+    val = Decimal(digit) * (Decimal(10) ** Decimal(order))
+    if return_as_decimal:
+        return val
     return float(val)
 
 
@@ -148,6 +159,7 @@ class FloatEncoding(nn.Embedding):
             embedding_dim: int,
             vocab: Dict,
             vmax: Optional[float] = None,
+            log_scale_embeddings: bool = False,
             *args,
             **kwargs,
     ) -> None:
@@ -201,13 +213,8 @@ class FloatEncoding(nn.Embedding):
             raise ValueError(f"Can not work only with negative numbers (vmax = {vmax})")
 
         weights = torch.zeros(num_embeddings, embedding_dim)
-        for idx, (token, index) in enumerate(vocab.items()):
-            '''
-            assert (
-                idx == index
-            ), "Please sort vocab indexes in ascending order starting from 0"
-            '''
-            weights[idx, :] = get_float_encoding(token, embedding_dim, vmax)
+        for token, index in vocab.items():
+            weights[index, :] = get_float_encoding(token, embedding_dim, vmax, log_scale_embeddings)
         weights = weights.to(device=get_device())
         self.embedding = nn.Embedding.from_pretrained(weights, freeze=True)
         self.vocab = vocab

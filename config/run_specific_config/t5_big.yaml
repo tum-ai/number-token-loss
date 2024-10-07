@@ -1,0 +1,11 @@
+training_args:
+  trial: t5-big
+  special_name: t5-big
+  save_total_limit: 1
+  per_device_train_batch_size: 8
+  per_device_eval_batch_size: 8
+  report_to: none
+
+model_args:
+  config_name: t5-11b
+  model_name_or_path: google-t5/t5-11b

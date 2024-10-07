@@ -5,7 +5,9 @@ import torch
 import torch.nn as nn
 from src.encoding_decoding.numerical_encodings import FloatEncoding
 import copy
-from src.number_token_loss import NumberTokenLoss
+from src.loss_functions.number_token_loss import NumberTokenLoss
+
+# Set maximal value for normalization
 V_MAX = 3000000000
 
 
@@ -18,13 +20,17 @@ class T5RegressionModelRT(T5ForConditionalGeneration):
         "decoder.embed_tokens.number_embeddings.weight",
         "decoder.embed_tokens.number_embeddings.embedding.weight",
         "lm_head.weight",
+        'encoder.embed_tokens.weight',
+        'decoder.embed_tokens.weight',
+        'shared.weight',
+        'shared.token_embeddings.weight'
     ]
 
-    def __init__(self, config, number_token_loss: NumberTokenLoss = None):
+    def __init__(self, config, log_scale_embeddings: bool, number_token_loss: NumberTokenLoss = None):
         super().__init__(config)
-        super()._resize_token_embeddings(config.vocab_size)
+        super().resize_token_embeddings(config.vocab_size, pad_to_multiple_of=64 if torch.cuda.is_available() else 1)
         number_embeds = FloatEncoding(num_embeddings=config.vocab_size, embedding_dim=self.config.d_model,
-                                      vocab=config.added_vocab, vmax=V_MAX)
+                                      vocab=config.added_vocab, vmax=V_MAX, log_scale_embeddings=log_scale_embeddings)
         combined_embeddings = RTEmbeddings(self.shared, number_embeds)
         # Set the new embedding for encoder and decoder.
         self.set_input_embeddings(combined_embeddings)
@@ -74,16 +80,19 @@ class T5RegressionModelRT(T5ForConditionalGeneration):
         # If labels are provided, calculate the NumberTokenLoss
         if labels is not None and self.number_token_loss is not None:
             number_token_loss = self.number_token_loss.forward(outputs.logits, labels)
-            outputs.loss = (1.0 - self.number_token_loss.weight) * outputs.loss + \
-                        self.number_token_loss.weight * number_token_loss
+            # number_token_loss = torch.log10(number_token_loss + 1)
+            outputs["number_loss"] = number_token_loss
+            outputs["token_loss"] = outputs.loss
+            outputs.loss = outputs.loss + self.number_token_loss.weight * number_token_loss
         return outputs
 
 
 class RTEmbeddings(nn.Module):
     def __init__(self, token_embeddings, number_embeddings):
         super().__init__()
-        self.token_embeddings = copy.deepcopy(token_embeddings)
+        self.token_embeddings = token_embeddings
         self.number_embeddings = number_embeddings
+        self.weight = token_embeddings.weight
 
     def forward(self, input_ids):
         # Compute token embeddings

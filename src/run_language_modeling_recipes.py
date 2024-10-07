@@ -32,15 +32,13 @@ from transformers import (
 )
 from transformers.training_args import TrainingArguments
 
-from src.get_cooking_data import download_cooking
-from src.data import load_txt_dataset, load_txt_cooking_dataset
-from src.collators.rt_question_answer_collator import RtQuestionAnswerCLMCollator
+from src.data.get_cooking_data import download_cooking
+from src.data.data import load_txt_dataset, load_txt_cooking_dataset
 from src.collators.rt_cooking_recipes_collator import RtCookingRecipeCollator
 from src.collators.xval_cooking_recipes_collator import XvalCookingRecipeCollator
 from src.collators.xval_question_answer_collator import XvalQuestionAnswerCLMCollator
 from src.tokenizer.rt_tokenizer import RtTokenizer
 from src.tokenizer.xval_tokenizer import XvalTokenizer
-from src.trainer import CustomTrainer, get_trainer_dict
 from src.transformer_backbone.t5.t5_rt import T5RegressionModelRT
 from src.transformer_backbone.t5.t5_xval import T5RegressionModelXval
 from src.evaluation import CustomMetrics

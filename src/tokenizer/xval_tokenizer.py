@@ -1,14 +1,16 @@
 import itertools
+import logging
 import re
 from typing import List, Optional, Union, Tuple, Dict
 
 import numpy as np
+import torch
 from torch import TensorType
 from transformers.tokenization_utils_base import TruncationStrategy, BatchEncoding, TextInput, TextInputPair, \
     PreTokenizedInput, PreTokenizedInputPair, EncodedInput, EncodedInputPair
 from transformers.utils import PaddingStrategy
 
-from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
+from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer, NUMBER_REGEX
 
 
 class XvalTokenizer(NumberEncodingTokenizer):
@@ -19,12 +21,6 @@ class XvalTokenizer(NumberEncodingTokenizer):
         self.num_token = num_token
         self.num_token_id = self.convert_tokens_to_ids(num_token)
         self.model_input_names.append("number_embeddings")
-        
-        # TODO mask token should not be needed
-        mask_token = "[MASK]"
-        self.add_tokens([mask_token])
-        self.mask_token = mask_token
-        self.mask_token_id = self.convert_tokens_to_ids(mask_token)
 
     def get_num_token_ids(self):
         return [self.num_token_id]
@@ -32,8 +28,57 @@ class XvalTokenizer(NumberEncodingTokenizer):
     def get_num_tokens(self):
         return [self.num_token]
 
-    def decode_number_token(self, token, number: float = None):
+    def decode_number_token(self, token: str, number: float = None, ignore_order: bool = True) -> float:
         return number
+
+    def decode_into_human_readable(
+            self,
+            ids: Union[List[int], List[List[int]], "np.ndarray", "torch.Tensor"],
+            numbers: Union[List[int], List[List[int]], "np.ndarray", "torch.Tensor"] = None
+    ) -> Tuple[List[str], int, int]:
+        if isinstance(ids, torch.Tensor):
+            ids = ids.cpu().numpy()
+        if isinstance(numbers, torch.Tensor):
+            numbers = numbers.cpu().numpy()
+
+        numbers = list(map(lambda x: list(map(lambda y: self.tokenize(str(y)), x)), numbers))
+        decoded_ids = np.array(list(map(lambda sample: self.convert_ids_to_tokens(sample), ids)))
+        count_no_number_prediction_at_all = np.sum(np.all(ids != 32100, axis=1))
+
+        def replace_number_tokens_with_numbers(id, number, decoded_id):
+            return number if id in self.get_num_token_ids() else decoded_id
+
+        def flatten(lst):
+            flat_list = []
+            for item in lst:
+                if isinstance(item, list):
+                    flat_list.extend(flatten(item))
+                else:
+                    flat_list.append(item)
+            return flat_list
+
+        decoded_ids = [
+            list(map(lambda id, number, decoded_id: replace_number_tokens_with_numbers(id, number, decoded_id), ids_row,
+                     numbers_row, decoded_ids_row))
+            for ids_row, numbers_row, decoded_ids_row in zip(ids, numbers, decoded_ids)
+        ]
+        decoded_ids = list(map(flatten, decoded_ids))
+
+        # Remove padding tokens
+        decoded_ids = [list(filter(lambda x: x not in self.all_special_tokens, decoded_id)) for decoded_id in
+                       decoded_ids]
+
+        try:
+            decoded_ids = list(
+                map(lambda sample: self.convert_tokens_to_string(sample) if len(sample) else "", decoded_ids))
+        except Exception as e:
+            logging.error(f"Error converting tokens to string: {e} for tokens {decoded_ids}")
+            decoded_ids = ["" for _ in range(len(decoded_ids))]
+
+        decoded_ids = list(
+            map(lambda sample: self.convert_tokens_to_string(sample) if len(sample) else "", decoded_ids))
+
+        return decoded_ids, 0, count_no_number_prediction_at_all
 
     def _encode_plus(
             self,
@@ -417,6 +462,12 @@ class XvalTokenizer(NumberEncodingTokenizer):
         ############################
         number_locs = np.array(sequence) == self.num_token_id
         num_embed = np.ones(len(sequence)).astype(np.float32)  # Use float32 instead of float16
+
+        if num_embed[number_locs].shape[0] < len(first_numbers):
+            # truncate first numbers
+            logging.warning(f"Truncating first numbers: {first_numbers} to {len(num_embed[number_locs])} to fit in sequence")
+            first_numbers = first_numbers[:len(num_embed[number_locs])]
+        
         num_embed[number_locs] = first_numbers + pair_numbers if pair_numbers else first_numbers
         encoded_inputs["number_embeddings"] = num_embed.tolist()
         ############################
@@ -528,7 +579,6 @@ def extract(text, num_token="[NUM]"):
     # this regular expression is intended to match numerical values in various forms
     # like integers, floating-point numbers, or scientific notation, while avoiding
     # matching numbers that are part of strings.
-    pattern = r"(?<!\')-?\d+(\.\d+)?([eE][-+]?\d+)?(?!\'|\d)"
 
     numbers = []
 
@@ -536,7 +586,7 @@ def extract(text, num_token="[NUM]"):
         numbers.append(match.group())
         return "¬"
 
-    nonum_text = re.sub(pattern, replace, text)
+    nonum_text = re.sub(NUMBER_REGEX, replace, text)
     return compress_matrix(nonum_text).replace("¬", num_token), numbers
 
 
