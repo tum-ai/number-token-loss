@@ -1,6 +1,9 @@
 import os
 import re
-from typing import List
+from typing import List, Union, Tuple
+
+import numpy as np
+import torch
 
 from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 
@@ -15,15 +18,6 @@ class T5Custom_Tokenizer(NumberEncodingTokenizer):
 
         num_tokens = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
 
-        # TODO remove NEG token?
-        self.add_special_tokens({"additional_special_tokens": ["[NEG]"]})
-
-        # TODO mask token should not be needed
-        mask_token = "[MASK]"
-        self.add_tokens([mask_token])
-        self.mask_token = mask_token
-        self.mask_token_id = self.convert_tokens_to_ids(mask_token)
-
         self.num_tokens = num_tokens
         self.num_token_ids = [self.convert_tokens_to_ids(num_token) for num_token in num_tokens]
         self.embedding_dim = embedding_dim
@@ -35,7 +29,7 @@ class T5Custom_Tokenizer(NumberEncodingTokenizer):
     def get_num_tokens(self):
         return self.num_tokens
 
-    def decode_number_token(self, token):
+    def decode_number_token(self, token: str, ignore_order: bool = True) -> float:
         return float(token)
 
     def tokenize(self, text: str, add_special_tokens=False, **kwargs) -> List[str]:
@@ -49,4 +43,36 @@ class T5Custom_Tokenizer(NumberEncodingTokenizer):
             else:
                 out_list.append(token)
 
-        return out_list    
+        return out_list
+
+    def decode_into_human_readable(
+            self,
+            ids: Union[List[int], List[List[int]], "np.ndarray", "torch.Tensor"]
+    ) -> Tuple[List[str], int, int]:
+        decoded = self.batch_decode(ids, skip_special_tokens=True)
+        total_invalid_numbers, count_no_number_prediction_at_all = check_number_predictions(decoded)
+        return decoded, total_invalid_numbers, count_no_number_prediction_at_all
+
+
+def check_number_predictions(decoded_preds: List[str]) -> Tuple[int, int]:
+    # Greedily match potential numbers with optional signs, digits, commas, and dots. I assumed that there are no dates in the data
+    number_pattern = r'[+-]?[\d,.]*\d'
+
+    total_invalid_numbers = 0
+    count_no_number_prediction = 0
+
+    for pred in decoded_preds:
+        matches = re.findall(number_pattern, pred)
+
+        if not matches:
+            count_no_number_prediction += 1
+            continue
+
+        for match in matches:
+            try:
+                parsed_value = float(match)
+            except ValueError:
+                print(match)
+                total_invalid_numbers += 1
+
+    return total_invalid_numbers, count_no_number_prediction

@@ -1,0 +1,4 @@
+output_dir: ${model_args.model_name_or_path}
+do_only_eval: true
+per_device_eval_batch_size: 64
+report_to: none

@@ -28,18 +28,10 @@ class RtQuestionAnswerCLMCollator(DataCollatorForLanguageModeling):
         # Masking the answers
         answer_input_ids = answer_encodings['input_ids']
         labels = answer_input_ids.clone()
-
-        # Generate number_labels for easier evaluation
-        number_token_ids = self.tokenizer.get_num_token_ids()
-        label_num_mask = torch.isin(answer_input_ids, torch.tensor(number_token_ids, dtype=torch.long, device=answer_input_ids.device))
-        tokens = self.tokenizer.convert_ids_to_tokens(answer_input_ids[label_num_mask])
-        number_values = torch.tensor([encoding_to_number(token) for token in tokens], dtype=torch.float, device=answer_input_ids.device)
-        number_labels = torch.zeros_like(answer_input_ids, dtype=torch.float)
-        number_labels[label_num_mask] = number_values
+        labels[labels == self.tokenizer.pad_token_id] = -100
 
         return {
             'input_ids': input_ids,
             'attention_mask': attention_mask,
             'labels': labels,
-            "number_labels": number_labels
         }

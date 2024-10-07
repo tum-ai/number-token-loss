@@ -2,7 +2,7 @@ from transformers import T5ForConditionalGeneration
 from transformers.modeling_outputs import Seq2SeqLMOutput
 import torch
 from typing import Optional, Tuple, Union
-from src.number_token_loss import NumberTokenLoss
+from src.loss_functions.number_token_loss import NumberTokenLoss
 
 
 class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
@@ -55,6 +55,7 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
         # If labels are provided, calculate and combine the NumberTokenLoss
         if labels is not None and self.number_token_loss is not None:
             number_token_loss = self.number_token_loss.forward(outputs.logits, labels)
-            outputs.loss = (1.0 - self.number_token_loss.weight) * outputs.loss + \
-                           self.number_token_loss.weight * number_token_loss
+            outputs["number_loss"] = number_token_loss
+            outputs["token_loss"] = outputs.loss
+            outputs.loss = outputs.loss + self.number_token_loss.weight * number_token_loss
         return outputs

@@ -1,0 +1,17 @@
+defaults:
+  - _self_
+  - training_args: train
+  - model_args: vanilla_t5
+  - dataset_args: mathematics_dataset
+  - run_specific_config@_here_: config
+  - hydra_config@_here_: config
+
+# You can add any global configurations here
+training_args:
+  seed: 42
+  remove_unused_columns: false
+  load_best_model_at_end: true
+  eval_strategy: steps
+  batch_eval_metrics: true
+  metric_for_best_model: loss
+  greater_is_better: false

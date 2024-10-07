@@ -5,11 +5,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import CrossEntropyLoss
+import torch.nn.init as init
 from transformers import T5ForConditionalGeneration, LogitsProcessorList, StoppingCriteriaList, GenerationConfig
 from transformers.generation.streamers import BaseStreamer
 from transformers.generation.utils import GenerateNonBeamOutput, GenerateEncoderDecoderOutput, GenerateDecoderOnlyOutput
 from transformers.modeling_outputs import Seq2SeqLMOutput, BaseModelOutput
 from transformers.utils import logging, is_torch_fx_proxy, is_accelerate_available, ModelOutput
+
+from transformers.generation.beam_search import BeamScorer, BeamSearchScorer
+from transformers.generation.utils import GenerateBeamDecoderOnlyOutput, GenerateBeamEncoderDecoderOutput, _split_model_inputs, _split_model_outputs, stack_model_outputs
 
 from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 
@@ -18,19 +22,62 @@ if is_accelerate_available():
 
 logger = logging.get_logger(__name__)
 
+GenerateBeamOutput = Union[GenerateBeamDecoderOnlyOutput, GenerateBeamEncoderDecoderOutput]
+
+
+# Set maximal value for normalization 
+V_MAX = 3000000000
 
 class T5RegressionModelXval(T5ForConditionalGeneration):
-    def __init__(self, config, tokenizer: NumberEncodingTokenizer, dim_feedforward=1024, numhead_bias=True):
+
+    def __init__(
+            self,
+            config,
+            tokenizer: NumberEncodingTokenizer,
+            bigger_language_head: bool,
+            log_scale_embeddings: bool,
+            dim_feedforward=1024,
+            numhead_bias=True
+    ):
         super().__init__(config)
-        super()._resize_token_embeddings(config.vocab_size)
+        super().resize_token_embeddings(config.vocab_size, pad_to_multiple_of=64 if torch.cuda.is_available() else 1)
 
         self.tokenizer = tokenizer
+        self.log_scale_embeddings = log_scale_embeddings
+        self.bigger_language_head = bigger_language_head
+
+        if self.bigger_language_head:
+            self.lm_head = nn.Sequential(
+                nn.Linear(config.d_model, dim_feedforward, bias=False),
+                nn.GELU(),
+                nn.Linear(dim_feedforward, config.vocab_size, bias=False),
+            )
 
         self.num_head = nn.Sequential(
             nn.Linear(config.d_model, dim_feedforward, bias=numhead_bias),
             nn.GELU(),
             nn.Linear(dim_feedforward, 1, bias=numhead_bias),
         )
+
+        self.encoder_position_embed = nn.Embedding(512, config.d_model) # TODO not hardcode
+        self.decoder_position_embed = nn.Embedding(512, config.d_model)
+
+    def initialize_num_head_weights(self):
+        for layer in self.num_head:
+            if isinstance(layer, nn.Linear):
+                init.xavier_uniform_(layer.weight)
+                if layer.bias is not None:
+                    init.zeros_(layer.bias)
+
+        self.encoder_position_embed.weight.data.normal_(mean=0.0, std=0.02)
+        self.decoder_position_embed.weight.data.normal_(mean=0.0, std=0.02)
+
+        if self.bigger_language_head:
+            for layer in self.lm_head:
+                if isinstance(layer, nn.Linear):
+                    init.xavier_uniform_(layer.weight)
+                    if layer.bias is not None:
+                        init.zeros_(layer.bias)
 
     def forward(
             self,
@@ -75,7 +122,17 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
             if inputs_embeds is not None:
                 raise ValueError("inputs_embeds are not None")
             # Convert encoder inputs in embeddings if needed
-            inputs_embeds = self.shared(input_ids) * input_number_embeddings.unsqueeze(-1)
+            # Normalize embeddings
+            number_locs = input_ids == self.tokenizer.num_token_id
+            input_number_embeddings_scaled = input_number_embeddings.clone()
+            if self.log_scale_embeddings:
+                input_number_embeddings_scaled[number_locs] = torch.sign(input_number_embeddings_scaled[number_locs]) * torch.log10(torch.abs(input_number_embeddings_scaled[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
+            else:
+                input_number_embeddings_scaled[number_locs] = input_number_embeddings_scaled[number_locs] + 1
+
+            inputs_embeds = self.shared(input_ids) * input_number_embeddings_scaled.unsqueeze(-1)
+            inputs_embeds = inputs_embeds + self.encoder_position_embed.weight[: input_ids.shape[1]].unsqueeze(0)
+
             encoder_outputs = self.encoder(
                 attention_mask=attention_mask,
                 inputs_embeds=inputs_embeds,
@@ -127,7 +184,17 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
         if decoder_inputs_embeds is not None:
             raise ValueError("decoder_inputs_embeds are not None")
             # Convert encoder inputs in embeddings if needed
-        decoder_inputs_embeds = self.shared(decoder_input_ids) * decoder_number_embeddings.unsqueeze(-1)
+        # Normalize embeddings
+        number_locs = decoder_input_ids == self.tokenizer.num_token_id
+        decoder_number_embeddings_scaled = decoder_number_embeddings.clone()
+        if number_locs.any():
+            if self.log_scale_embeddings:
+                decoder_number_embeddings_scaled[number_locs] = torch.sign(decoder_number_embeddings_scaled[number_locs]) * torch.log10(torch.abs(decoder_number_embeddings_scaled[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
+            else:
+                decoder_number_embeddings_scaled[number_locs] = decoder_number_embeddings_scaled[number_locs] + 1
+        
+        decoder_inputs_embeds = self.shared(decoder_input_ids) * decoder_number_embeddings_scaled.unsqueeze(-1)
+        decoder_inputs_embeds = decoder_inputs_embeds + self.decoder_position_embed.weight[: decoder_input_ids.shape[1]].unsqueeze(0)
 
         # Decode
         decoder_outputs = self.decoder(
@@ -195,12 +262,27 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
 
         if number_labels is not None:
             num_mask = labels == self.tokenizer.convert_tokens_to_ids(self.tokenizer.num_token)
+
+            # Extract only the predictions and labels that correspond to number tokens
+            selected_preds = num_preds[num_mask]
+            selected_labels = number_labels[num_mask].view(-1, 1)
+
+            # Perform Z-score normalization on both predictions and labels
+            combined = torch.cat((selected_preds, selected_labels), dim=0)
+            mean = combined.mean(dim=0, keepdim=True)
+            std = combined.std(dim=0, keepdim=True) + 1e-6  # Add small value to avoid division by zero
+
+            normalized_preds = (selected_preds - mean) / std
+            normalized_labels = (selected_labels - mean) / std
+
             loss_num = F.mse_loss(
-                num_preds[num_mask],
-                number_labels[num_mask].view(-1, 1),
+                normalized_preds,
+                normalized_labels,
                 reduction="mean",
             )
-            loss = loss + loss_num
+            outputs["number_loss"] = loss_num
+            outputs["token_loss"] = outputs.loss
+            loss = (loss + loss_num) / 2
             outputs.loss = loss
 
         outputs["number_predictions"] = num_preds
@@ -216,7 +298,7 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
         Overwritten to also shift the input_number_embeddings.
         """
         decoder_start_token_id = self.config.decoder_start_token_id
-        decoder_start_number_embedding = 1
+        decoder_start_number_embedding = 1.0
         pad_token_id = self.config.pad_token_id
 
         if decoder_start_token_id is None:
@@ -296,7 +378,17 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
         #######################
         encoder_input_ids = encoder_kwargs.pop("input_ids", None)
         encoder_input_number_embeddings = model_kwargs.pop("input_number_embeddings", None)
-        encoder_kwargs["inputs_embeds"] = self.shared(encoder_input_ids) * encoder_input_number_embeddings.unsqueeze(-1)
+        
+        # Normalize embeddings
+        number_locs = encoder_input_ids == self.tokenizer.num_token_id
+        encoder_input_number_embeddings_scaled = encoder_input_number_embeddings.clone()
+        if self.log_scale_embeddings:
+            encoder_input_number_embeddings_scaled[number_locs] = torch.sign(encoder_input_number_embeddings_scaled[number_locs]) * torch.log10(torch.abs(encoder_input_number_embeddings_scaled[number_locs]) + 1) / (torch.log10(torch.tensor(V_MAX)) / 10)
+        else:
+            encoder_input_number_embeddings_scaled[number_locs] = encoder_input_number_embeddings_scaled[number_locs] + 1
+        
+        inputs_embeds = self.shared(encoder_input_ids) * encoder_input_number_embeddings_scaled.unsqueeze(-1)
+        encoder_kwargs["inputs_embeds"] = inputs_embeds + self.encoder_position_embed.weight[: encoder_input_ids.shape[1]].unsqueeze(0)
         #######################
         # Customized code end
         #######################
@@ -459,6 +551,7 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
         this_peer_finished = False
         unfinished_sequences = torch.ones(batch_size, dtype=torch.long, device=input_ids.device)
         model_kwargs = self._get_initial_cache_position(input_ids, model_kwargs)
+        output_numbers = model_kwargs.get("decoder_number_embeddings")
 
         while self._has_unfinished_sequences(this_peer_finished, synced_gpus, device=input_ids.device):
             # prepare model inputs
@@ -525,11 +618,12 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
             # finished sentences should have their next token be a padding token
             if has_eos_stopping_criteria:
                 next_tokens = next_tokens * unfinished_sequences + pad_token_id * (1 - unfinished_sequences)
-                next_number_embeddings = next_number_embeddings * unfinished_sequences + 1 * (1 - unfinished_sequences)
+                next_number_embeddings = next_number_embeddings * unfinished_sequences + 1.0 * (1 - unfinished_sequences)
 
             # update generated ids, model inputs, and length for next step
             input_ids = torch.cat([input_ids, next_tokens[:, None]], dim=-1)
-            model_kwargs["decoder_number_embeddings"] = torch.cat([model_kwargs["decoder_number_embeddings"], next_number_embeddings[:, None]], dim=-1)
+            output_numbers = torch.cat([output_numbers, next_number_embeddings[:, None]], dim=-1)
+            model_kwargs["decoder_number_embeddings"] = torch.ones_like(output_numbers)  # reset to 1 for next step
             #######################
             # Customized code end
             #######################
@@ -575,7 +669,350 @@ class T5RegressionModelXval(T5ForConditionalGeneration):
                     past_key_values=model_kwargs.get("past_key_values"),
                 )
         else:
-            return input_ids, model_kwargs.get("decoder_number_embeddings")
+            return input_ids, output_numbers
+
+        
+
+    def _beam_search(
+        self,
+        input_ids: torch.LongTensor,
+        beam_scorer: BeamScorer,
+        logits_processor: LogitsProcessorList,
+        stopping_criteria: StoppingCriteriaList,
+        generation_config: GenerationConfig,
+        synced_gpus: bool,
+        logits_warper: Optional[LogitsProcessorList] = None,
+        **model_kwargs,
+    ) -> Union[GenerateBeamOutput, torch.LongTensor]:
+        r"""
+        Generates sequences of token ids for models with a language modeling head using **beam search decoding** and
+        can be used for text-decoder, text-to-text, speech-to-text, and vision-to-text models.
+
+        Parameters:
+            input_ids (`torch.LongTensor` of shape `(batch_size, sequence_length)`):
+                The sequence used as a prompt for the generation.
+            beam_scorer (`BeamScorer`):
+                An derived instance of [`BeamScorer`] that defines how beam hypotheses are constructed, stored and
+                sorted during generation. For more information, the documentation of [`BeamScorer`] should be read.
+            logits_processor (`LogitsProcessorList`):
+                An instance of [`LogitsProcessorList`]. List of instances of class derived from [`LogitsProcessor`]
+                used to modify the prediction scores of the language modeling head applied at each generation step.
+            stopping_criteria (`StoppingCriteriaList`:
+                An instance of [`StoppingCriteriaList`]. List of instances of class derived from [`StoppingCriteria`]
+                used to tell if the generation loop should stop.
+            generation_config ([`~generation.GenerationConfig`]):
+                The generation configuration to be used as parametrization of the decoding method.
+            synced_gpus (`bool`):
+                Whether to continue running the while loop until max_length (needed for ZeRO stage 3)
+            logits_warper (`LogitsProcessorList`, *optional*):
+                An instance of [`LogitsProcessorList`]. List of instances of class derived from [`LogitsWarper`] used
+                to warp the prediction score distribution of the language modeling head applied before multinomial
+                sampling at each generation step. Only required with sampling strategies (i.e. `do_sample` is set in
+                `generation_config`)
+            model_kwargs:
+                Additional model specific kwargs will be forwarded to the `forward` function of the model. If model is
+                an encoder-decoder model the kwargs should include `encoder_outputs`.
+
+        Return:
+            [`generation.GenerateBeamDecoderOnlyOutput`], [`~generation.GenerateBeamEncoderDecoderOutput`] or
+            `torch.LongTensor`: A `torch.LongTensor` containing the generated tokens (default behaviour) or a
+            [`~generation.GenerateBeamDecoderOnlyOutput`] if `model.config.is_encoder_decoder=False` and
+            `return_dict_in_generate=True` or a [`~generation.GenerateBeamEncoderDecoderOutput`] if
+            `model.config.is_encoder_decoder=True`.
+        """
+        # init values
+        pad_token_id = generation_config.pad_token_id
+        eos_token_id = generation_config.eos_token_id
+        output_attentions = generation_config.output_attentions
+        output_hidden_states = generation_config.output_hidden_states
+        output_scores = generation_config.output_scores
+        output_logits = generation_config.output_logits
+        return_dict_in_generate = generation_config.return_dict_in_generate
+        sequential = generation_config.low_memory
+        do_sample = generation_config.do_sample
+        if do_sample is True and not isinstance(logits_warper, LogitsProcessorList):
+            raise ValueError(
+                "`do_sample` is set to `True`, `logits_warper` must be a `LogitsProcessorList` instance (it is "
+                f"{logits_warper})."
+            )
+
+        batch_size = len(beam_scorer._beam_hyps)
+        num_beams = beam_scorer.num_beams
+
+        batch_beam_size, cur_len = input_ids.shape
+        model_kwargs = self._get_initial_cache_position(input_ids, model_kwargs)
+
+        if num_beams * batch_size != batch_beam_size:
+            raise ValueError(
+                f"Batch dimension of `input_ids` should be {num_beams * batch_size}, but is {batch_beam_size}."
+            )
+
+        # init attention / hidden states / scores tuples
+        scores = () if (return_dict_in_generate and output_scores) else None
+        raw_logits = () if (return_dict_in_generate and output_logits) else None
+        beam_indices = (
+            tuple(() for _ in range(batch_beam_size)) if (return_dict_in_generate and output_scores) else None
+        )
+        decoder_attentions = () if (return_dict_in_generate and output_attentions) else None
+        cross_attentions = () if (return_dict_in_generate and output_attentions) else None
+        decoder_hidden_states = () if (return_dict_in_generate and output_hidden_states) else None
+
+        # if model is an encoder-decoder, retrieve encoder attention weights and hidden states
+        if return_dict_in_generate and self.config.is_encoder_decoder:
+            encoder_attentions = model_kwargs["encoder_outputs"].get("attentions") if output_attentions else None
+            encoder_hidden_states = (
+                model_kwargs["encoder_outputs"].get("hidden_states") if output_hidden_states else None
+            )
+
+        # initialise score of first beam with 0 and the rest with -1e9. This makes sure that only tokens
+        # of the first beam are considered to avoid sampling the exact same tokens across all beams.
+        beam_scores = torch.zeros((batch_size, num_beams), dtype=torch.float, device=input_ids.device)
+        beam_scores[:, 1:] = -1e9
+        beam_scores = beam_scores.view((batch_size * num_beams,))
+
+        this_peer_finished = False
+
+        decoder_prompt_len = input_ids.shape[-1]  # record the prompt length of decoder
+
+        while self._has_unfinished_sequences(this_peer_finished, synced_gpus, device=input_ids.device):
+            model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
+
+            # if sequential is True, split the input to batches of batch_size and run sequentially
+            if sequential:
+                if any(
+                    model_name in self.__class__.__name__.lower()
+                    for model_name in [
+                        "fsmt",
+                        "reformer",
+                        "bloom",
+                        "ctrl",
+                        "gpt_bigcode",
+                        "transo_xl",
+                        "xlnet",
+                        "cpm",
+                        "jamba",
+                    ]
+                ):
+                    raise RuntimeError(
+                        f"Currently generation for {self.__class__.__name__} is not supported "
+                        f"for `low_memory beam_search`. Please open an issue on GitHub if you need this feature."
+                    )
+
+                inputs_per_sub_batches = _split_model_inputs(
+                    model_inputs, split_size=batch_size, full_batch_size=batch_beam_size
+                )
+                outputs_per_sub_batch = [
+                    self(
+                        **inputs_per_sub_batch,
+                        return_dict=True,
+                        output_attentions=output_attentions,
+                        output_hidden_states=output_hidden_states,
+                    )
+                    for inputs_per_sub_batch in inputs_per_sub_batches
+                ]
+
+                outputs = stack_model_outputs(outputs_per_sub_batch)
+
+            else:  # Unchanged original behavior
+                outputs = self(
+                    **model_inputs,
+                    return_dict=True,
+                    output_attentions=output_attentions,
+                    output_hidden_states=output_hidden_states,
+                )
+
+            if synced_gpus and this_peer_finished:
+                cur_len = cur_len + 1
+                continue  # don't waste resources running the code we don't need
+
+            # Clone is needed to avoid keeping a hanging ref to outputs.logits which may be very large for first iteration
+            # (the clone itself is always small)
+            next_token_logits = outputs.logits[:, -1, :].clone()
+            next_token_scores = nn.functional.log_softmax(
+                next_token_logits, dim=-1
+            )  # (batch_size * num_beams, vocab_size)
+
+            next_token_scores_processed = logits_processor(input_ids, next_token_scores)
+            if do_sample:
+                next_token_scores_processed = logits_warper(input_ids, next_token_scores_processed)
+            next_token_scores = next_token_scores_processed + beam_scores[:, None].expand_as(
+                next_token_scores_processed
+            )
+
+            # Store scores, attentions and hidden_states when required
+            if return_dict_in_generate:
+                if output_scores:
+                    scores += (next_token_scores_processed,)
+                if output_logits:
+                    raw_logits += (next_token_logits,)
+                if output_attentions:
+                    decoder_attentions += (
+                        (outputs.decoder_attentions,) if self.config.is_encoder_decoder else (outputs.attentions,)
+                    )
+                    if self.config.is_encoder_decoder:
+                        cross_attentions += (outputs.cross_attentions,)
+                if output_hidden_states:
+                    decoder_hidden_states += (
+                        (outputs.decoder_hidden_states,)
+                        if self.config.is_encoder_decoder
+                        else (outputs.hidden_states,)
+                    )
+
+            # reshape for beam search
+            vocab_size = next_token_scores.shape[-1]
+            next_token_scores = next_token_scores.view(batch_size, num_beams * vocab_size)
+
+            # Beam token selection: pick 1 + eos_token_id.shape[0] next tokens for each beam so we have at least 1
+            # non eos token per beam.
+            n_eos_tokens = eos_token_id.shape[0] if eos_token_id is not None else 0
+            n_tokens_to_keep = max(2, 1 + n_eos_tokens) * num_beams
+            if do_sample:
+                probs = nn.functional.softmax(next_token_scores, dim=-1)
+                next_tokens = torch.multinomial(probs, num_samples=n_tokens_to_keep)
+                next_token_scores = torch.gather(next_token_scores, -1, next_tokens)
+                next_token_scores, _indices = torch.sort(next_token_scores, descending=True, dim=1)
+                next_tokens = torch.gather(next_tokens, -1, _indices)
+            else:
+                next_token_scores, next_tokens = torch.topk(
+                    next_token_scores, n_tokens_to_keep, dim=1, largest=True, sorted=True
+                )
+
+            next_indices = torch.div(next_tokens, vocab_size, rounding_mode="floor")
+            next_tokens = next_tokens % vocab_size
+
+            # stateless
+            beam_outputs = beam_scorer.process(
+                input_ids,
+                next_token_scores,
+                next_tokens,
+                next_indices,
+                pad_token_id=pad_token_id,
+                eos_token_id=eos_token_id,
+                beam_indices=beam_indices,
+                decoder_prompt_len=decoder_prompt_len,
+            )
+
+            beam_scores = beam_outputs["next_beam_scores"]
+            beam_next_tokens = beam_outputs["next_beam_tokens"]
+            beam_idx = beam_outputs["next_beam_indices"]
+            #######################
+            # Customized code start
+            #######################
+            # Next number_embeddings should be "number_predictions" from model output
+            next_number_embeddings = torch.where(
+                beam_next_tokens == self.tokenizer.get_num_token_ids()[0],
+                outputs["number_predictions"].squeeze(),
+                torch.ones_like(outputs["number_predictions"].squeeze()),
+                )
+            
+            # select the number embeddings corresponding to the selected beams
+            if not (next_number_embeddings[beam_next_tokens != self.tokenizer.get_num_token_ids()[0]] == 1).all():
+                raise Exception("Number embeddings should be 1 for non-number tokens")
+
+            input_ids = torch.cat([input_ids[beam_idx, :], beam_next_tokens.unsqueeze(-1)], dim=-1)
+            model_kwargs["decoder_number_embeddings"] = torch.cat([model_kwargs["decoder_number_embeddings"][beam_idx, :], next_number_embeddings.unsqueeze(-1)], dim=-1)
+
+            if not (model_kwargs["decoder_number_embeddings"][input_ids != self.tokenizer.get_num_token_ids()[0]] == 1).all():
+                raise Exception("Number embeddings should be 1 for non-number tokens")
+
+            #####################
+            # Customized code end
+            #####################
+            model_kwargs = self._update_model_kwargs_for_generation(
+                outputs,
+                model_kwargs,
+                is_encoder_decoder=self.config.is_encoder_decoder,
+            )
+
+            # This is needed to properly delete outputs.logits which may be very large for first iteration
+            # Otherwise a reference to outputs is kept which keeps the logits alive in the next iteration
+            # IMPORTANT: Note that this should appear BEFORE the call to _reorder_cache() to save the maximum memory
+            # (that way the memory peak does not include outputs.logits)
+            del outputs
+
+            if model_kwargs.get("past_key_values", None) is not None:
+                model_kwargs["past_key_values"] = self._temporary_reorder_cache(
+                    model_kwargs["past_key_values"], beam_idx
+                )
+
+            if return_dict_in_generate and output_scores:
+                beam_indices = tuple((beam_indices[beam_idx[i]] + (beam_idx[i],) for i in range(len(beam_indices))))
+
+            # increase cur_len
+            cur_len = cur_len + 1
+
+            if beam_scorer.is_done or all(stopping_criteria(input_ids, scores)):
+                this_peer_finished = True
+
+        sequence_outputs = beam_scorer.finalize(
+            input_ids,
+            beam_scores,
+            next_tokens,
+            next_indices,
+            pad_token_id=pad_token_id,
+            eos_token_id=eos_token_id,
+            max_length=stopping_criteria.max_length,
+            beam_indices=beam_indices,
+            decoder_prompt_len=decoder_prompt_len,
+        )
+
+        #######################
+        # Customized code start
+        #######################
+
+        # As the finalize method of the beam_scorer does not return the index of the highest scoring beam, we need to extract it manually again.
+        # Alternatively, the beam scorer and generate function could be overwritten to return the index of the highest scoring beam.
+        # The follwoing code is copied from the finalize method of the beam scorer and adapted to return the index of the highest scoring beam.
+        # The beams should already be finalized and we just have to retrieve the best again.
+
+        idx_final_beams = []
+        for i in range(batch_size):
+            beam_hyps_in_batch = beam_scorer._beam_hyps[i * beam_scorer.num_beam_groups : (i + 1) * beam_scorer.num_beam_groups]
+            candidate_beams = [beam for beam_hyp in beam_hyps_in_batch for beam in beam_hyp.beams]
+
+            # get the index of the highest scoring beam
+            best_beam_idx = max(enumerate(candidate_beams), key=lambda x: x[1][0])[0]
+            idx_final_beams.append(best_beam_idx+i*num_beams)
+
+        # extract the number embeddings corresponding to the highest scoring beams
+        sequence_outputs['number_embeddings'] = model_kwargs["decoder_number_embeddings"][idx_final_beams]
+
+        # if not (sequence_outputs["number_embeddings"][sequence_outputs['sequences'] != self.tokenizer.get_num_token_ids()[0]] == 1).all():
+        #     raise Exception("Number embeddings should be 1 for non-number tokens")
+
+        #######################
+        # Customized code end
+        #######################
 
 
+        if return_dict_in_generate:
+            if not output_scores:
+                sequence_outputs["sequence_scores"] = None
 
+            if self.config.is_encoder_decoder:
+                return GenerateBeamEncoderDecoderOutput(
+                    sequences=sequence_outputs["sequences"],
+                    sequences_scores=sequence_outputs["sequence_scores"],
+                    scores=scores,
+                    logits=raw_logits,
+                    beam_indices=sequence_outputs["beam_indices"],
+                    encoder_attentions=encoder_attentions,
+                    encoder_hidden_states=encoder_hidden_states,
+                    decoder_attentions=decoder_attentions,
+                    cross_attentions=cross_attentions,
+                    decoder_hidden_states=decoder_hidden_states,
+                    past_key_values=model_kwargs.get("past_key_values"),
+                )
+            else:
+                return GenerateBeamDecoderOnlyOutput(
+                    sequences=sequence_outputs["sequences"],
+                    sequences_scores=sequence_outputs["sequence_scores"],
+                    scores=scores,
+                    logits=raw_logits,
+                    beam_indices=sequence_outputs["beam_indices"],
+                    attentions=decoder_attentions,
+                    hidden_states=decoder_hidden_states,
+                    past_key_values=model_kwargs.get("past_key_values"),
+                )
+        else:
+            return sequence_outputs["sequences"], sequence_outputs["number_embeddings"]
