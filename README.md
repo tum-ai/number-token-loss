@@ -1,15 +1,26 @@
 # IBM Impact Project
 
-## Training
+## Setup
 
-- ssh to the server
-- Check which GPUs are available with `nvidia-smi`
-- Either attach to the docker container IBM_project (docker attach IBM_project) or run you own new container with
+### Via Python
+- Requires Python 3.9 or higher
+- Install the required packages
+    ```bash
+    pip install -r requirements.txt
+    ```
+- Log into wandb in the terminal
+    ```
+    wandb login
+    ```
+  Enter you username and auth token (wandb.ai/auth)
+
+### Via Docker
+
+- Start a docker container with the transformers image
     ```bash
     docker run --name container_name --gpus <device_number> -v /home/students/code/<name>/path_to_code:/app/data -it huggingface/transformers-pytorch-gpu
   ```
-
-- In container, interactively set the transformers library to version  4.42.4 and install wandb and hydra
+- Inside the container, interactively set the transformers library to version  4.42.4 and install wandb and hydra
     ```bash
     pip install transformers==4.42.4
     pip install wandb
@@ -20,6 +31,8 @@
     wandb login
     ```
     Enter you username and auth token (wandb.ai/auth)
+
+## Training
 - The main script is [src.run_language_modeling.py](src%2Frun_language_modeling.py).
   - The Arguments are configured via Hydra (Yadan, Omry. *Hydra - A framework for elegantly configuring complex applications*. Github, 2019. Available at: [https://github.com/facebookresearch/hydra](https://github.com/facebookresearch/hydra).)
   - Therefore the script can be called via 
