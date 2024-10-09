@@ -9,7 +9,8 @@ import numpy as np
 import typer
 from together import Together
 from tqdm import tqdm
-
+import datasets
+import math
 
 class LLM:
     def __init__(
@@ -30,7 +31,7 @@ class LLM:
     def _add_to_message_history(self, role: str, content: str):
         self.message_history.append({"role": role, "content": content})
 
-    def send_message(self, message: str, history: bool = True):
+    def send_message(self, message: str, history: bool = False):
         # Add user's message to the conversation history.
         self._add_to_message_history("user", message)
         response = self.client.chat.completions.create(
@@ -38,6 +39,7 @@ class LLM:
             messages=self.message_history,
             stream=True,
             temperature=self.temperature,
+            max_tokens=500,
         )
 
         # Process and stream the response.
@@ -144,13 +146,75 @@ def run_generating(
 
     print(f"Generation completed and saved to {output_file}")
 
+def parse_chunk(data_chunk, model, output_file):
+    invalid_count = 0
+    error_count = 0
+    wrong_answer_count = 0
+    with open(output_file, "a") as f:
+        for idx, (question,code,example) in tqdm(enumerate(zip(data_chunk['question'],data_chunk['code'],data_chunk['example'])), total=len(data_chunk['question'])):
+            namespace = {}
+            exec(code,{},namespace)
+            try:
+                answer = namespace['simple_math_problem']()
+            except:
+                error_count += 1
+                continue
+            if not isinstance(answer, (int, float)):
+                # Sometimes the answer code returns touples, lists, or strings. We skip these.
+                invalid_count += 1
+                continue
+            problem = 'EXAMPLE_ANSWER: '+example+' QUESTION: '+question + f" The answer is {answer}"
+            #problem = ' QUESTION: '+question
+            
+            try:
+                new_q = model(problem)
+            except:
+                error_count += 1
+                continue
+            
+            if new_q.find("incorrect") != -1 or new_q.find("not correct") != -1:
+                wrong_answer_count += 1
+                continue
+            new_q = new_q + f"\n#### {round(answer, 4)}"
+            out_example = {"question": question, "answer": new_q}
+
+            with lock:
+                f.write(json.dumps(out_example) + "\n")
+                f.flush()
+
+
+    print(f"Skipped {invalid_count} questions with invalid answers. The Error count is {error_count}. Found {wrong_answer_count} incorrect answers.")
+
+def run_parsing(
+    data, n_proc, model,output_file: str = "train_aug.jsonl"
+):  
+    
+    questions = data['question']
+    code = data['code']
+    example = data['example']
+    data_chunks = []
+    chunk_size = -(-len(data['question']) // n_proc) 
+    for i in range(n_proc):
+        chunk = {'question': questions[i*chunk_size:(i+1)*chunk_size],
+                    'code': code[i*chunk_size:(i+1)*chunk_size],
+                    'example': example[i*chunk_size:(i+1)*chunk_size]}
+        data_chunks.append(chunk)
+    with multiprocessing.Pool(processes=n_proc) as pool:
+        results = pool.starmap(
+            parse_chunk, [(chunk, model, output_file) for chunk in data_chunks]
+        )
+    
+    print(f"Parsing completed and saved to {output_file}")
+    
+    
+
 
 app = typer.Typer()
 
 
 def run(
     mode: str = typer.Option(
-        "paraphrase",
+        "parse_tinygsm",
         help="Mode of operation, options are: `paraphrase` and `generate`.",
     ),
     n_aug: int = typer.Option(
@@ -160,7 +224,7 @@ def run(
         1, help="Number of samples to generate. Only used for generate mode"
     ),
     output_file: str = typer.Option(
-        "train_aug.jsonl", help="Output file for augmented data"
+        "out.jsonl", help="Output file for augmented data"
     ),
 ):
     if mode == "paraphrase":
@@ -176,19 +240,46 @@ def run(
             temperature=0.7,
             model="meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo",
         )
+    elif mode == "parse_tinygsm":
+        model = LLM(
+            token=os.getenv("TOGETHER_API_KEY"),
+            task_prompt="You will see one example answer from a math dataset for a NLP model and a task question including the answer. Your task is to reformulate the answer to the question in the style of the given example answer. If you notice that the given answer is is incorrect, say so, if it is correct, do not explicitly mention it. Do NOT include newlines in the rewritten answer. Your example will be used as ground truth to train a NLP model so make sure to value correctness of the example higher than creativity. Limit response to 300 words MAX.",
+            temperature=0.7,
+            model="meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+        )
+
     else:
         raise ValueError(f"Unknown mode {mode}")
 
-    data_root = "data/grade-school-math/grade_school_math/data"
-    with open(f"{data_root}/train_clean.jsonl", "r") as f:
-        data = [json.loads(line) for line in f]
+    if mode == "paraphrase" or mode == "generate":
+        data_root = "data/grade-school-math/grade_school_math/data"
+        with open(f"{data_root}/train_clean.jsonl", "r") as f:
+            data = [json.loads(line) for line in f]
+    elif mode == "parse_tinygsm":
+        data_root = "."
+        with open(f"{data_root}/train_clean.jsonl", "r") as f:
+            data = [json.loads(line)['answer'].split("#### ")[0][:-2] for line in f]
+    else:
+        raise ValueError(f"Unknown mode {mode}")
+    
+    if mode == "parse_tinygsm":
+        dataset = datasets.load_from_disk("tinygsm")
+        dataset = dataset["train"].shuffle(seed=42)[120000:145000]
+        random_indices = np.random.randint(0, len(data), len(dataset['question']))
+        dataset['example'] = [data[i] for i in random_indices]
 
-    n_proc = multiprocessing.cpu_count()
+    #n_proc = multiprocessing.cpu_count()
+    n_proc = 6
 
     if mode == "paraphrase":
         run_paraphrasing(
             data, n_proc, model, n_aug=n_aug, output_file=f"{data_root}/{output_file}"
         )
+    if mode == "parse_tinygsm":
+        run_parsing(
+            dataset, n_proc, model, output_file=f"{data_root}/{output_file}"
+        )   
+
     else:
         run_generating(
             data, n_proc, n_samples, model, output_file=f"{data_root}/{output_file}"
