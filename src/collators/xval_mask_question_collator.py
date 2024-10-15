@@ -3,8 +3,7 @@ from typing import List, Union, Dict
 import torch
 from transformers import DataCollatorForLanguageModeling
 
-def signed_log(x):
-    return torch.sign(x) * torch.log1p(torch.abs(x))
+from src.utils.numerical_operations import signed_log
 
 
 class XvalQuestionAnswerCLMCollator(DataCollatorForLanguageModeling):

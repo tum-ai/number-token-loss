@@ -12,6 +12,7 @@ from transformers import EvalPrediction
 
 from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer, NUMBER_REGEX
 from src.tokenizer.t5custom_tokenizer import check_number_predictions
+from src.utils.numerical_operations import inverse_signed_log
 
 PADDING_TOKEN = -100
 MASKED_OUT = -1
@@ -190,6 +191,8 @@ class CustomMetrics:
                 print(sanity_invalid_number_prediction)
                 print(sanity_no_number_prediction)
         else:
+            labels = inverse_signed_log(labels)
+            logits = inverse_signed_log(logits)
             decoded_labels = [str("{0:.12f}".format(label).rstrip('0').rstrip('.')) for label in labels.squeeze(-1).tolist()]
             decoded_preds = [str("{0:.12f}".format(logit).rstrip('0').rstrip('.')) for logit in logits.squeeze(-1).tolist()]
             count_invalid_number_prediction = 0
