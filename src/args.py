@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Literal
 
 from transformers import (
     Seq2SeqTrainingArguments, MODEL_WITH_LM_HEAD_MAPPING
@@ -30,6 +30,12 @@ class TrainingArguments(Seq2SeqTrainingArguments):
         default=None,
         metadata={
             "help": "Special name for this run"
+        },
+    )
+    language_modelling: Literal["clm", "mlm"] = field(
+        default="clm",
+        metadata={
+            "help": "Choose either clm or mlm for language modelling"
         },
     )
 
