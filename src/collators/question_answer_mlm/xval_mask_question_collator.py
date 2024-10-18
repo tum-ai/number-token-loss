@@ -6,7 +6,7 @@ from transformers import DataCollatorForLanguageModeling
 from src.utils.numerical_operations import signed_log
 
 
-class XvalQuestionAnswerCLMCollator(DataCollatorForLanguageModeling):
+class XvalMaskedQuestionAnswerCollator(DataCollatorForLanguageModeling):
     def __init__(self, tokenizer):
         super().__init__(tokenizer, mlm=False)
         self.tokenizer = tokenizer

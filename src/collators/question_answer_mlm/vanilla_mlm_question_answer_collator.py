@@ -1,14 +1,12 @@
 from typing import Dict, List, Union
 
-import numpy as np
 import torch
 from transformers import DataCollatorForLanguageModeling
 
 from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
-from src.encoding_decoding.numerical_encodings import encoding_to_number
 
 
-class RtQuestionAnswerCLMCollator(DataCollatorForLanguageModeling):
+class VanillaMaskedQuestionAnswerCollator(DataCollatorForLanguageModeling):
     def __init__(self, tokenizer: NumberEncodingTokenizer):
         super().__init__(tokenizer, mlm=False)
         self.tokenizer: NumberEncodingTokenizer = tokenizer
@@ -19,19 +17,23 @@ class RtQuestionAnswerCLMCollator(DataCollatorForLanguageModeling):
         questions = [example['question'] for example in examples]
         answers = [example['answer'] for example in examples]
 
-        question_encodings = self.tokenizer(questions, padding=True, truncation=True, return_tensors="pt")
+        masked_answer = self.tokenizer.additional_special_tokens[0]
+        answers = [masked_answer + " " + answer for answer in answers]
+
+        text = [question + " " + masked_answer for question in questions]
+
+        encodings = self.tokenizer(text, padding=True, truncation=True, return_tensors="pt")
         answer_encodings = self.tokenizer(answers, padding=True, truncation=True, return_tensors="pt")
 
-        input_ids = question_encodings['input_ids']
-        attention_mask = question_encodings['attention_mask']
+        input_ids = encodings['input_ids']
+        attention_mask = encodings['attention_mask']
 
         # Masking the answers
-        answer_input_ids = answer_encodings['input_ids']
-        labels = answer_input_ids.clone()
+        labels = answer_encodings['input_ids']
         labels[labels == self.tokenizer.pad_token_id] = -100
 
         return {
             'input_ids': input_ids,
             'attention_mask': attention_mask,
-            'labels': labels,
+            'labels': labels
         }
