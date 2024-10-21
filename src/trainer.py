@@ -18,7 +18,7 @@ from transformers.models.auto.modeling_auto import MODEL_FOR_CAUSAL_LM_MAPPING_N
 from transformers.trainer import _is_peft_model, TRAINER_STATE_NAME
 from transformers.trainer_callback import ExportableState
 from transformers.trainer_pt_utils import EvalLoopContainer, find_batch_size, IterableDatasetShard, \
-    get_model_param_count
+    get_model_param_count, nested_detach
 from transformers.trainer_utils import EvalLoopOutput, has_length, EvalPrediction, denumpify_detensorize, \
     HPSearchBackend, TrainOutput, speed_metrics
 from transformers.training_args import OptimizerNames, ParallelMode
@@ -58,6 +58,7 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
     It overrides the prediction_step method in order to
         - additionally return next_token_prediction_logits for calculating perplexity
         - also handle the number_predictions from xval as they are an additional output of the model
+        - log both normal token loss and number token loss
     """
 
     def prediction_step(
@@ -76,9 +77,15 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
         labels are the token labels, unless for xval where the labels is a tuple of (token_labels, number_labels)
         """
         if not self.args.predict_with_generate or prediction_loss_only:
-            return super().prediction_step(
+            #######################
+            # Customized code start
+            #######################
+            return self.prediction_step_without_generation(
                 model, inputs, prediction_loss_only=prediction_loss_only, ignore_keys=ignore_keys
             )
+            #######################
+            # Customized code end
+            #######################
 
         has_labels = "labels" in inputs
         inputs = self._prepare_inputs(inputs)
@@ -213,6 +220,132 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
     ########################
     # Customized code end
     ########################
+
+    def prediction_step_without_generation(
+            self,
+            model: nn.Module,
+            inputs: Dict[str, Union[torch.Tensor, Any]],
+            prediction_loss_only: bool,
+            ignore_keys: Optional[List[str]] = None,
+    ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
+        """
+        Overwritten from transformer.Trainer.prediction_step to log both normal token loss and number token loss.
+        """
+
+        has_labels = False if len(self.label_names) == 0 else all(inputs.get(k) is not None for k in self.label_names)
+        # For CLIP-like models capable of returning loss values.
+        # If `return_loss` is not specified or being `None` in `inputs`, we check if the default value of `return_loss`
+        # is `True` in `model.forward`.
+        return_loss = inputs.get("return_loss", None)
+        if return_loss is None:
+            return_loss = self.can_return_loss
+        loss_without_labels = True if len(self.label_names) == 0 and return_loss else False
+
+        inputs = self._prepare_inputs(inputs)
+        if ignore_keys is None:
+            if hasattr(self.model, "config"):
+                ignore_keys = getattr(self.model.config, "keys_to_ignore_at_inference", [])
+            else:
+                ignore_keys = []
+
+        # labels may be popped when computing the loss (label smoothing for instance) so we grab them first.
+        if has_labels or loss_without_labels:
+            labels = nested_detach(tuple(inputs.get(name) for name in self.label_names))
+            if len(labels) == 1:
+                labels = labels[0]
+        else:
+            labels = None
+
+        with torch.no_grad():
+            if is_sagemaker_mp_enabled():
+                raw_outputs = smp_forward_only(model, inputs)
+                if has_labels or loss_without_labels:
+                    if isinstance(raw_outputs, dict):
+                        loss_mb = raw_outputs["loss"]
+                        logits_mb = tuple(v for k, v in raw_outputs.items() if k not in ignore_keys + ["loss"])
+                    else:
+                        loss_mb = raw_outputs[0]
+                        logits_mb = raw_outputs[1:]
+
+                    loss = loss_mb.reduce_mean().detach().cpu()
+                    logits = smp_nested_concat(logits_mb)
+                else:
+                    loss = None
+                    if isinstance(raw_outputs, dict):
+                        logits_mb = tuple(v for k, v in raw_outputs.items() if k not in ignore_keys)
+                    else:
+                        logits_mb = raw_outputs
+                    logits = smp_nested_concat(logits_mb)
+            else:
+                if has_labels or loss_without_labels:
+                    with self.compute_loss_context_manager():
+                        loss, outputs = self.compute_loss(model, inputs, return_outputs=True)
+
+                    #######################
+                    # Customized code start
+                    #######################
+                    if isinstance(loss, tuple):
+                        loss, token_loss, number_loss = loss
+                    else:
+                        token_loss = None
+                        number_loss = None
+                        #######################
+                        # Customized code end
+                        #######################
+
+                    loss = loss.mean().detach()
+
+                    #######################
+                    # Customized code start
+                    #######################
+                    if token_loss is not None and number_loss is not None:
+                        token_loss = token_loss.mean().detach()
+                        number_loss = number_loss.mean().detach()
+                        loss = (loss, token_loss, number_loss)
+                    #######################
+                    # Customized code end
+                    #######################
+
+
+                    if isinstance(outputs, dict):
+                        #######################
+                        # Customized code start
+                        #######################
+                        logits = outputs["logits"]
+                        number_predictions = outputs.get("number_predictions", None)
+                        #######################
+                        # Customized code end
+                        #######################
+                    else:
+                        logits = outputs[1:]
+                else:
+                    loss = None
+                    with self.compute_loss_context_manager():
+                        outputs = model(**inputs)
+                    if isinstance(outputs, dict):
+                        logits = tuple(v for k, v in outputs.items() if k not in ignore_keys)
+                    else:
+                        logits = outputs
+                    if self.args.past_index >= 0:
+                        self._past = outputs[self.args.past_index - 1]
+
+        if prediction_loss_only:
+            return (loss, None, None)
+
+        logits = nested_detach(logits)
+
+        #######################
+        # Customized code start
+        #######################
+        predictions = logits.argmax(-1)
+        if number_predictions is not None:
+            predictions = (predictions, number_predictions.detach())
+        logits = (logits, predictions)
+        #######################
+        # Customized code end
+        #######################
+
+        return (loss, logits, labels)
 
     def evaluation_loop(
             self,

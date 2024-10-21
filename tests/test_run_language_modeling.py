@@ -4,6 +4,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from typing import Literal, List
 from unittest import mock
 
 import numpy as np
@@ -39,7 +40,7 @@ class TestRunLanguageModeling(unittest.TestCase):
             dataset_name="gsm8k",  # Using gsm8k for faster tests
         )
 
-    def generate_training_args(self, output_dir, do_only_eval=False):
+    def generate_training_args(self, output_dir, do_only_eval=False, language_modelling: Literal["clm", "mlm"] = "clm"):
         return TrainingArguments(
             output_dir=output_dir,
             overwrite_output_dir=True,
@@ -55,6 +56,7 @@ class TestRunLanguageModeling(unittest.TestCase):
             remove_unused_columns=False,
             batch_eval_metrics=True,
             do_only_eval=do_only_eval,
+            language_modelling=language_modelling,
         )
 
     def mock_load_json_dataset(self, path):
@@ -81,80 +83,92 @@ class TestRunLanguageModeling(unittest.TestCase):
         log_scale_embeddings_options = [True, False]
         model_names_or_paths = [None, "google-t5/t5-small"]
         xval_bigger_language_heads = [True, False]
+        language_modelling_options: List[Literal["clm", "mlm"]] = ["mlm", "clm"]
+
 
         for number_encoding in number_encodings:
             for number_token_loss in number_token_losses:
                 for log_scale_embeddings in log_scale_embeddings_options:
                     for model_name_or_path in model_names_or_paths:
                         for xval_bigger_language_head in xval_bigger_language_heads:
+                            for language_modelling in language_modelling_options:
 
-                            # Skip invalid combinations
-                            if number_encoding in ["xval", "none_regression_head"] and number_token_loss:
-                                continue  # NumberTokenLoss is only applicable when number_encoding is not 'xval'
+                                # Skip invalid combinations
+                                if number_encoding in ["xval", "none_regression_head"] and number_token_loss:
+                                    continue  # NumberTokenLoss is only applicable when number_encoding is not 'xval'
 
-                            if number_encoding != "xval" and xval_bigger_language_head:
-                                continue
+                                if number_encoding != "xval" and xval_bigger_language_head:
+                                    continue
 
-                            if number_encoding in ["none", "none_regression_head"] and log_scale_embeddings:
-                                continue  # Log scaling is only applicable for 'rt' and 'xval' encodings
+                                if number_encoding in ["none"] and log_scale_embeddings:
+                                    continue  # Log scaling is only applicable for 'rt' and 'xval' encodings
+                                if language_modelling == "clm" and number_encoding == "none_regression_head":
+                                    continue  # CLM is not supported with none_regression_head
 
-                            checkpoint_dir = os.path.join(self.temp_dir, "checkpoint-10")
+                                checkpoint_dir = os.path.join(self.temp_dir, "checkpoint-10")
 
-                            # Prepare arguments
-                            model_training_args = self.generate_model_args(
-                                number_encoding=number_encoding,
-                                number_token_loss=number_token_loss,
-                                log_scale_embeddings=log_scale_embeddings,
-                                model_name_or_path=model_name_or_path,
-                            )
+                                # Prepare arguments
+                                model_training_args = self.generate_model_args(
+                                    number_encoding=number_encoding,
+                                    number_token_loss=number_token_loss,
+                                    log_scale_embeddings=log_scale_embeddings,
+                                    model_name_or_path=model_name_or_path,
+                                )
 
-                            training_args = self.generate_training_args(output_dir=self.temp_dir)
-                            dataset_args = self.generate_dataset_args()
-                            model_eval_args = self.generate_model_args(
-                                number_encoding=number_encoding,
-                                number_token_loss=number_token_loss,
-                                log_scale_embeddings=log_scale_embeddings,
-                                model_name_or_path=checkpoint_dir,
-                            )
-                            eval_args = self.generate_training_args(output_dir=self.temp_dir, do_only_eval=True)
+                                training_args = self.generate_training_args(
+                                    output_dir=self.temp_dir,
+                                    language_modelling=language_modelling
+                                )
+                                dataset_args = self.generate_dataset_args()
+                                model_eval_args = self.generate_model_args(
+                                    number_encoding=number_encoding,
+                                    number_token_loss=number_token_loss,
+                                    log_scale_embeddings=log_scale_embeddings,
+                                    model_name_or_path=checkpoint_dir,
+                                )
+                                eval_args = self.generate_training_args(
+                                    output_dir=self.temp_dir,
+                                    do_only_eval=True,
+                                    language_modelling=language_modelling
+                                )
 
-                            # Run training
-                            with self.subTest(number_encoding=number_encoding,
-                                              number_token_loss=number_token_loss,
-                                              log_scale_embeddings=log_scale_embeddings):
-                                try:
-                                    eval_results_expected, _ = run_language_modeling(
-                                        model_args=model_training_args,
-                                        training_args=training_args,
-                                        dataset_args=dataset_args,
-                                    )
-                                except Exception as e:
-                                    logging.error(f"Training failed with exception: {e}", exc_info=True)
-                                    self.fail(f"Training failed with exception: {e}")
+                                # Run training
+                                with self.subTest(number_encoding=number_encoding,
+                                                  number_token_loss=number_token_loss,
+                                                  log_scale_embeddings=log_scale_embeddings):
+                                    try:
+                                        eval_results_expected, _ = run_language_modeling(
+                                            model_args=model_training_args,
+                                            training_args=training_args,
+                                            dataset_args=dataset_args,
+                                        )
+                                    except Exception as e:
+                                        logging.error(f"Training failed with exception: {e}", exc_info=True)
+                                        self.fail(f"Training failed with exception: {e}")
 
-                                # Check if checkpoint is saved
+                                    # Check if checkpoint is saved
 
-                                self.assertTrue(os.path.isdir(checkpoint_dir), "Checkpoint directory was not created.")
+                                    self.assertTrue(os.path.isdir(checkpoint_dir), "Checkpoint directory was not created.")
 
-                                try:
-                                    eval_results_val, eval_results_test = run_language_modeling(
-                                        model_args=model_eval_args,
-                                        training_args=eval_args,
-                                        dataset_args=dataset_args,
-                                    )
-                                except Exception as e:
-                                    logging.error(f"Loading model from checkpoint failed with exception: {e}", exc_info=True)
-                                    self.fail(f"Loading model from checkpoint failed with exception: {e}")
+                                    try:
+                                        eval_results_val, eval_results_test = run_language_modeling(
+                                            model_args=model_eval_args,
+                                            training_args=eval_args,
+                                            dataset_args=dataset_args,
+                                        )
+                                    except Exception as e:
+                                        logging.error(f"Loading model from checkpoint failed with exception: {e}", exc_info=True)
+                                        self.fail(f"Loading model from checkpoint failed with exception: {e}")
 
-                                # Clean up checkpoint dir for next iteration
-                                shutil.rmtree(checkpoint_dir)
+                                    # Clean up checkpoint dir for next iteration
+                                    shutil.rmtree(checkpoint_dir)
 
-                                # assert equal or both nan
-                                np.testing.assert_allclose(eval_results_expected["eval_MAE"], eval_results_val["eval_MAE"], equal_nan=True, err_msg="Validation MAE results do not match.")
-                                self.assertEqual(eval_results_expected["eval_token_perplexity"], eval_results_val["eval_token_perplexity"], "Validation perplexity results do not match.")
+                                    # assert equal or both nan
+                                    np.testing.assert_allclose(eval_results_expected["eval_MAE"], eval_results_val["eval_MAE"], equal_nan=True, err_msg="Validation MAE results do not match.")
+                                    self.assertEqual(eval_results_expected["eval_token_perplexity"], eval_results_val["eval_token_perplexity"], "Validation perplexity results do not match.")
 
-                                np.testing.assert_allclose(eval_results_expected["eval_MAE"], eval_results_test["eval_MAE"], equal_nan=True, err_msg="Test MAE results do not match.")
-                                self.assertEqual(eval_results_expected["eval_token_perplexity"], eval_results_test["eval_token_perplexity"], "Test perplexity results do not match.")
+                                    np.testing.assert_allclose(eval_results_expected["eval_MAE"], eval_results_test["eval_MAE"], equal_nan=True, err_msg="Test MAE results do not match.")
+                                    self.assertEqual(eval_results_expected["eval_token_perplexity"], eval_results_test["eval_token_perplexity"], "Test perplexity results do not match.")
 
 
     @mock.patch('src.run_language_modeling.load_json_dataset')

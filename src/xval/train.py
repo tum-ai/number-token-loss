@@ -1,29 +1,19 @@
 import os
 
 import torch
-from torch import optim
-from datasets import DatasetDict
-from torch.utils.data import DataLoader
 import torch.nn.functional as F
-
+import wandb
+from torch import optim
+from torch.utils.data import DataLoader
 from tqdm import tqdm
-import matplotlib.pyplot as plt
-import pandas as pd
 
+from .xval_mask_question_collator import XvalMaskedQuestionAnswerCollator
+from src.data.data import load_txt_dataset
 from src.evaluation import CustomMetrics
+from src.tokenizer.xval_tokenizer import XvalTokenizer
+from src.utils.numerical_operations import inverse_signed_log
 # Where the model and collator is defined
 from src.xval import numformer
-
-from src.data import load_txt_dataset
-from src.tokenizer.xval_tokenizer import XvalTokenizer
-from src.collators.xval_mask_question_collator import XvalQuestionAnswerCLMCollator
-
-import wandb
-
-
-def inverse_signed_log(x):
-    return torch.sign(x) * (torch.exp(torch.abs(x)) - 1)
-
 
 train_data_path = 'data/mathematics_dataset-v1.0/train.txt'
 eval_data_path = 'data/mathematics_dataset-v1.0/val.txt'
@@ -54,7 +44,7 @@ mask_token_id = tokenizer.additional_special_tokens_ids[0]
 epochs = 10000
 
 # Define the masked xVal collator which takes samples of unequal length and masks out both the token_ids and the numbers.
-collator = XvalQuestionAnswerCLMCollator(tokenizer)
+collator = XvalMaskedQuestionAnswerCollator(tokenizer)
 
 train_loader = DataLoader(
     train_dataset,

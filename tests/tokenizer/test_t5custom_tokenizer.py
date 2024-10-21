@@ -1,5 +1,7 @@
 import unittest
 
+import transformers
+
 from src.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
 
 
@@ -79,6 +81,56 @@ class TestEvaluationMethods(unittest.TestCase):
         self.assertEqual(decoded, expected_result)
         self.assertEqual(count_invalid_number_prediction, 1)
         self.assertEqual(count_no_number_prediction, 1)
+
+    def test_encoding_decoding_special_tokens(self):
+        special_token = self.tokenizer.additional_special_tokens[0]
+        sentence_end_token = self.tokenizer.eos_token
+        pad_token = self.tokenizer.pad_token
+        texts = [
+            f"{special_token} 13.87",
+            f"{special_token} some text",
+        ]
+
+        expected_result_no_skipping = [
+            f"{special_token} 13.87{sentence_end_token}",
+            f"{special_token} some text{sentence_end_token}{pad_token}{pad_token}{pad_token}{pad_token}",
+        ]
+        expected_result_skip_special_tokens = [
+            "13.87",
+            "some text",
+        ]
+
+        result = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
+        decoded_no_skipping = self.tokenizer.batch_decode(result["input_ids"], skip_special_tokens=False)
+        decoded_skip_special_tokens = self.tokenizer.batch_decode(result["input_ids"], skip_special_tokens=True)
+
+        self.assertEqual(decoded_no_skipping, expected_result_no_skipping)
+        self.assertEqual(decoded_skip_special_tokens, expected_result_skip_special_tokens)
+
+    def test_encoding_decoding_special_tokens_vanilla_tokenizer(self):
+        vanilla_tokenizer = transformers.AutoTokenizer.from_pretrained("t5-small")
+        special_token = vanilla_tokenizer.additional_special_tokens[0]
+        sentence_end_token = vanilla_tokenizer.eos_token
+        texts = [
+            f"{special_token}13.87",
+            f"{special_token}some text",
+        ]
+
+        expected_result_no_skipping = [
+            f"{special_token} 13.87{sentence_end_token}",
+            f"{special_token} some text{sentence_end_token}",
+        ]
+        expected_result_skip_special_tokens = [
+            "13.87",
+            "some text",
+        ]
+
+        result = vanilla_tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
+        decoded_no_skipping = vanilla_tokenizer.batch_decode(result["input_ids"], skip_special_tokens=False)
+        decoded_skip_special_tokens = vanilla_tokenizer.batch_decode(result["input_ids"], skip_special_tokens=True)
+
+        self.assertEqual(decoded_no_skipping, expected_result_no_skipping)
+        self.assertEqual(decoded_skip_special_tokens, expected_result_skip_special_tokens)
 
 
 if __name__ == "__main__":
