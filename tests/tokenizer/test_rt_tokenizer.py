@@ -148,6 +148,39 @@ class TestEvaluationMethods(unittest.TestCase):
         self.assertEqual(count_invalid_number_prediction, 0)
         self.assertEqual(count_no_number_prediction, 1)
 
+    def test_encoding_decoding_special_tokens(self):
+        special_token = self.tokenizer.additional_special_tokens[0]
+        sentence_end_token = self.tokenizer.eos_token
+        pad_token = self.tokenizer.pad_token
+        texts = [
+            f"{special_token} 13.87",
+            f"{special_token} some text",
+        ]
+
+        expected_result_no_skipping = [
+            f'{special_token} _1_1_ _3_0_ _8_-1_ _7_-2_ {sentence_end_token}',
+            f'{special_token} some text{sentence_end_token}{pad_token}{pad_token}'
+        ]
+
+        expected_result_skip_special_tokens = [
+            '_1_1_ _3_0_ _8_-1_ _7_-2_',
+            'some text'
+        ]
+
+        expected_result_human_readable = [
+            '13.87',
+            'some text',
+        ]
+
+        result = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
+        decoded_no_skipping = self.tokenizer.batch_decode(result["input_ids"], skip_special_tokens=False)
+        decoded_skip_special_tokens = self.tokenizer.batch_decode(result["input_ids"], skip_special_tokens=True)
+        result_human_readable, _, _ = self.tokenizer.decode_into_human_readable(result["input_ids"])
+
+        self.assertEqual(decoded_no_skipping, expected_result_no_skipping)
+        self.assertEqual(decoded_skip_special_tokens, expected_result_skip_special_tokens)
+        self.assertEqual(result_human_readable, expected_result_human_readable)
+
 
 if __name__ == "__main__":
     unittest.main()

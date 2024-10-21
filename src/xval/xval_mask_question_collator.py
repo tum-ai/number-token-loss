@@ -3,11 +3,10 @@ from typing import List, Union, Dict
 import torch
 from transformers import DataCollatorForLanguageModeling
 
-def signed_log(x):
-    return torch.sign(x) * torch.log1p(torch.abs(x))
+from src.utils.numerical_operations import signed_log
 
 
-class XvalQuestionAnswerCLMCollator(DataCollatorForLanguageModeling):
+class XvalMaskedQuestionAnswerCollator(DataCollatorForLanguageModeling):
     def __init__(self, tokenizer):
         super().__init__(tokenizer, mlm=False)
         self.tokenizer = tokenizer
@@ -24,7 +23,7 @@ class XvalQuestionAnswerCLMCollator(DataCollatorForLanguageModeling):
 
         x = encodings['input_ids']
         x_num = encodings["number_embeddings"]
-        # attention_mask = question_encodings['attention_mask']
+        attention_mask = encodings['attention_mask']
 
         # mask for last number token
         number_token_id = self.tokenizer.get_num_token_ids()[0]

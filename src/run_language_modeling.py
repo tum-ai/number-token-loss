@@ -6,20 +6,12 @@ The file is an adaptation of https://github.com/huggingface/transformers/blob/v3
 
 """
 import sys
+import os
 sys.path.append(".")
-
-from src.args import ModelArguments, TrainingArguments, DatasetArguments
-from src.collators.regression_head_question_answer_collator import RegressionHeadQuestionAnswerCLMCollator
-
-from src.trainer import CustomSeq2SeqTrainer
-from src.transformer_backbone.t5.t5_vanilla_for_number_token_loss import T5VanillaForNumberTokenLoss
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import json
 import logging
-import os
-
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
 import numpy as np
 import pandas as pd
 import torch
@@ -30,23 +22,28 @@ from transformers import (
     MODEL_WITH_LM_HEAD_MAPPING,
     AutoConfig,
     set_seed,
-    EarlyStoppingCallback, T5ForConditionalGeneration, T5ForSequenceClassification, Trainer
+    EarlyStoppingCallback, T5ForConditionalGeneration, T5ForSequenceClassification
 )
-
-from src.data.data import load_txt_dataset, load_json_dataset
-from src.collators.rt_question_answer_collator import RtQuestionAnswerCLMCollator
-from src.collators.xval_question_answer_collator import XvalQuestionAnswerCLMCollator
-from src.collators.vanilla_question_answer_collator import VanillaQuestionAnswerCLMCollator
-from src.tokenizer.rt_tokenizer import RtTokenizer
-from src.tokenizer.xval_tokenizer import XvalTokenizer
-from src.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
-from src.transformer_backbone.t5.t5_rt import T5RegressionModelRT
-from src.transformer_backbone.t5.t5_xval import T5RegressionModelXval
-from src.evaluation import CustomMetrics
-from src.loss_functions.number_token_loss import NumberTokenLoss
-from src.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
 import hydra
 from omegaconf import DictConfig, OmegaConf
+
+from src.trainer import CustomSeq2SeqTrainer
+from src.evaluation import CustomMetrics
+from src.args import ModelArguments, TrainingArguments, DatasetArguments
+from src.data.data import load_txt_dataset, load_json_dataset
+from src.collators.question_answer_clm.xval_question_answer_collator import XvalQuestionAnswerCLMCollator
+from src.collators.question_answer_clm.vanilla_question_answer_collator import VanillaQuestionAnswerCLMCollator
+from src.collators.question_answer_mlm.regression_head_question_answer_collator import RegressionHeadQuestionAnswerCollator
+from src.collators.question_answer_mlm.xval_mask_question_collator import XvalMaskedQuestionAnswerCollator
+from src.collators.question_answer_mlm.vanilla_mlm_question_answer_collator import VanillaMaskedQuestionAnswerCollator
+from src.transformer_backbone.t5.t5_vanilla_for_number_token_loss import T5VanillaForNumberTokenLoss
+from src.transformer_backbone.t5.t5_rt import T5RegressionModelRT
+from src.transformer_backbone.t5.t5_xval import T5RegressionModelXval
+from src.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
+from src.tokenizer.rt_tokenizer import RtTokenizer
+from src.tokenizer.xval_tokenizer import XvalTokenizer
+from src.loss_functions.number_token_loss import NumberTokenLoss
+from src.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
 
 transformers.logging.set_verbosity_info()
 logger = logging.getLogger(__name__)
@@ -96,8 +93,6 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     logger.info("Training on dataset: %s", dataset_args.dataset_name)
     logger.info("Training/evaluation parameters %s", training_args)
 
-    # Set generation arguments
-    training_args.predict_with_generate = True
     if model_args.number_encoding != "xval":
         training_args.generation_num_beams = 4
         logger.info("Setting generation_num_beams to 4")
@@ -105,12 +100,12 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         logger.info("Setting generation_num_beams to 1 for xval")
 
     if model_args.log_scale_embeddings:
-        if model_args.number_encoding in ["xval", "rt"]:
+        if model_args.number_encoding in ["xval", "rt", "none_regression_head"]:
             logger.info("Log scaling embeddings")
         else:
-            raise ValueError("Log scaling only supported for xval and rt")
+            raise ValueError("Log scaling only supported for xval, rt and none_regression_head")
     else:
-        if model_args.number_encoding in ["xval", "rt"]:
+        if model_args.number_encoding in ["xval", "rt", "none_regression_head"]:
             logger.info("Not log scaling embeddings")
 
     if model_args.xval_bigger_language_head:
@@ -154,7 +149,13 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         model_params = config.__dict__
         logger.warning("You are instantiating a new config instance from scratch.")
 
-    trainer_class = CustomSeq2SeqTrainer
+    if training_args.language_modelling == "clm":
+        # Set generation arguments
+        training_args.predict_with_generate = True
+        logger.info("Setting predict_with_generate to True")
+    else:
+        training_args.predict_with_generate = False
+        logger.info("Setting predict_with_generate to False")
 
     if model_args.number_encoding == "rt":
         model_class = T5RegressionModelRT
@@ -170,7 +171,6 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
             model_class = T5ForConditionalGeneration
             tokenizer_class = transformers.AutoTokenizer
     elif model_args.number_encoding.lower() == "none_regression_head":
-        trainer_class = Trainer
         config.num_labels = 1
         model_class = T5ForSequenceClassification
         tokenizer_class = transformers.AutoTokenizer
@@ -255,12 +255,6 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
                 os.path.join(model_args.model_name_or_path, "generation_config.json")):
             os.remove(os.path.join(model_args.model_name_or_path, "generation_config.json"))
 
-        # Restore checkpoint if available
-        # if "checkpoint" not in model_args.model_name_or_path:
-        #     model_args.model_name_or_path = get_latest_checkpoint(
-        #         model_args.model_name_or_path,
-        #         must_contain="best",
-        #     )
         model = model_class.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -322,24 +316,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"Number of parameters {num_params} of type {type(model)}")
 
-    # Conditional Generation Training
-    if model_args.number_encoding == "rt":
-        data_collator = RtQuestionAnswerCLMCollator(
-            tokenizer=tokenizer
-        )
-    elif model_args.number_encoding == "xval":
-        data_collator = XvalQuestionAnswerCLMCollator(
-            tokenizer=tokenizer
-        )
-    elif model_args.number_encoding.lower() == "none":
-        # Rt collator can be used for default T5 as well
-        data_collator = VanillaQuestionAnswerCLMCollator(
-            tokenizer=tokenizer
-        )
-    elif model_args.number_encoding.lower() == "none_regression_head":
-        data_collator = RegressionHeadQuestionAnswerCLMCollator(
-            tokenizer=tokenizer
-        )
+    data_collator = get_data_collator(model_args, tokenizer, training_args)
 
     # Custom Metric
     custom_metrics = CustomMetrics(
@@ -347,6 +324,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         number_encoding=model_args.number_encoding,
         output_dir=training_args.output_dir,
         save_all_output=True,
+        log_scale=model_args.log_scale_embeddings,
     )
 
     # Early stopping
@@ -356,10 +334,8 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
 
     # custom_trainer_params = get_trainer_dict(model_params)
 
-    logger.info("Trainer class: %s", trainer_class)
-
     # Initialize our Trainer
-    trainer = trainer_class(
+    trainer = CustomSeq2SeqTrainer(
         model=model,
         args=training_args,
         data_collator=data_collator,
@@ -409,6 +385,49 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         eval_results_test_extrapolate = trainer.evaluate(eval_dataset=test_extrapolate_dataset)
         logger.info(f"eval_results extrapolate data: {eval_results_test_extrapolate}")
         return eval_results_val, eval_results_test_interpolate, eval_results_test_extrapolate
+
+
+def get_data_collator(model_args: ModelArguments, tokenizer, training_args: TrainingArguments) -> transformers.DataCollator:
+    # Conditional Generation Training
+    if training_args.language_modelling == "clm":
+        logger.info("Using CLM collator")
+        if model_args.number_encoding == "rt":
+            data_collator = VanillaQuestionAnswerCLMCollator(
+                tokenizer=tokenizer
+            )
+        elif model_args.number_encoding == "xval":
+            data_collator = XvalQuestionAnswerCLMCollator(
+                tokenizer=tokenizer
+            )
+        elif model_args.number_encoding.lower() == "none":
+            # Rt collator can be used for default T5 as well
+            data_collator = VanillaQuestionAnswerCLMCollator(
+                tokenizer=tokenizer
+            )
+        elif model_args.number_encoding.lower() == "none_regression_head":
+            raise ValueError("Regression head not supported for CLM")
+
+    # Masked Language Modeling
+    else:
+        logger.info("Using MLM collator")
+        if model_args.number_encoding == "rt":
+            data_collator = VanillaMaskedQuestionAnswerCollator(
+                tokenizer=tokenizer
+            )
+        elif model_args.number_encoding == "xval":
+            data_collator = XvalMaskedQuestionAnswerCollator(
+                tokenizer=tokenizer
+            )
+        elif model_args.number_encoding.lower() == "none":
+            # Rt collator can be used for default T5 as well
+            data_collator = VanillaMaskedQuestionAnswerCollator(
+                tokenizer=tokenizer
+            )
+        elif model_args.number_encoding.lower() == "none_regression_head":
+            data_collator = RegressionHeadQuestionAnswerCollator(
+                tokenizer=tokenizer, log_scale=model_args.log_scale_embeddings
+            )
+    return data_collator
 
 
 def store_config(cfg: DictConfig):
