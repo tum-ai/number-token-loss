@@ -106,7 +106,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
                 ############################
                 # Custom Code Start
                 ############################
-                nonum_text, numbers = extract(text, num_token=self.num_token)
+                nonum_text, numbers = self.extract(text, num_token=self.num_token)
                 tokens = self.tokenize(nonum_text, **kwargs)
                 ############################
                 # Custom Code End
@@ -120,7 +120,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
                         ############################
                         # Custom Code Start
                         ############################
-                        nonum_text, number_text = extract(t, num_token=self.num_token)
+                        nonum_text, number_text = self.extract(t, num_token=self.num_token)
                         tokenized_text = self.tokenize(nonum_text, is_split_into_words=True, **kwargs)
                         tokens.extend(tokenized_text)
                         numbers.extend(number_text)
@@ -209,7 +209,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
                 ############################
                 # Custom Code Start
                 ############################
-                nonum_text, numbers = extract(text, num_token=self.num_token)
+                nonum_text, numbers = self.extract(text, num_token=self.num_token)
                 tokens = self.tokenize(nonum_text, **kwargs)
                 ############################
                 # Custom Code End
@@ -223,7 +223,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
                         ############################
                         # Custom Code Start
                         ############################
-                        nonum_text, number_text = extract(t, num_token=self.num_token)
+                        nonum_text, number_text = self.extract(t, num_token=self.num_token)
                         tokenized_text = self.tokenize(nonum_text, is_split_into_words=True, **kwargs)
                         tokens.extend(tokenized_text)
                         numbers.extend(number_text)
@@ -572,29 +572,46 @@ class XvalTokenizer(NumberEncodingTokenizer):
 
         return encoded_inputs
 
+    def extract(self, text, num_token="[NUM]"):
+        numbers = []
 
-def extract(text, num_token="[NUM]"):
-    import re
+        # Build a regex pattern that matches any of the special tokens
+        special_tokens = self.all_special_tokens
+        escaped_special_tokens = [re.escape(token) for token in special_tokens]
+        special_tokens_pattern = '|'.join(escaped_special_tokens)
+        special_tokens_regex = re.compile(special_tokens_pattern)
 
-    # this regular expression is intended to match numerical values in various forms
-    # like integers, floating-point numbers, or scientific notation, while avoiding
-    # matching numbers that are part of strings.
+        def process_part(part):
+            def replace(match):
+                numbers.append(match.group())
+                return "¬"
+            return re.sub(NUMBER_REGEX, replace, part)
 
-    numbers = []
+        # Split the text into tokens, keeping the special tokens
+        tokens = special_tokens_regex.split(text)
+        special_tokens_in_text = special_tokens_regex.findall(text)
 
-    def replace(match):
-        numbers.append(match.group())
-        return "¬"
+        # Now process the tokens
+        result = []
+        for i, token in enumerate(tokens):
+            # Process the token if it's not empty
+            if token:
+                processed_token = process_part(token)
+                result.append(processed_token)
+            # Add the special token if it exists
+            if i < len(special_tokens_in_text):
+                result.append(special_tokens_in_text[i])
 
-    nonum_text = re.sub(NUMBER_REGEX, replace, text)
-    return compress_matrix(nonum_text).replace("¬", num_token), numbers
+        # Join the result to get the final text
+        nonum_text = ''.join(result)
+        return self.compress_matrix(nonum_text).replace("¬", num_token), numbers
 
 
-def compress_matrix(text):
-    text = (
-        text.replace("¬, ¬", "¬¬")
-        .replace("¬, ¬", "¬¬")
-        .replace("¬,¬", "¬¬")
-        .replace("¬,¬", "¬¬")
-    )
-    return text
+    def compress_matrix(self, text):
+        text = (
+            text.replace("¬, ¬", "¬¬")
+            .replace("¬, ¬", "¬¬")
+            .replace("¬,¬", "¬¬")
+            .replace("¬,¬", "¬¬")
+        )
+        return text

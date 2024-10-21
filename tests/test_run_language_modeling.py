@@ -4,7 +4,7 @@ import os
 import shutil
 import tempfile
 import unittest
-from typing import Literal
+from typing import Literal, List
 from unittest import mock
 
 import numpy as np
@@ -83,7 +83,7 @@ class TestRunLanguageModeling(unittest.TestCase):
         log_scale_embeddings_options = [True, False]
         model_names_or_paths = [None, "google-t5/t5-small"]
         xval_bigger_language_heads = [True, False]
-        language_modelling_options = ["clm", "mlm"]
+        language_modelling_options: List[Literal["clm", "mlm"]] = ["mlm", "clm"]
 
 
         for number_encoding in number_encodings:
@@ -115,7 +115,10 @@ class TestRunLanguageModeling(unittest.TestCase):
                                     model_name_or_path=model_name_or_path,
                                 )
 
-                                training_args = self.generate_training_args(output_dir=self.temp_dir)
+                                training_args = self.generate_training_args(
+                                    output_dir=self.temp_dir,
+                                    language_modelling=language_modelling
+                                )
                                 dataset_args = self.generate_dataset_args()
                                 model_eval_args = self.generate_model_args(
                                     number_encoding=number_encoding,
@@ -123,7 +126,11 @@ class TestRunLanguageModeling(unittest.TestCase):
                                     log_scale_embeddings=log_scale_embeddings,
                                     model_name_or_path=checkpoint_dir,
                                 )
-                                eval_args = self.generate_training_args(output_dir=self.temp_dir, do_only_eval=True)
+                                eval_args = self.generate_training_args(
+                                    output_dir=self.temp_dir,
+                                    do_only_eval=True,
+                                    language_modelling=language_modelling
+                                )
 
                                 # Run training
                                 with self.subTest(number_encoding=number_encoding,
