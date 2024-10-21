@@ -22,7 +22,7 @@ from transformers import (
     MODEL_WITH_LM_HEAD_MAPPING,
     AutoConfig,
     set_seed,
-    EarlyStoppingCallback, T5ForConditionalGeneration, T5ForSequenceClassification, Trainer
+    EarlyStoppingCallback, T5ForConditionalGeneration, T5ForSequenceClassification
 )
 import hydra
 from omegaconf import DictConfig, OmegaConf
@@ -93,8 +93,6 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     logger.info("Training on dataset: %s", dataset_args.dataset_name)
     logger.info("Training/evaluation parameters %s", training_args)
 
-    # Set generation arguments
-    training_args.predict_with_generate = True
     if model_args.number_encoding != "xval":
         training_args.generation_num_beams = 4
         logger.info("Setting generation_num_beams to 4")
@@ -152,9 +150,12 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         logger.warning("You are instantiating a new config instance from scratch.")
 
     if training_args.language_modelling == "clm":
-        trainer_class = CustomSeq2SeqTrainer
+        # Set generation arguments
+        training_args.predict_with_generate = True
+        logger.info("Setting predict_with_generate to True")
     else:
-        trainer_class = Trainer
+        training_args.predict_with_generate = False
+        logger.info("Setting predict_with_generate to False")
 
     if model_args.number_encoding == "rt":
         model_class = T5RegressionModelRT
@@ -323,7 +324,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         number_encoding=model_args.number_encoding,
         output_dir=training_args.output_dir,
         save_all_output=True,
-        log_scale= model_args.log_scale_embeddings,
+        log_scale=model_args.log_scale_embeddings,
     )
 
     # Early stopping
@@ -333,10 +334,8 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
 
     # custom_trainer_params = get_trainer_dict(model_params)
 
-    logger.info("Trainer class: %s", trainer_class)
-
     # Initialize our Trainer
-    trainer = trainer_class(
+    trainer = CustomSeq2SeqTrainer(
         model=model,
         args=training_args,
         data_collator=data_collator,

@@ -38,7 +38,7 @@ class T5Custom_Tokenizer(NumberEncodingTokenizer):
         )
         out_list = []
         for token in out:
-            if bool(re.search(r'\d', token)):
+            if bool(re.search(r'\d', token)) and token not in self.additional_special_tokens:
                 out_list = out_list + list(token)
             else:
                 out_list.append(token)

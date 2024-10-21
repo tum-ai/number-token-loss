@@ -7,7 +7,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.collators.xval_mask_question_collator import XvalQuestionAnswerCLMCollator
+from .xval_mask_question_collator import XvalMaskedQuestionAnswerCollator
 from src.data.data import load_txt_dataset
 from src.evaluation import CustomMetrics
 from src.tokenizer.xval_tokenizer import XvalTokenizer
@@ -44,7 +44,7 @@ mask_token_id = tokenizer.additional_special_tokens_ids[0]
 epochs = 10000
 
 # Define the masked xVal collator which takes samples of unequal length and masks out both the token_ids and the numbers.
-collator = XvalQuestionAnswerCLMCollator(tokenizer)
+collator = XvalMaskedQuestionAnswerCollator(tokenizer)
 
 train_loader = DataLoader(
     train_dataset,

@@ -40,7 +40,7 @@ class RtTokenizer(NumberEncodingTokenizer):
         return encoding_to_number(token, ignore_order=ignore_order)
 
     def tokenize(self, text: str, add_special_tokens=False, **kwargs) -> List[str]:
-        nonum_text, number_tokens = extract(text)
+        nonum_text, number_tokens = self.extract(text)
         out = super().tokenize(
             nonum_text, **kwargs
         )
@@ -159,54 +159,72 @@ class RtTokenizer(NumberEncodingTokenizer):
         count_no_number_prediction_at_all = np.sum(np.all(np.isnan(number_token_array.astype(float)), axis=1))
         return result, count_invalid_number_prediction, count_no_number_prediction_at_all
 
+    def extract(self, text):
+        numbers = []
 
-def extract(text):
-    numbers = []
+        # Build a regex pattern that matches any of the special tokens
+        special_tokens = self.all_special_tokens
+        escaped_special_tokens = [re.escape(token) for token in special_tokens]
+        special_tokens_pattern = '|'.join(escaped_special_tokens)
+        special_tokens_regex = re.compile(special_tokens_pattern)
 
-    def replace(match):
-        def str_to_number(s):
-            try:
-                return int(s)
-            except ValueError:
-                return float(s)
+        def process_part(part):
+            def replace(match):
+                number = match.group(0).strip()
+                tokens = []
 
-        number = match.group(0).strip()
-        tokens = []
+                # Remove plus as previously we treated it like a digit
+                number = number.lstrip('+-')
 
-        # Remove plus as previously we treated it like a digit
-        number = number.lstrip('+-')
+                total_digits = len(number.replace('.', ''))
+                required_precision = total_digits + 12  # Add 12 for decimal places
+                number = Decimal(number)
 
-        total_digits = len(number.replace('.', ''))
-        required_precision = total_digits + 12  # Add 12 for decimal places
-        number = Decimal(number)
+                # set local context to required precision to avoid floating point errors during rounding
+                with localcontext() as ctx:
+                    ctx.prec = required_precision
+                    # Round the number to 12 decimal places
+                    precision = Decimal('1.000000000000')
+                    number = number.quantize(precision, rounding=ROUND_HALF_UP)
+                    number = str("{0:.12f}".format(number.normalize()).rstrip('0').rstrip('.'))
 
-        # set local context to required precision to avoid floating point errors during rounding
-        with localcontext() as ctx:
-            ctx.prec = required_precision
-            # Round the number to 12 decimal places
-            precision = Decimal('1.000000000000')
-            number = number.quantize(precision, rounding=ROUND_HALF_UP)
-            number = str("{0:.12f}".format(number.normalize()).rstrip('0').rstrip('.'))
+                if "." in number:
+                    integer_part, _, fractional_part = number.partition('.')
+                else:
+                    integer_part = number
+                    fractional_part = []
 
-        if "." in number:
-            integer_part, _, fractional_part = number.partition('.')
-        else:
-            integer_part = number
-            fractional_part = []
+                z = len(integer_part) - 1
+                for digit in integer_part:
+                    tokens.append(f"_{digit}_{z}_")
+                    numbers.append(f"_{digit}_{z}_")
+                    z -= 1
+                for i, digit in enumerate(fractional_part):
+                    tokens.append(f"_{digit}_{-i - 1}_")
+                    numbers.append(f"_{digit}_{-i - 1}_")
 
-        z = len(integer_part) - 1
-        for digit in integer_part:
-            tokens.append(f"_{digit}_{z}_")
-            numbers.append(f"_{digit}_{z}_")
-            z -= 1
-        for i, digit in enumerate(fractional_part):
-            tokens.append(f"_{digit}_{-i - 1}_")
-            numbers.append(f"_{digit}_{-i - 1}_")
+                return " ".join(tokens)
+            return re.sub(NUMBER_REGEX, replace, part)
 
-        return " ".join(tokens)
+        # Split the text into tokens, keeping the special tokens
+        tokens = special_tokens_regex.split(text)
+        special_tokens_in_text = special_tokens_regex.findall(text)
 
-    nonum_text = re.sub(NUMBER_REGEX, replace, text)
-    return nonum_text, numbers
+        # Now process the tokens
+        result = []
+        for i, token in enumerate(tokens):
+            # Process the token if it's not empty
+            if token:
+                processed_token = process_part(token)
+                result.append(processed_token)
+            # Add the special token if it exists
+            if i < len(special_tokens_in_text):
+                result.append(special_tokens_in_text[i])
+
+        # Join the result to get the final text
+        nonum_text = ''.join(result)
+
+        return nonum_text, numbers
 
 
 if __name__ == "__main__":

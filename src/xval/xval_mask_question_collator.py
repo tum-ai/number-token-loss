@@ -51,11 +51,4 @@ class XvalMaskedQuestionAnswerCollator(DataCollatorForLanguageModeling):
 
         mask = last_number_token_mask
 
-        # return {"x": x, "x_num": x_num, "y": y, "y_num": y_num, "mask": mask}
-        return {
-            'input_ids': x,
-            'input_number_embeddings': x_num,
-            'attention_mask': attention_mask,
-            'labels': y,
-            "number_labels": y_num
-        }
+        return {"x": x, "x_num": x_num, "y": y, "y_num": y_num, "mask": mask}
