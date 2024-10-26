@@ -310,8 +310,15 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         eval_dataset = load_txt_dataset(eval_data_path)
         test_interpolate_dataset = load_txt_dataset(test_interpolate_data_path)
         test_extrapolate_dataset = load_txt_dataset(test_extrapolate_data_path)
+    elif dataset_args.dataset_name == "multiplication":
+        train_data_path = 'data/digit-multiplication/data/train.jsonl'
+        eval_data_path = 'data/digit-multiplication/data/val.jsonl'
+        test_data_path = 'data/digit-multiplication/data/test.jsonl'
+        train_dataset = load_json_dataset(train_data_path)
+        eval_dataset = load_json_dataset(eval_data_path)
+        test_dataset = load_json_dataset(test_data_path)
     else:
-        raise ValueError(f"Unknown dataset: {dataset_args.dataset_name}. Allowed: gsm8k, mathematics_dataset")
+        raise ValueError(f"Unknown dataset: {dataset_args.dataset_name}. Allowed: gsm8k, mathematics_dataset, multiplication")
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"Number of parameters {num_params} of type {type(model)}")
@@ -371,7 +378,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     if not training_args.do_only_eval:
         return eval_results_val, model
 
-    if dataset_args.dataset_name == "gsm8k":
+    if dataset_args.dataset_name in ["gsm8k", "multiplication"]:
         logger.info("*** Evaluate on test set ***")
         eval_results_test = trainer.evaluate(eval_dataset=test_dataset)
         logger.info(f"eval_results test data: {eval_results_test}")
