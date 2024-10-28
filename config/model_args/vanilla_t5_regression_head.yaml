@@ -1,4 +1,4 @@
 name: vanilla_t5_regression_head
 config_name: t5-base
 number_encoding: none_regression_head
-log_scale_embeddings: true
+log_scale_embeddings: false

@@ -1,5 +1,7 @@
-# IBM Impact Project
+# Regress, Don’t Guess – A Regression-like Loss onNumber Tokens for Language Models
+![ntl-image.jpg](resources%2Fntl-image.jpg)
 
+Introducing "Number Token Loss" (NTL) for language models to improve numerical reasoning by using regression-based loss functions that account for the proximity of numbers, achieving better performance on math tasks without increasing computational overhead.
 ## Setup
 
 ### Via Python
@@ -55,4 +57,39 @@
     ```bash
     nohup python src/run_language_modeling.py dataset_args=mathematics_dataset model_args=vanilla_t5 training_args=train >logs/log_<run_name>.txt &
     ```
+## Reproduce our results
+1. Get the data from https://console.cloud.google.com/storage/browser/mathematics-dataset;tab=objects?pli=1&prefix=&forceOnObjectsSortingFiltering=false
+2. Execute [create_data_splits.py](data%2Fmathematics_dataset-v1.0%2Fcreate_data_splits.py)
+3. Put the .txt files under data/mathematics_dataset-v1.0/
+4. Execute the run_language_modeling.py script with the following arguments:
+- Standard T5: 
+  ```
+  python src/run_language_modeling.py model_args=vanilla_t5 +training_args.max_steps=1050000
+  ```
+- Standard T5 + **NTL-MSE**:
+  ```
+  python src/run_language_modeling.py model_args=vanilla_t5_ntl +training_args.max_steps=1050000
+  ```
+- Standard T5 + **NTL-WAS**: 
+  ```
+  python src/run_language_modeling.py model_args=vanilla_t5_ntl  model_args.number_token_loss_with_wasserstein=true +training_args.max_steps=1050000
+  ```
+- RT: 
+  ```
+  python src/run_language_modeling.py model_args=rt +training_args.max_steps=1050000
+  ```
+- RT + **NTL-MSE**: 
+  ```
+  python src/run_language_modeling.py model_args=rt_ntl +training_args.max_steps=1050000
+  ```
+- xVal: 
+  ```
+  python src/xval/train.py
+  ```
+
+For evaluating instead of training a model, add those two parameters to the respective python command: ```training_args=eval model_args.model_name_or_path=<path to checkpoint file>``` 
+e.g for Standard T5 + **NTL-WAS**: 
+```
+python src/run_language_modeling.py model_args=vanilla_t5_ntl  model_args.number_token_loss_with_wasserstein=true training_args=eval model_args.model_name_or_path=<path to checkpoint file>
+```
 
