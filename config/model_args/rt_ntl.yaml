@@ -3,3 +3,5 @@ config_name: t5-base
 number_encoding: rt
 log_scale_embeddings: true
 number_token_loss: true
+number_token_loss_weight: 0.3
+number_token_loss_with_wasserstein: false
