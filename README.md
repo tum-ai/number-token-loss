@@ -1,4 +1,4 @@
-# Regress, Don’t Guess – A Regression-like Loss onNumber Tokens for Language Models
+# Regress, Don’t Guess – A Regression-like Loss on Number Tokens for Language Models
 ![ntl-image.jpg](resources%2Fntl-image.jpg)
 
 Introducing "Number Token Loss" (NTL) for language models to improve numerical reasoning by using regression-based loss functions that account for the proximity of numbers, achieving better performance on math tasks without increasing computational overhead.
