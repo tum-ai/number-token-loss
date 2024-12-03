@@ -351,6 +351,13 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         train_dataset = load_json_dataset(train_data_path)
         eval_dataset = load_json_dataset(eval_data_path)
         test_dataset = load_json_dataset(test_data_path)
+    elif dataset_args.dataset_name == "rjokes":
+        train_data_path = 'data/rjokes-dataset/data/train.jsonl'
+        eval_data_path = 'data/rjokes-dataset/data/dev.jsonl'
+        test_data_path = 'data/rjokes-dataset/data/test.jsonl'
+        train_dataset = load_json_dataset(train_data_path)
+        eval_dataset = load_json_dataset(eval_data_path)
+        test_dataset = load_json_dataset(test_data_path)
     else:
         raise ValueError(f"Unknown dataset: {dataset_args.dataset_name}. Allowed: gsm8k, mathematics_dataset, multiplication")
 
