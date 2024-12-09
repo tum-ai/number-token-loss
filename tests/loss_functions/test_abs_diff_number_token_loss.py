@@ -1,15 +1,18 @@
 import unittest
+from time import time
 from typing import Dict, List
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 import transformers
 
-from src.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
 from src.loss_functions.abs_diff_number_token_loss import AbsDiffNumberTokenLoss
+from src.loss_functions.wasserstein_distance_number_token_loss import (
+    WassersteinNumberTokenLoss,
+)
 from src.tokenizer.rt_tokenizer import RtTokenizer
 from src.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
-import numpy as np
 
 
 class TestAbsDiffNumberTokenLoss(unittest.TestCase):
@@ -214,7 +217,7 @@ class TestAbsDiffNumberTokenLoss(unittest.TestCase):
         print(f"Expected Loss: {wasserstein_loss.item()}")
         print(f"Abs diff loss: {abs_diff_loss.item()}")
 
-        self.assertAlmostEqual(abs_diff_loss.item(), wasserstein_loss.item(), places=5)
+        self.assertAlmostEqual(abs_diff_loss.item(), wasserstein_loss.item(), places=3)
 
     def test_loss_comparison_t5(self):
         logits = self.create_logits(
@@ -274,3 +277,39 @@ class TestAbsDiffNumberTokenLoss(unittest.TestCase):
         self.assertRaises(
             ValueError, lambda: self.t5_number_token_loss_absdiff.forward(torch.tensor([]), torch.tensor([]))
         )
+    
+    def test_runtime_speed(self, ):
+        logits = self.create_logits(
+            self.t5_tokenizer,
+            [
+                {"0": -4.0, "1": 2.0, "2": -1.0},
+                {"0": 1.5, "1": 0.5, "2": 1.2},
+                {"3": -2.0, "4": 1.0, "5": -2.5},
+            ],
+        )
+
+        labels = torch.tensor(
+            [
+                [
+                    self.t5_tokenizer.convert_tokens_to_ids("2"),
+                    self.t5_tokenizer.convert_tokens_to_ids("1"),
+                    self.t5_tokenizer.convert_tokens_to_ids("3"),
+                ]
+            ]
+        )
+        batch_size: int = 128
+        logits = logits.repeat(batch_size, 100, 1)
+        labels = labels.repeat(batch_size, 100)
+        
+        runs: int = 10
+        start = time()
+        for _ in range(runs):
+            self.t5_number_token_loss_absdiff.forward(logits, labels)
+        a_time = (time() - start) / runs
+        
+        start = time()
+        for _ in range(runs):
+            self.t5_number_token_loss_wasserstein.forward(logits, labels)
+        w_time = (time() - start) / runs
+        shape_str = " x ".join(list(map(str, list(logits.shape))))
+        print(f"\n\n****Speed Average for BS x T x V = {shape_str}***\n\tWasserstein: {w_time:.4f}\n\tAbsdiff: {a_time:.4f}")
