@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import torch
 
-from src.tokenizer.xval_tokenizer import XvalTokenizer
+from ntl.tokenizer.xval_tokenizer import XvalTokenizer
 
 
 class TestEvaluationMethods(unittest.TestCase):

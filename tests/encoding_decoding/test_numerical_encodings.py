@@ -3,8 +3,8 @@ import unittest
 import torch
 import transformers
 
-from src.encoding_decoding.numerical_encodings import FloatEncoding, get_float_encoding
-from src.tokenizer.rt_tokenizer import RtTokenizer
+from ntl.encoding_decoding.numerical_encodings import FloatEncoding, get_float_encoding
+from ntl.tokenizer.rt_tokenizer import RtTokenizer
 
 
 class TestRtNumericalEncodings(unittest.TestCase):

@@ -27,23 +27,23 @@ from transformers import (
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
-from src.trainer import CustomSeq2SeqTrainer
-from src.evaluation import CustomMetrics
-from src.args import ModelArguments, TrainingArguments, DatasetArguments
-from src.data.data import load_txt_dataset, load_json_dataset
-from src.collators.question_answer_clm.xval_question_answer_collator import XvalQuestionAnswerCLMCollator
-from src.collators.question_answer_clm.vanilla_question_answer_collator import VanillaQuestionAnswerCLMCollator
-from src.collators.question_answer_mlm.regression_head_question_answer_collator import RegressionHeadQuestionAnswerCollator
-from src.collators.question_answer_mlm.xval_mask_question_collator import XvalMaskedQuestionAnswerCollator
-from src.collators.question_answer_mlm.vanilla_mlm_question_answer_collator import VanillaMaskedQuestionAnswerCollator
-from src.transformer_backbone.t5.t5_vanilla_for_number_token_loss import T5VanillaForNumberTokenLoss
-from src.transformer_backbone.t5.t5_rt import T5RegressionModelRT
-from src.transformer_backbone.t5.t5_xval import T5RegressionModelXval
-from src.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
-from src.tokenizer.rt_tokenizer import RtTokenizer
-from src.tokenizer.xval_tokenizer import XvalTokenizer
-from src.loss_functions.number_token_loss import NumberTokenLoss
-from src.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
+from ntl.trainer import CustomSeq2SeqTrainer
+from ntl.evaluation import CustomMetrics
+from ntl.args import ModelArguments, TrainingArguments, DatasetArguments
+from ntl.data.data import load_txt_dataset, load_json_dataset
+from ntl.collators.question_answer_clm.xval_question_answer_collator import XvalQuestionAnswerCLMCollator
+from ntl.collators.question_answer_clm.vanilla_question_answer_collator import VanillaQuestionAnswerCLMCollator
+from ntl.collators.question_answer_mlm.regression_head_question_answer_collator import RegressionHeadQuestionAnswerCollator
+from ntl.collators.question_answer_mlm.xval_mask_question_collator import XvalMaskedQuestionAnswerCollator
+from ntl.collators.question_answer_mlm.vanilla_mlm_question_answer_collator import VanillaMaskedQuestionAnswerCollator
+from ntl.transformer_backbone.t5.t5_vanilla_for_number_token_loss import T5VanillaForNumberTokenLoss
+from ntl.transformer_backbone.t5.t5_rt import T5RegressionModelRT
+from ntl.transformer_backbone.t5.t5_xval import T5RegressionModelXval
+from ntl.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
+from ntl.tokenizer.rt_tokenizer import RtTokenizer
+from ntl.tokenizer.xval_tokenizer import XvalTokenizer
+from ntl.loss_functions.number_token_loss import NumberTokenLoss
+from ntl.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
 
 transformers.logging.set_verbosity_info()
 logger = logging.getLogger(__name__)

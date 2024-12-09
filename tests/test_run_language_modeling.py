@@ -11,9 +11,9 @@ import numpy as np
 import torch
 from datasets import Dataset
 
-from src.args import ModelArguments, TrainingArguments, DatasetArguments
-from src.run_language_modeling import run_language_modeling
-from src.tokenizer.rt_tokenizer import RtTokenizer
+from ntl.args import ModelArguments, TrainingArguments, DatasetArguments
+from ntl.run_language_modeling import run_language_modeling
+from ntl.tokenizer.rt_tokenizer import RtTokenizer
 
 
 class TestRunLanguageModeling(unittest.TestCase):
@@ -71,8 +71,8 @@ class TestRunLanguageModeling(unittest.TestCase):
 
         return Dataset.from_generator(read_txt)
 
-    @mock.patch('src.run_language_modeling.load_json_dataset')
-    @mock.patch('src.run_language_modeling.load_txt_dataset')
+    @mock.patch('ntl.run_language_modeling.load_json_dataset')
+    @mock.patch('ntl.run_language_modeling.load_txt_dataset')
     def test_model_training(self, mock_load_txt_dataset_fn, mock_load_json_dataset_fn):
         # Mock the dataset loading functions
         mock_load_json_dataset_fn.side_effect = self.mock_load_json_dataset
@@ -171,7 +171,7 @@ class TestRunLanguageModeling(unittest.TestCase):
                                     self.assertEqual(eval_results_expected["eval_token_perplexity"], eval_results_test["eval_token_perplexity"], "Test perplexity results do not match.")
 
 
-    @mock.patch('src.run_language_modeling.load_json_dataset')
+    @mock.patch('ntl.run_language_modeling.load_json_dataset')
     def test_log_scale_embeddings(self, mock_load_json_dataset_fn):
         # Mock the dataset loading function
         mock_load_json_dataset_fn.side_effect = self.mock_load_json_dataset
