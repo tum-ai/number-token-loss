@@ -8,12 +8,12 @@ import numpy as np
 import torch
 import transformers
 
-from src.loss_functions.abs_diff_number_token_loss import AbsDiffNumberTokenLoss
-from src.loss_functions.wasserstein_distance_number_token_loss import (
+from ntl.loss_functions.abs_diff_number_token_loss import AbsDiffNumberTokenLoss
+from ntl.loss_functions.wasserstein_distance_number_token_loss import (
     WassersteinNumberTokenLoss,
 )
-from src.tokenizer.rt_tokenizer import RtTokenizer
-from src.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
+from ntl.tokenizer.rt_tokenizer import RtTokenizer
+from ntl.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
 
 def skiptest():
     """Decorator to skip tests when running in GitHub Actions."""

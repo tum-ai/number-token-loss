@@ -2,7 +2,7 @@ from transformers import T5ForConditionalGeneration
 from transformers.modeling_outputs import Seq2SeqLMOutput
 import torch
 from typing import Optional, Tuple, Union
-from src.loss_functions.number_token_loss import NumberTokenLoss
+from ntl.loss_functions.number_token_loss import NumberTokenLoss
 
 
 class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):

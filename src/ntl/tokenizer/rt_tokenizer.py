@@ -5,12 +5,15 @@ import re
 from decimal import Decimal, ROUND_HALF_UP, localcontext
 from typing import List, Union, Tuple
 import logging
+import importlib.resources
+
 
 import numpy as np
 import torch
 
-from src.encoding_decoding.numerical_encodings import encoding_to_number
-from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer, NUMBER_REGEX
+from ntl.encoding_decoding.numerical_encodings import encoding_to_number
+from ntl.tokenizer.abstract_tokenizer import NumberEncodingTokenizer, NUMBER_REGEX
+
 
 NON_NUMERIC_TOKEN = 10000
 
@@ -19,8 +22,9 @@ class RtTokenizer(NumberEncodingTokenizer):
     def __init__(self, embedding_dim=256, **kwargs):
         super().__init__(**kwargs)
 
-        with open(os.path.join(os.path.dirname(__file__), "..", "..", "regression_transformer_number_tokens.txt"),
-                  'r') as file:
+        with importlib.resources.open_text(
+            "ntl.data", "regression_transformer_number_tokens.txt"
+        ) as file:
             lines = file.readlines()
 
         num_tokens = [line.strip() for line in lines]

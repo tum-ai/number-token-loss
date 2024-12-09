@@ -3,9 +3,9 @@ from transformers import T5Tokenizer, T5Model, T5ForConditionalGeneration
 from transformers.modeling_outputs import Seq2SeqLMOutput
 import torch
 import torch.nn as nn
-from src.encoding_decoding.numerical_encodings import FloatEncoding
+from ntl.encoding_decoding.numerical_encodings import FloatEncoding
 import copy
-from src.loss_functions.number_token_loss import NumberTokenLoss
+from ntl.loss_functions.number_token_loss import NumberTokenLoss
 
 # Set maximal value for normalization
 V_MAX = 3000000000

@@ -5,9 +5,9 @@ import torch
 import torch.nn.functional as F
 import transformers
 
-from src.loss_functions.number_token_loss import NumberTokenLoss
-from src.tokenizer.rt_tokenizer import RtTokenizer
-from src.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
+from ntl.loss_functions.number_token_loss import NumberTokenLoss
+from ntl.tokenizer.rt_tokenizer import RtTokenizer
+from ntl.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
 import numpy as np
 
 

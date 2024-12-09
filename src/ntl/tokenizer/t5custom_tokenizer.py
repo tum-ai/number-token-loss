@@ -5,7 +5,7 @@ from typing import List, Union, Tuple
 import numpy as np
 import torch
 
-from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
+from ntl.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 
 
 class T5Custom_Tokenizer(NumberEncodingTokenizer):

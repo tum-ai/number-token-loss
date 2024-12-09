@@ -15,7 +15,7 @@ from transformers.utils import logging, is_torch_fx_proxy, is_accelerate_availab
 from transformers.generation.beam_search import BeamScorer, BeamSearchScorer
 from transformers.generation.utils import GenerateBeamDecoderOnlyOutput, GenerateBeamEncoderDecoderOutput, _split_model_inputs, _split_model_outputs, stack_model_outputs
 
-from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
+from ntl.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 
 if is_accelerate_available():
     from accelerate.hooks import AlignDevicesHook, add_hook_to_module

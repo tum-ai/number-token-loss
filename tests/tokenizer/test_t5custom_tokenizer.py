@@ -2,7 +2,7 @@ import unittest
 
 import transformers
 
-from src.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
+from ntl.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
 
 
 class TestEvaluationMethods(unittest.TestCase):
