@@ -1,10 +1,11 @@
 import unittest
 from time import time
 from typing import Dict, List
+import os
+import pytest
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 import transformers
 
 from src.loss_functions.abs_diff_number_token_loss import AbsDiffNumberTokenLoss
@@ -14,6 +15,12 @@ from src.loss_functions.wasserstein_distance_number_token_loss import (
 from src.tokenizer.rt_tokenizer import RtTokenizer
 from src.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
 
+def skiptest():
+    """Decorator to skip tests when running in GitHub Actions."""
+    return pytest.mark.skipif(
+        os.getenv("GITHUB_ACTIONS") == "true",
+        reason="Skipped on GitHub Actions due to high memory usage"
+    )
 
 class TestAbsDiffNumberTokenLoss(unittest.TestCase):
 
@@ -277,8 +284,9 @@ class TestAbsDiffNumberTokenLoss(unittest.TestCase):
         self.assertRaises(
             ValueError, lambda: self.t5_number_token_loss_absdiff.forward(torch.tensor([]), torch.tensor([]))
         )
-    
-    def test_runtime_speed(self, ):
+
+    @skiptest()
+    def test_runtime_speed(self):
         logits = self.create_logits(
             self.t5_tokenizer,
             [
