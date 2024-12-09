@@ -122,6 +122,24 @@ class ModelArguments:
             "help": "Whether to use a bigger language head for xval."
         },
     )
+    expression_loss: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "Whether to add ExpressionLoss to model."
+        },
+    )
+    expression_loss_weight: Optional[float] = field(
+        default=0.5,
+        metadata={
+            "help": "Weight of the expression_loss in reference to other loss terms."
+        },
+    )
+    expression_loss_function: Optional[str] = field(
+        default="mse",
+        metadata={
+            "help": "Loss function for expression loss. Allowed: mse, huber, mae."
+        },
+    )
 
 
 @dataclass
