@@ -156,15 +156,15 @@ class ExpressionParser:
 
     def __init__(
         self,
-        operators: Set[str]=None,
-        precedence: Dict[str, int]=None,
+        operators: Set[str] = None,
+        precedence: Dict[str, int] = None,
     ):
         """
         Initializes the parser with a list of operators and their precedence.
 
         Parameters:
-            operators: A list of valid operators. Defaults to ["+", "-", "*", "/"].
-            precedence: A dictionary mapping operators to their precedence. Defaults to {"+" : 1, "-" : 1, "*" : 2, "/" : 2}.
+            operators: A set of valid operators. Defaults to {"+", "-", "*", "/"}.
+            precedence: A dictionary mapping operators to their precedence. Defaults to {"+": 1, "-": 1, "*": 2, "/": 2}.
         """
         self._operators = operators or {"+", "-", "*", "/"}
         self._precedence = precedence or {"+": 1, "-": 1, "*": 2, "/": 2}
@@ -199,9 +199,13 @@ class ExpressionParser:
         """
         tokens = []
         current_number = ""
+        i = 0
 
-        for char in expression:
+        while i < len(expression):
+            char = expression[i]
             if char.isdigit():
+                current_number += char
+            elif char == '-' and (i == 0 or expression[i - 1] == '('):
                 current_number += char
             else:
                 if current_number:
@@ -209,6 +213,7 @@ class ExpressionParser:
                     current_number = ""
                 if char in self._operators or char in {'(', ')'}:
                     tokens.append(char)
+            i += 1
 
         if current_number:
             tokens.append(current_number)
@@ -226,7 +231,7 @@ class ExpressionParser:
         operators: List[str] = []
 
         for token in self._tokens:
-            if token.isdigit():
+            if token.lstrip('-').isdigit():
                 output.append(token)
             elif token in self._operators:
                 self._process_operator(token, operators, output)
@@ -275,7 +280,7 @@ class ExpressionParser:
         stack: List[ASTNode] = []
 
         for token in self._postfix:
-            if token.isdigit():
+            if token.lstrip('-').isdigit():
                 stack.append(self._create_operand_node(token))
             elif token in self._operators:
                 stack.append(self._create_operator_node(token, stack))
