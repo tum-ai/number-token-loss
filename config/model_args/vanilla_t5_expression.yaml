@@ -1,0 +1,5 @@
+name: vanilla_t5_ntl
+config_name: t5-base
+number_encoding: none
+expression_loss: true
+expression_loss_weight: 0.3
