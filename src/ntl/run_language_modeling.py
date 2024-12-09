@@ -258,7 +258,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
             loss_function = F.l1_loss
         else:
             raise ValueError(
-                f"Unknown number_token_loss_function: {model_args.number_token_loss_function}. Allowed: mse, huber, mae.")
+                f"Unknown expression_loss_function: {model_args.expression_loss_function}. Allowed: mse, huber, mae.")
         
         model_init_kwargs["expression_loss"] = ExpressionLoss(
             tokenizer,
