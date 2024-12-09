@@ -321,7 +321,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         eval_dataset = load_json_dataset(eval_data_path)
         test_dataset = load_json_dataset(test_data_path)
     elif dataset_args.dataset_name == "mathematics_dataset":
-        train_data_path = 'data/mathematics_dataset-v1.0/train1.txt'
+        train_data_path = 'data/mathematics_dataset-v1.0/train.txt'
         eval_data_path = 'data/mathematics_dataset-v1.0/val.txt'
         test_interpolate_data_path = 'data/mathematics_dataset-v1.0/test_interpolate.txt'
         test_extrapolate_data_path = 'data/mathematics_dataset-v1.0/test_extrapolate.txt'
