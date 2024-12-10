@@ -8,12 +8,12 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from .xval_mask_question_collator import XvalMaskedQuestionAnswerCollator
-from src.data.data import load_txt_dataset
-from src.evaluation import CustomMetrics
-from src.tokenizer.xval_tokenizer import XvalTokenizer
-from src.utils.numerical_operations import inverse_signed_log
+from ntl.data.data import load_txt_dataset
+from ntl.evaluation import CustomMetrics
+from ntl.tokenizer.xval_tokenizer import XvalTokenizer
+from ntl.utils.numerical_operations import inverse_signed_log
 # Where the model and collator is defined
-from src.xval import numformer
+from ntl.xval import numformer
 
 train_data_path = 'data/mathematics_dataset-v1.0/train.txt'
 eval_data_path = 'data/mathematics_dataset-v1.0/val.txt'

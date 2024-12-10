@@ -3,10 +3,10 @@ import numpy as np
 import torch
 import transformers
 from transformers import EvalPrediction
-from src.tokenizer.rt_tokenizer import RtTokenizer
-from src.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
-from src.tokenizer.xval_tokenizer import XvalTokenizer
-from src.evaluation import CustomMetrics
+from ntl.tokenizer.rt_tokenizer import RtTokenizer
+from ntl.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
+from ntl.tokenizer.xval_tokenizer import XvalTokenizer
+from ntl.evaluation import CustomMetrics
 
 class TestEvaluationMethods(unittest.TestCase):
 
