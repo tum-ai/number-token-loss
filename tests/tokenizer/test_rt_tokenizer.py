@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import torch
 
-from src.tokenizer.rt_tokenizer import RtTokenizer
+from ntl.tokenizer.rt_tokenizer import RtTokenizer
 
 
 class TestEvaluationMethods(unittest.TestCase):

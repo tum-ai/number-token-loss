@@ -10,9 +10,9 @@ import torch
 import torch.nn.functional as F
 from transformers import EvalPrediction
 
-from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer, NUMBER_REGEX
-from src.tokenizer.t5custom_tokenizer import check_number_predictions
-from src.utils.numerical_operations import inverse_signed_log
+from ntl.tokenizer.abstract_tokenizer import NumberEncodingTokenizer, NUMBER_REGEX
+from ntl.tokenizer.t5custom_tokenizer import check_number_predictions
+from ntl.utils.numerical_operations import inverse_signed_log
 
 PADDING_TOKEN = -100
 MASKED_OUT = -1

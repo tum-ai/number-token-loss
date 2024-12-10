@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch._tensor import Tensor
 import logging
-from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
+from ntl.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 
 
 class WassersteinNumberTokenLoss:

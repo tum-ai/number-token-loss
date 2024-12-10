@@ -8,7 +8,10 @@ Introducing "Number Token Loss" (NTL) for language models to improve numerical r
 - Requires Python 3.9 or higher
 - Install the required packages
     ```bash
+    conda create -n ntl python=3.9
+    conda activate ntl
     pip install -r requirements.txt
+    pip install -e .
     ```
 - Log into wandb in the terminal
     ```

@@ -3,7 +3,7 @@ from typing import Dict, List, Union
 import torch
 from transformers import DataCollatorForLanguageModeling
 
-from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
+from ntl.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 
 
 class VanillaMaskedQuestionAnswerCollator(DataCollatorForLanguageModeling):

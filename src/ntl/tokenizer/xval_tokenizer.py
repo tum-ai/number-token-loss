@@ -10,7 +10,7 @@ from transformers.tokenization_utils_base import TruncationStrategy, BatchEncodi
     PreTokenizedInput, PreTokenizedInputPair, EncodedInput, EncodedInputPair
 from transformers.utils import PaddingStrategy
 
-from src.tokenizer.abstract_tokenizer import NumberEncodingTokenizer, NUMBER_REGEX
+from ntl.tokenizer.abstract_tokenizer import NumberEncodingTokenizer, NUMBER_REGEX
 
 
 class XvalTokenizer(NumberEncodingTokenizer):
