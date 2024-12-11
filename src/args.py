@@ -139,3 +139,11 @@ class DatasetArguments:
             "help": "Name of the dataset. Allowed: mathematics_dataset, gsm8k, multiplication"
         },
     )
+
+    mode: Optional[str] = field(
+        default="interpolate_extrapolate",
+        metadata={
+            "help": "Whether we test on interpolation/extrapolation of linear algebra, or on everything to see differences between datasets. Allowed: interpolate_extrapolate, dataset_comparison"
+        },
+    )
+
