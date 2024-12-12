@@ -1,4 +1,3 @@
-
 standalone benchmark:
   steps: 10
   batch_size: 32

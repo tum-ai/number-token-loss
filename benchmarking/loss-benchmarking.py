@@ -9,7 +9,7 @@ import shutil
 import torch
 from torch.optim import AdamW
 from omegaconf import DictConfig, OmegaConf
-import hydra
+import yaml
 
 from src.ntl.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
 from src.ntl.transformer_backbone.t5.t5_vanilla_for_number_token_loss import T5VanillaForNumberTokenLoss
@@ -18,12 +18,11 @@ from src.ntl.loss_functions.wasserstein_distance_number_token_loss import Wasser
 from src.ntl.loss_functions.abs_diff_number_token_loss import AbsDiffNumberTokenLoss
 
 logging.basicConfig(
-    level=logging.INFO,  # Set logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+    level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     datefmt="%m/%d/%Y %H:%M:%S",
     handlers=[
-        logging.StreamHandler(),  # Logs to console
-        logging.FileHandler("benchmark.log"),  # Logs to a file
+        logging.StreamHandler()
     ]
 )
 
@@ -313,8 +312,13 @@ def set_up():
     
     return device, vocab_size, tokenizer, model, loss_functions
 
-@hydra.main(version_base=None, config_path=".", config_name="config")
-def main(config: DictConfig):
+def loaf_config(file_path = "config.yaml"):
+    with open(file_path, 'r') as file:
+        config = yaml.safe_load(file)
+    return config
+
+def main():
+    config = loaf_config("benchmarking/config.yaml")
     
     times = {}
     device, vocab_size, tokenizer, model, loss_functions = set_up()
@@ -357,7 +361,7 @@ def main(config: DictConfig):
         for loss_name in loss_functions.keys():
             writer.writerow([loss_name] + [times[key][loss_name] for key in times.keys()])
 
-    shutil.copy("benchmarking/config.yaml", f"benchmarking/config_{timestamp}.yaml")
+    shutil.copy("benchmarking/config.yaml", f"benchmarking/config_{timestamp}.stored_yaml")
 
 if __name__ == "__main__":
     main()
