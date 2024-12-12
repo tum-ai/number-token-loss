@@ -79,10 +79,10 @@ class ExpressionLoss:
             operator = self.tokenizer.convert_ids_to_tokens(operator_id.item())
             
             # extract solutions
-            solution = self.tokenizer.convert_ids_to_tokens(labels[batch, eq+1:end])
+            #solution = self.tokenizer.convert_ids_to_tokens(labels[batch, eq+1:end])
                         
             # extract predicted first number 
-            first_num = self.convert_logit_seq_to_number(logits[batch, start+2:op,:]) # @TODO: for some reason the first token is always a '_' token.
+            first_num = self.convert_logit_seq_to_number(logits[batch, start+2:op,:])# @TODO: for some reason the first token is always a '_' token.
             second_num = self.convert_logit_seq_to_number(logits[batch, op+1:eq,:])
             pred_solution = self.convert_logit_seq_to_number(logits[batch, eq+1:end,:])
             
