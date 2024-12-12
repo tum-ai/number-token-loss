@@ -371,3 +371,7 @@ if __name__ == "__main__":
 # TODO: Save setting
 # TODO: Every step new input
 # TODO: unused variables in function signatures in tokenizer
+
+# TODO: one plot for each benchmark
+# TODO: add standart deviations
+# TODO: add ce loss to the other losses
