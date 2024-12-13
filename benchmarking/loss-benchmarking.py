@@ -11,11 +11,11 @@ import numpy as np
 from torch.optim import AdamW
 import yaml
 
-from src.ntl.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
-from src.ntl.transformer_backbone.t5.t5_vanilla_for_number_token_loss import T5VanillaForNumberTokenLoss
-from src.ntl.loss_functions.number_token_loss import NumberTokenLoss
-from src.ntl.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
-from src.ntl.loss_functions.abs_diff_number_token_loss import AbsDiffNumberTokenLoss
+from ntl.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
+from ntl.transformer_backbone.t5.t5_vanilla_for_number_token_loss import T5VanillaForNumberTokenLoss
+from ntl.loss_functions.number_token_loss import NumberTokenLoss
+from ntl.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
+from ntl.loss_functions.abs_diff_number_token_loss import AbsDiffNumberTokenLoss
 
 logging.basicConfig(
     level=logging.INFO,
