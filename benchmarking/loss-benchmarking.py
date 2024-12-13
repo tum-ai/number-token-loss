@@ -7,8 +7,8 @@ import gc
 import shutil
 
 import torch
+import numpy as np
 from torch.optim import AdamW
-from omegaconf import DictConfig, OmegaConf
 import yaml
 
 from src.ntl.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
@@ -19,7 +19,7 @@ from src.ntl.loss_functions.abs_diff_number_token_loss import AbsDiffNumberToken
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
+    format="[%(asctime)s] - [%(levelname)s] - %(message)s",
     datefmt="%m/%d/%Y %H:%M:%S",
     handlers=[
         logging.StreamHandler()
@@ -121,28 +121,34 @@ def generate_input_set(steps, batch_size, sequence_length, number_share, tokeniz
 
 def standalone(inputs, loss_func, loss_name):
 
-    gc.disable()
+    #gc.disable()
 
-    start = time.perf_counter()
+    times = []
+
     for logits, labels in inputs:
+        start = time.perf_counter()
         loss = loss_func.forward(logits, labels)
-    execution_time = time.perf_counter() - start
+        times.append(time.perf_counter() - start)
+    
+    execution_time = np.mean(times)
+    execution_time_std = np.std(times)
 
-    gc.enable()
+    #gc.enable()
 
-    logger.info(f"{loss_name} computation completed in {execution_time}s")
+    logger.info(f"{loss_name} computation completed in ({execution_time:.2f} ± {execution_time_std:.2f})s")
     logger.debug(f"Loss for {loss_name}: {loss.item()}")
 
-    return execution_time
+    return execution_time, execution_time_std
 
 def forward_pass(inputs, model, loss_func, loss_name, tokenizer, device, gradient_update = False):
 
+    times = []
     optimizer = AdamW(model.parameters(), lr=5e-5)
-    gc.disable()
-
-    start_time = time.perf_counter()
+    #gc.disable()
 
     for input_sentences, output_sentences in inputs:
+
+        start_time = time.perf_counter()
         
         # Tokenize input
         input_encoding = tokenizer(input_sentences, return_tensors="pt", padding=True, truncation=True)
@@ -167,18 +173,21 @@ def forward_pass(inputs, model, loss_func, loss_name, tokenizer, device, gradien
             optimizer.step()
             optimizer.zero_grad()
 
-    duration = time.perf_counter() - start_time
+        times.append(time.perf_counter() - start_time)
 
-    gc.enable()
+    duration = np.mean(times)
+    duration_std = np.std(times)
+
+    #gc.enable()
 
     if gradient_update:
-        logger.info(f"Training step with {loss_name} completed in {duration}s")
+        logger.info(f"Training step with {loss_name} completed in ({duration:.2f} ± {duration_std:.2f})s")
     else:
-        logger.info(f"Forward pass with {loss_name} completed in {duration}s")
+        logger.info(f"Forward pass with {loss_name} completed in ({duration:.2f} ± {duration_std:.2f})ss")
     
     logger.debug(f"Loss for {loss_name}: {loss.item()}")
 
-    return duration
+    return duration, duration_std
 
 def standalone_benchmark(config, loss_functions, vocab_size, device):
 
@@ -265,6 +274,17 @@ def training_step_benchmark(config, loss_functions, tokenizer, model, device):
 
     return times
 
+class CustomLoss:
+    def __init__(self, loss_functions: list):   
+        self.loss_functions = loss_functions
+    
+    def forward(self, logits, labels):
+        total_loss = 0
+        for loss_function in self.loss_functions:
+            total_loss += loss_function.forward(logits, labels)
+        return total_loss
+        
+
 def set_up():
 
     logger.info("Setup...")
@@ -302,11 +322,15 @@ def set_up():
                                                vocab_size = vocab_size,
                                                device = device
     )
+
+    ce_with_mse = CustomLoss([ce_loss, mse_ntl_loss])
+    ce_with_wasserstein = CustomLoss([ce_loss, wasserstein_ntl_loss])
+    ce_with_abs_diff = CustomLoss([ce_loss, abs_diff_ntl_loss])
     
     loss_functions = {"CE Loss": ce_loss, 
-                      "MSE Loss": mse_ntl_loss, 
-                      "Wassserstein Loss": wasserstein_ntl_loss, 
-                      "Abs Diff NTL Loss": abs_diff_ntl_loss}
+                      "CE and MSE Loss": ce_with_mse, 
+                      "CE and Wassserstein Loss": ce_with_wasserstein, 
+                      "CE and Abs Diff NTL Loss": ce_with_abs_diff}
     
     logger.info("Setup finished")
     
@@ -330,7 +354,7 @@ def main():
         device = device
     )
 
-    gc.collect()
+    #gc.collect()
     time.sleep(1)
 
     times["forward pass"] = forward_pass_benchmark(
@@ -341,7 +365,7 @@ def main():
         device = device
     )
 
-    gc.collect()
+    #gc.collect()
     time.sleep(1)
 
     times["training step"] = training_step_benchmark(

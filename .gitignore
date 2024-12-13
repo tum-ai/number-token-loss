@@ -143,6 +143,7 @@ cython_debug/
 # Benchmark logging
 *.stored_yaml
 *.log
+*.csv
 
 # Mac OS
 .DS_Store
