@@ -119,13 +119,18 @@ def generate_input_set(steps, batch_size, sequence_length, number_share, tokeniz
     return inputs
 
 
-def standalone(inputs, loss_func, loss_name):
+def standalone(config, loss_func, loss_name, vocab_size, device):
 
     #gc.disable()
 
     times = []
 
-    for logits, labels in inputs:
+    for _ in range(config['steps']):
+        logits, labels = generate_inputs(config['batch_size'],
+                                         config['sequence_length'], 
+                                         vocab_size, 
+                                         device
+        )
         start = time.perf_counter()
         loss = loss_func.forward(logits, labels)
         times.append(time.perf_counter() - start)
@@ -140,13 +145,24 @@ def standalone(inputs, loss_func, loss_name):
 
     return execution_time, execution_time_std
 
-def forward_pass(inputs, model, loss_func, loss_name, tokenizer, device, gradient_update = False):
+def forward_pass(config, model, loss_func, loss_name, tokenizer, device, gradient_update = False):
 
     times = []
     optimizer = AdamW(model.parameters(), lr=5e-5)
     #gc.disable()
 
-    for input_sentences, output_sentences in inputs:
+    for _ in range(config['steps']):
+
+        input_sentences = generate_random_input(tokenizer=tokenizer, 
+                                        batch_size=config['batch_size'], 
+                                        n_tokens=config['sequence_length'], 
+                                        number_share=config['number_share']
+        )
+        output_sentences = generate_random_input(tokenizer=tokenizer, 
+                                        batch_size=config['batch_size'], 
+                                        n_tokens=config['sequence_length'], 
+                                        number_share=config['number_share']
+        )
 
         start_time = time.perf_counter()
         
@@ -197,19 +213,12 @@ def standalone_benchmark(config, loss_functions, vocab_size, device):
     
     for name, loss in loss_functions.items():
         
-        # Generate Inputs
-        single_inputs = [
-            generate_inputs(config['batch_size'],
-                            config['sequence_length'], 
-                            vocab_size, 
-                            device)
-            for _ in range(config['steps'])
-        ]
-
         times[name] = standalone(
-            inputs = single_inputs,
+            config = config,
             loss_func=loss,
             loss_name=name,
+            vocab_size=vocab_size,
+            device=device
         )
 
     logger.info("Standalone benchmarking completed.")
@@ -223,16 +232,9 @@ def forward_pass_benchmark(config, loss_functions, tokenizer, model, device):
 
     for name, loss in loss_functions.items():
 
-        # Generate Inputs
-        forward_inputs = generate_input_set(steps = config['steps'],
-                                            batch_size = config['batch_size'],
-                                            sequence_length = config['sequence_length'],
-                                            number_share = config['number_share'],
-                                            tokenizer = tokenizer
-        )
 
         times[name] = forward_pass(
-            inputs = forward_inputs,
+            config = config,
             model=model,
             loss_func=loss,
             loss_name=name,
@@ -252,16 +254,8 @@ def training_step_benchmark(config, loss_functions, tokenizer, model, device):
     
     for name,loss in loss_functions.items():
 
-        # Generate Inputs
-        training_inputs = generate_input_set(steps = config['steps'],
-                                            batch_size = config['batch_size'],
-                                            sequence_length = config['sequence_length'],
-                                            number_share = config['number_share'],
-                                            tokenizer = tokenizer
-        )
-
         times[name] = forward_pass(
-            inputs = training_inputs,
+            config = config,
             model=model,
             loss_func=loss,
             loss_name=name,
