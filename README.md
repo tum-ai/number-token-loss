@@ -4,7 +4,7 @@
 Introducing "Number Token Loss" (NTL) for language models to improve numerical reasoning by using regression-based loss functions that account for the proximity of numbers, achieving better performance on math tasks without increasing computational overhead.
 
 ## Resources
-Find our paper [here](https://arxiv.org/abs/2411.02083) and the poster of the NeurIPS 2024 MathAI workshop [here](https://github.com/tum-ai/number-token-loss/blob/poster/resources/neurips_mathai_poster.pdf?raw=true "Poster")
+Find our paper [here](https://arxiv.org/abs/2411.02083) and the poster of the NeurIPS 2024 MathAI workshop [here](https://github.com/tum-ai/number-token-loss/blob/main/resources/neurips_mathai_poster.pdf "Poster")
 
 ## Setup
 
