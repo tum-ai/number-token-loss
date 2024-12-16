@@ -3,8 +3,8 @@ import random
 import string
 import logging
 import csv
-import gc
 import shutil
+import copy
 
 import torch
 import numpy as np
@@ -16,6 +16,11 @@ from ntl.transformer_backbone.t5.t5_vanilla_for_number_token_loss import T5Vanil
 from ntl.loss_functions.number_token_loss import NumberTokenLoss
 from ntl.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
 from ntl.loss_functions.abs_diff_number_token_loss import AbsDiffNumberTokenLoss
+
+# Set seed for reproducibility
+torch.manual_seed(42)
+np.random.seed(42)
+random.seed(42)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -37,14 +42,21 @@ logger = logging.getLogger(__name__)
 # 3. Measure speed of training step (including gradient update)
 # Run each configuration in each setup 100 times (on GPU) and make a barplot showing the differences
 
+class CustomLoss:
+    def __init__(self, loss_functions: list):   
+        self.loss_functions = loss_functions
+    
+    def forward(self, logits, labels):
+        total_loss = 0
+        for loss_function in self.loss_functions:
+            total_loss += loss_function.forward(logits, labels)
+        return total_loss
+
 class CustomCrossEntropyLoss:
     def forward(self, logits, labels):
-        # Automatisch die Shapes bestimmen und dann umformen
-        batch_size, seq_len, num_classes = logits.shape  # Die Form der Logits erfassen
+        batch_size, seq_len, num_classes = logits.shape
 
-        # Vergewissern, dass die Shapes übereinstimmen, bevor wir den Loss berechnen
-        assert labels.shape == (batch_size, seq_len), "Die Shapes von Logits und Targets müssen übereinstimmen."
-
+        assert labels.shape == (batch_size, seq_len), "The shapes of the labels and logits do not match."
         return torch.nn.functional.cross_entropy(logits.view(-1, num_classes), labels.view(-1))
 
 def generate_inputs(batch_size, sequence_length, vocab_size, device):
@@ -95,7 +107,7 @@ def generate_random_input(tokenizer, batch_size, n_tokens, number_share):
                 miss_count += 1
         
         if(found == False):
-            raise Exception("Could not generate a valid input after 10 tries.")
+            raise RuntimeError(f"Failed to generate valid input after {miss_count} tries.")
     
     return texts
 
@@ -121,8 +133,6 @@ def generate_input_set(steps, batch_size, sequence_length, number_share, tokeniz
 
 def standalone(config, loss_func, loss_name, vocab_size, device):
 
-    #gc.disable()
-
     times = []
 
     for _ in range(config['steps']):
@@ -138,8 +148,6 @@ def standalone(config, loss_func, loss_name, vocab_size, device):
     execution_time = np.mean(times)
     execution_time_std = np.std(times)
 
-    #gc.enable()
-
     logger.info(f"{loss_name} computation completed in ({execution_time:.2f} ± {execution_time_std:.2f})s")
     logger.debug(f"Loss for {loss_name}: {loss.item()}")
 
@@ -148,8 +156,9 @@ def standalone(config, loss_func, loss_name, vocab_size, device):
 def forward_pass(config, model, loss_func, loss_name, tokenizer, device, gradient_update = False):
 
     times = []
+    model.to(device)
     optimizer = AdamW(model.parameters(), lr=5e-5)
-    #gc.disable()
+    
 
     for _ in range(config['steps']):
 
@@ -194,12 +203,10 @@ def forward_pass(config, model, loss_func, loss_name, tokenizer, device, gradien
     duration = np.mean(times)
     duration_std = np.std(times)
 
-    #gc.enable()
-
     if gradient_update:
         logger.info(f"Training step with {loss_name} completed in ({duration:.2f} ± {duration_std:.2f})s")
     else:
-        logger.info(f"Forward pass with {loss_name} completed in ({duration:.2f} ± {duration_std:.2f})ss")
+        logger.info(f"Forward pass with {loss_name} completed in ({duration:.2f} ± {duration_std:.2f})s")
     
     logger.debug(f"Loss for {loss_name}: {loss.item()}")
 
@@ -268,17 +275,6 @@ def training_step_benchmark(config, loss_functions, tokenizer, model, device):
 
     return times
 
-class CustomLoss:
-    def __init__(self, loss_functions: list):   
-        self.loss_functions = loss_functions
-    
-    def forward(self, logits, labels):
-        total_loss = 0
-        for loss_function in self.loss_functions:
-            total_loss += loss_function.forward(logits, labels)
-        return total_loss
-        
-
 def set_up():
 
     logger.info("Setup...")
@@ -330,17 +326,34 @@ def set_up():
     
     return device, vocab_size, tokenizer, model, loss_functions
 
-def loaf_config(file_path = "config.yaml"):
-    with open(file_path, 'r') as file:
-        config = yaml.safe_load(file)
-    return config
+def load_config(file_path="config.yaml"):
+    try:
+        with open(file_path, 'r') as file:
+            return yaml.safe_load(file)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Config file not found at {file_path}.")
+
 
 def main():
-    config = loaf_config("benchmarking/config.yaml")
+    config = load_config("benchmarking/config.yaml")
     
     times = {}
     device, vocab_size, tokenizer, model, loss_functions = set_up()
 
+    # run up
+    run_up_config = copy.deepcopy(config)
+    run_up_config['standalone benchmark']['steps'] = 1
+    run_up_config['forward pass benchmark']['steps'] = 1
+    run_up_config['training step benchmark']['steps'] = 1
+
+    standalone_benchmark(
+        config = run_up_config['standalone benchmark'],
+        loss_functions = loss_functions,
+        vocab_size = vocab_size,
+        device = device
+    )
+
+    # benchmark
     times["standalone"] = standalone_benchmark(
         config = config['standalone benchmark'],
         loss_functions = loss_functions,
@@ -348,20 +361,34 @@ def main():
         device = device
     )
 
-    #gc.collect()
-    time.sleep(1)
-
-    times["forward pass"] = forward_pass_benchmark(
-        config = config['forwad pass benchmark'],
+    # run up
+    forward_pass_benchmark(
+        config = run_up_config['forward pass benchmark'],
         loss_functions = loss_functions,
         tokenizer = tokenizer,
         model = model,
         device = device
     )
 
-    #gc.collect()
-    time.sleep(1)
+    # benchmark
+    times["forward pass"] = forward_pass_benchmark(
+        config = config['forward pass benchmark'],
+        loss_functions = loss_functions,
+        tokenizer = tokenizer,
+        model = model,
+        device = device
+    )
 
+    # run up
+    training_step_benchmark(
+        config = run_up_config['training step benchmark'],
+        loss_functions = loss_functions,
+        tokenizer = tokenizer,
+        model = model,
+        device = device
+    )
+
+    # benchmark
     times["training step"] = training_step_benchmark(
         config = config['training step benchmark'],
         loss_functions = loss_functions,
@@ -384,16 +411,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# TODO: add order numbers?
-# TODO: add realistic inputs from dataset
-# TODO: Log to csv
-# TODO: Check GPU Inputs
 # TODO: Custom loss 
-# TODO: plotting
-# TODO: Save setting
-# TODO: Every step new input
-# TODO: unused variables in function signatures in tokenizer
-
-# TODO: one plot for each benchmark
-# TODO: add standart deviations
-# TODO: add ce loss to the other losses
