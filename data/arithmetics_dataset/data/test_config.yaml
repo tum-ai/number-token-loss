@@ -1,0 +1,23 @@
+- num_samples: 5000
+  num_operators: 2
+  max_digits: 2
+  negative_probability: 0.3
+  parentheses_probability: 0.8
+  
+- num_samples: 5000
+  num_operators: 2
+  max_digits: 3
+  negative_probability: 0.3
+  parentheses_probability: 0.8
+
+- num_samples: 5000
+  num_operators: 3
+  max_digits: 2
+  negative_probability: 0.3
+  parentheses_probability: 0.8
+
+- num_samples: 5000
+  num_operators: 3
+  max_digits: 3
+  negative_probability: 0.3
+  parentheses_probability: 0.8
