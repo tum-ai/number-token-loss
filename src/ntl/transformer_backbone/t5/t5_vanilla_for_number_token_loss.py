@@ -7,15 +7,19 @@ from ntl.loss_functions.expression_loss import ExpressionLoss
 
 
 class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
-    def __init__(self, config, number_token_loss: NumberTokenLoss = None, expression_loss = ExpressionLoss):
+
+    def __init__(
+        self,
+        config,
+        number_token_loss: NumberTokenLoss = None,
+        expression_loss: ExpressionLoss = None,
+    ):
         super().__init__(config)
         super().resize_token_embeddings(config.vocab_size, pad_to_multiple_of=64 if torch.cuda.is_available() else 1)
 
         # Initialize additional losses
         self.number_token_loss = number_token_loss
         self.expression_loss = expression_loss
-    
-        
 
     def forward(
             self,
@@ -62,7 +66,7 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
             outputs["number_loss"] = number_token_loss
             outputs["token_loss"] = outputs.loss
             outputs.loss = outputs.loss + self.number_token_loss.weight * number_token_loss
-            
+
         if labels is not None and self.expression_loss is not None:
             expression_loss = self.expression_loss.forward(outputs.logits, labels)
             outputs["expression_loss"] = expression_loss
