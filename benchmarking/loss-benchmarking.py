@@ -406,8 +406,12 @@ def main():
         for loss_name in loss_functions.keys():
             writer.writerow([loss_name] + [times[key][loss_name] for key in times.keys()])
 
-    shutil.copy("benchmarking/config.yaml", f"benchmarking/config_{timestamp}.stored_yaml")
+    # Save config object as yaml
+    with open(f'benchmarking/config_{timestamp}.stored_yaml', 'w') as file:
+        yaml.dump(config, file)
+    
 
+   
 if __name__ == "__main__":
     main()
 
