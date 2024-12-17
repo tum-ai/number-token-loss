@@ -349,8 +349,7 @@ def load_config(file_path="config.yaml"):
         raise FileNotFoundError(f"Config file not found at {file_path}.")
 
 
-def main():
-    config = load_config("benchmarking/config.yaml")
+def main(config = load_config("benchmarking/config.yaml")):
     
     times = {}
     device, vocab_size, tokenizer, model, loss_functions = set_up()
@@ -424,10 +423,20 @@ def main():
     # Save config object as yaml
     with open(f'benchmarking/config_{timestamp}.stored_yaml', 'w') as file:
         yaml.dump(config, file)
-    
 
+    
+def number_share_benchmark():
+    orig_config = load_config("benchmarking/config.yaml")
+
+    for number_share in [0.1 * n for n in range(11)]:
+        config = copy.deepcopy(orig_config)
+        number_share = round(number_share, 1)
+        config['standalone benchmark']['number_share'] = number_share
+        config['forward pass benchmark']['number_share'] = number_share
+        config['training step benchmark']['number_share'] = number_share
+        main(config)
    
 if __name__ == "__main__":
-    main()
+    number_share_benchmark()
 
 # TODO: Custom loss 
