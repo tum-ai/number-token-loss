@@ -22,6 +22,8 @@ torch.manual_seed(42)
 np.random.seed(42)
 random.seed(42)
 
+CUDA_DEVICE = "cuda"
+
 logging.basicConfig(
     level=logging.INFO,
     format="[%(asctime)s] - [%(levelname)s] - %(message)s",
@@ -141,8 +143,16 @@ def standalone(config, loss_func, loss_name, vocab_size, device):
                                          vocab_size, 
                                          device
         )
+
+        if device == CUDA_DEVICE:
+            torch.cuda.synchronize()
         start = time.perf_counter()
+        
         loss = loss_func.forward(logits, labels)
+
+        if device == CUDA_DEVICE:
+            torch.cuda.synchronize()
+
         times.append(time.perf_counter() - start)
     
     execution_time = np.mean(times)
@@ -173,6 +183,8 @@ def forward_pass(config, model, loss_func, loss_name, tokenizer, device, gradien
                                         number_share=config['number_share']
         )
 
+        if device == CUDA_DEVICE:
+            torch.cuda.synchronize()
         start_time = time.perf_counter()
         
         # Tokenize input
@@ -198,6 +210,9 @@ def forward_pass(config, model, loss_func, loss_name, tokenizer, device, gradien
             optimizer.step()
             optimizer.zero_grad()
 
+
+        if device == CUDA_DEVICE:
+            torch.cuda.synchronize()
         times.append(time.perf_counter() - start_time)
 
     duration = np.mean(times)
@@ -280,7 +295,7 @@ def set_up():
     logger.info("Setup...")
 
     if torch.cuda.is_available():
-        device = "cuda"
+        device = CUDA_DEVICE
     else:
         device = "cpu"
 
