@@ -147,6 +147,14 @@ class TestRunLanguageModeling(unittest.TestCase):
                                         )
                                     except Exception as e:
                                         logging.error(f"Training failed with exception: {e}", exc_info=True)
+                                        logging.error(
+                                            f"Failed with: number_encoding={number_encoding}, "
+                                            f"number_token_loss={number_token_loss}, "
+                                            f"log_scale_embeddings={log_scale_embeddings}, "
+                                            f"model_name_or_path={model_name_or_path}, "
+                                            f"xval_bigger_language_head={xval_bigger_language_head}, "
+                                            f"language_modelling={language_modelling}. "
+                                            f"Error: {e}", exc_info=True)
                                         self.fail(f"Training failed with exception: {e}")
 
                                     # Check if checkpoint is saved
