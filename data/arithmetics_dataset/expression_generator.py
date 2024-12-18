@@ -1,4 +1,5 @@
 import random
+from typing import Optional
 
 
 class ExpressionGenerator:
@@ -8,7 +9,7 @@ class ExpressionGenerator:
 
     def __init__(
         self,
-        operators: list[str] = None,
+        operators: Optional[list[str]] = None,
         negative_probability: float = 0.5,
         parentheses_probability: float = 1.0,
     ):
