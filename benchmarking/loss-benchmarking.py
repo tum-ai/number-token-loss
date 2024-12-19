@@ -135,7 +135,7 @@ def generate_input_set(steps, batch_size, sequence_length, number_share, tokeniz
 
 def standalone(config, loss_func, loss_name, vocab_size, device):
 
-    times = []
+    timer = Timer()
 
     for _ in range(config['steps']):
         logits, labels = generate_inputs(config['batch_size'],
@@ -144,33 +144,58 @@ def standalone(config, loss_func, loss_name, vocab_size, device):
                                          device
         )
 
-        if device == CUDA_DEVICE:
-            torch.cuda.synchronize()
-        start = time.perf_counter()
+        timer.start()
         
         loss = loss_func.forward(logits, labels)
 
+        timer.stop("complete_pass", device)
+    
+    execution_times, execution_time_stds = timer.get_results()
+
+    logger.info(f"{loss_name} computation completed in ({execution_times['complete_pass']:.2f} ± {execution_time_stds['complete_pass']:.2f})s")
+    logger.debug(f"Loss for {loss_name}: {loss.item()}")
+
+    return execution_times, execution_time_stds
+
+class Timer():  
+    def __init__(self):
+        self.start_time = -1
+        self.times = {}
+
+    def start(self):
+        self.start_time = time.perf_counter()
+    
+    def stop(self, name, device):
+        if(self.start_time == -1):
+            raise RuntimeError("Timer not started.")
+        
+        if name not in self.times:
+            self.times[name] = []
+
         if device == CUDA_DEVICE:
             torch.cuda.synchronize()
 
-        times.append(time.perf_counter() - start)
-    
-    execution_time = np.mean(times)
-    execution_time_std = np.std(times)
+        self.times[name].append(time.perf_counter() - self.start_time)
 
-    logger.info(f"{loss_name} computation completed in ({execution_time:.2f} ± {execution_time_std:.2f})s")
-    logger.debug(f"Loss for {loss_name}: {loss.item()}")
+    def get_results(self):
+        results = {}
+        results_err = {}
+        
+        for stop_point, times in self.times.items():
+            results[stop_point] = np.mean(times)
+            results_err[stop_point] = np.std(times)
 
-    return execution_time, execution_time_std
+        return results, results_err
 
 def forward_pass(config, model, loss_func, loss_name, tokenizer, device, gradient_update = False):
 
-    times = []
+    timer = Timer()
     model.to(device)
     optimizer = AdamW(model.parameters(), lr=5e-5)
-    
 
     for _ in range(config['steps']):
+
+        timer.start()
 
         input_sentences = generate_random_input(tokenizer=tokenizer, 
                                         batch_size=config['batch_size'], 
@@ -183,9 +208,7 @@ def forward_pass(config, model, loss_func, loss_name, tokenizer, device, gradien
                                         number_share=config['number_share']
         )
 
-        if device == CUDA_DEVICE:
-            torch.cuda.synchronize()
-        start_time = time.perf_counter()
+        timer.stop("input_generation", device)
         
         # Tokenize input
         input_encoding = tokenizer(input_sentences, return_tensors="pt", padding=True, truncation=True)
@@ -196,36 +219,38 @@ def forward_pass(config, model, loss_func, loss_name, tokenizer, device, gradien
         target_encoding = tokenizer(output_sentences, return_tensors="pt", padding=True, truncation=True)
         labels = target_encoding["input_ids"].to(device)
 
+        timer.stop("tokenization", device)
+
         # Replace padding token ID in labels with -100 (ignored in loss computation)
         labels[labels == tokenizer.pad_token_id] = -100
 
         outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-        logits = outputs.logits              
+        logits = outputs.logits  
+
+        timer.stop("model_forward", device)            
 
         loss = loss_func.forward(logits, labels)
         loss.backward()
+
+        timer.stop("loss_computation", device)
 
         # Perform one optimization step
         if(gradient_update):
             optimizer.step()
             optimizer.zero_grad()
 
+        timer.stop("complete_pass", device)
 
-        if device == CUDA_DEVICE:
-            torch.cuda.synchronize()
-        times.append(time.perf_counter() - start_time)
-
-    duration = np.mean(times)
-    duration_std = np.std(times)
+    durations, duration_stds = timer.get_results()
 
     if gradient_update:
-        logger.info(f"Training step with {loss_name} completed in ({duration:.2f} ± {duration_std:.2f})s")
+        logger.info(f"Training step with {loss_name} completed in ({durations['complete_pass']:.2f} ± {duration_stds['complete_pass']:.2f})s")
     else:
-        logger.info(f"Forward pass with {loss_name} completed in ({duration:.2f} ± {duration_std:.2f})s")
+        logger.info(f"Forward pass with {loss_name} completed in ({durations['complete_pass']:.2f} ± {duration_stds['complete_pass']:.2f})s")
     
     logger.debug(f"Loss for {loss_name}: {loss.item()}")
 
-    return duration, duration_std
+    return durations, duration_stds
 
 def standalone_benchmark(config, loss_functions, vocab_size, device):
 
@@ -289,6 +314,46 @@ def training_step_benchmark(config, loss_functions, tokenizer, model, device):
     logger.info("Training step benchmarking completed.")
 
     return times
+
+# Prepare the data for writing rows
+def prepare_rows(data):
+    rows = []
+    all_measurement_points = set()
+
+    for benchmark, losses in data.items():
+        for loss_function, values in losses.items():
+            time_values, time_errors = values
+            row = {
+                "benchmark": benchmark,
+                "loss": loss_function
+            }
+            for key in time_values:
+                row[f"{key}"] = time_values[key]
+                row[f"{key}_err"] = time_errors[key]
+                all_measurement_points.add(key)
+            rows.append(row)
+
+    return rows, all_measurement_points
+
+def save_results(filename, data):
+
+    # Write to CSV
+    with open(filename, mode='w', newline='') as file:
+        rows, all_measurement_points = prepare_rows(data)
+
+        # Dynamically generate fieldnames
+        fieldnames = ["benchmark", "loss"]
+        for point in sorted(all_measurement_points):
+            fieldnames.append(f"{point}")
+            fieldnames.append(f"{point}_err")
+
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+    
+    logger.info(f"Data has been written to {filename}")
+
 
 def set_up():
 
@@ -413,12 +478,8 @@ def main(config = load_config("benchmarking/config.yaml")):
 
     timestamp = int(time.time() * 100)
 
-    # Write to csv 
-    with open(f'benchmarking/benchmark_results_{timestamp}.csv', 'w') as f:
-        writer = csv.writer(f)
-        writer.writerow(["loss"] + list(times.keys()))
-        for loss_name in loss_functions.keys():
-            writer.writerow([loss_name] + [times[key][loss_name] for key in times.keys()])
+    # Save results as csv
+    save_results(f'benchmarking/benchmark_results_{timestamp}.csv', times)
 
     # Save config object as yaml
     with open(f'benchmarking/config_{timestamp}.stored_yaml', 'w') as file:
