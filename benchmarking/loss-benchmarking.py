@@ -368,7 +368,7 @@ def run_model_benchmark(
         if update_gradients:
             optimizer.step()
             optimizer.zero_grad()
-            timer.stop("optimization", device)
+            timer.stop("optimizer_step", device)
 
     times, stds = timer.get_statistics()
     overall_time, overall_std = timer.get_overall_statistics()
