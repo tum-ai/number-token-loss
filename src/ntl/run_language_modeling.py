@@ -178,7 +178,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     else:
         raise ValueError(f"Unknown number encoding: {model_args.number_encoding}")
 
-    # load tokenizer    
+    # load tokenizer
     if model_args.tokenizer_name:
         tokenizer = tokenizer_class.from_pretrained(
             model_args.tokenizer_name, cache_dir=model_args.cache_dir
@@ -248,7 +248,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
                 loss_function=loss_function,
                 weight=model_args.number_token_loss_weight
             )
-            
+
     if model_args.expression_loss:
         if model_args.expression_loss_function == "mse":
             loss_function = F.mse_loss
@@ -259,7 +259,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         else:
             raise ValueError(
                 f"Unknown expression_loss_function: {model_args.expression_loss_function}. Allowed: mse, huber, mae.")
-        
+
         model_init_kwargs["expression_loss"] = ExpressionLoss(
             tokenizer,
             vocab_size=config.vocab_size,
@@ -334,6 +334,13 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         train_data_path = 'data/digit-multiplication/data/train.jsonl'
         eval_data_path = 'data/digit-multiplication/data/val.jsonl'
         test_data_path = 'data/digit-multiplication/data/test.jsonl'
+        train_dataset = load_json_dataset(train_data_path)
+        eval_dataset = load_json_dataset(eval_data_path)
+        test_dataset = load_json_dataset(test_data_path)
+    elif dataset_args.dataset_name == "expression_dataset":
+        train_data_path = "data/expression-dataset/train.jsonl"
+        eval_data_path = "data/expression-dataset/val.jsonl"
+        test_data_path = "data/expression-dataset/test.jsonl"
         train_dataset = load_json_dataset(train_data_path)
         eval_dataset = load_json_dataset(eval_data_path)
         test_dataset = load_json_dataset(test_data_path)
