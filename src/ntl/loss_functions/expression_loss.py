@@ -103,7 +103,7 @@ class ExpressionLoss:
             operator_id = labels[batch, op]
             operator = self.tokenizer.convert_ids_to_tokens(operator_id.item())
 
-            # extract solutions
+            # extract label solutions
             solution_numbers = self.tokenizer.convert_ids_to_tokens(
                 labels[batch, eq + 1 : end]
             )
@@ -112,11 +112,13 @@ class ExpressionLoss:
             # extract predicted first number
             first_num = self.convert_logit_seq_to_number(
                 logits[batch, start + 2 : op, :]
-            )  # @TODO: for some reason the first token is always a '_' token.
+            )  # @TODO: Look at tokenization some reason the first token is always a '_' token.
             second_num = self.convert_logit_seq_to_number(logits[batch, op + 1 : eq, :])
+
+            # extract predicted solution
             # pred_solution.append(self.convert_logit_seq_to_number(logits[batch, eq+1:end,:]))
 
-            # compute result based on predicted numbers
+            # compute result based on individual predicted numbers
             consistent_solution.append(
                 self.apply_operator(first_num, second_num, operator)
             )

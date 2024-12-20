@@ -154,6 +154,6 @@ class DatasetArguments:
     dataset_name: str = field(
         default="mathematics_dataset",
         metadata={
-            "help": "Name of the dataset. Allowed: mathematics_dataset, gsm8k, multiplication"
+            "help": "Name of the dataset. Allowed: mathematics_dataset, gsm8k, multiplication, expression"
         },
     )
