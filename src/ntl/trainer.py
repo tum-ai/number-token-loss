@@ -130,7 +130,6 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
         if self.model.generation_config._from_model_config:
             self.model.generation_config._from_model_config = False
 
-
         ########################
         # Customized code start
         ########################
@@ -198,7 +197,6 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
                 labels = (labels, number_labels)
         else:
             labels = None
-
 
         return next_token_prediction_loss, (next_token_prediction_logits, generated_tokens), labels
 
@@ -305,7 +303,6 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
                     #######################
                     # Customized code end
                     #######################
-
 
                     if isinstance(outputs, dict):
                         #######################
@@ -606,7 +603,6 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
 
         return EvalLoopOutput(predictions=all_preds, label_ids=all_labels, metrics=metrics, num_samples=num_samples)
 
-
     def _maybe_log_save_evaluate(self, tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, token_loss = None, number_loss = None):
         if self.control.should_log and self.state.global_step > self._globalstep_last_logged:
 
@@ -651,7 +647,6 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
         if self.control.should_save:
             self._save_checkpoint(model, trial, metrics=metrics)
             self.control = self.callback_handler.on_save(self.args, self.state, self.control)
-
 
     def _inner_training_loop(
             self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None

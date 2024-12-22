@@ -18,6 +18,9 @@ class ExpressionLoss:
         self.loss_function = loss_function
         self.weight = weight
         hashed_num_tokens = set(self.tokenizer.get_num_tokens())
+        self.num_token_ids = self.tokenizer.convert_tokens_to_ids(
+            self.tokenizer.get_num_tokens()
+        )
         self.expression_tokens = self.tokenizer.expression_tokens
 
         self.start_token_id = self.tokenizer.convert_tokens_to_ids(
@@ -73,11 +76,17 @@ class ExpressionLoss:
         # Create a mask to filter out non-digit tokens
         logits = logits[:, :, self.number_tokens]
 
+        # Set all logits where label is not a number to 0 as we do not want to compute gradients for them
+        logits = logits * torch.isin(
+            labels, torch.tensor(self.num_token_ids)
+        ).unsqueeze(-1)
+
         # Create a mask for the expression
         start_locs = labels == self.start_token_id
         end_locs = labels == self.end_token_id
         equal_locs = labels == self.equal_token_id
         operator_locs = torch.isin(labels, torch.tensor(self.operator_ids))
+        number_locs = torch.isin(labels, torch.tensor(self.number_tokens))
 
         # do not compute a loss if no complete expression is found
         if (
@@ -93,6 +102,17 @@ class ExpressionLoss:
         _, equal_indices = torch.where(equal_locs)
         _, end_indices = torch.where(end_locs)
         _, op_indices = torch.where(operator_locs)
+        _, num_indices = torch.where(number_locs)
+
+        if (
+            len(start_indices)
+            != len(end_indices)
+            != len(equal_indices)
+            != len(op_indices)
+        ):
+            raise ValueError("Mismatch in number of partial expressions found!")
+
+        # filter out negative signs for numbers from the operators
 
         consistent_solution = []
         solution = []
@@ -111,9 +131,11 @@ class ExpressionLoss:
 
             # extract predicted first number
             first_num = self.convert_logit_seq_to_number(
-                logits[batch, start + 2 : op, :]
+                logits[batch, start + 2 : op, :], labels[batch, start + 2 : op, :]
             )  # @TODO: Look at tokenization some reason the first token is always a '_' token.
-            second_num = self.convert_logit_seq_to_number(logits[batch, op + 1 : eq, :])
+            second_num = self.convert_logit_seq_to_number(
+                logits[batch, op + 1 : eq, :], labels[batch, start + 2 : op, :]
+            )
 
             # extract predicted solution
             # pred_solution.append(self.convert_logit_seq_to_number(logits[batch, eq+1:end,:]))
