@@ -337,15 +337,17 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         train_dataset = load_json_dataset(train_data_path)
         eval_dataset = load_json_dataset(eval_data_path)
         test_dataset = load_json_dataset(test_data_path)
-    elif dataset_args.dataset_name == "expression_dataset":
-        train_data_path = "data/expression-dataset/train.jsonl"
-        eval_data_path = "data/expression-dataset/val.jsonl"
-        test_data_path = "data/expression-dataset/test.jsonl"
+    elif dataset_args.dataset_name == "arithmetic":
+        train_data_path = "data/arithmetics_dataset/data/train.jsonl"
+        eval_data_path = "data/arithmetics_dataset/data/val.jsonl"
+        test_data_path = "data/arithmetics_dataset/data/test.jsonl"
         train_dataset = load_json_dataset(train_data_path)
         eval_dataset = load_json_dataset(eval_data_path)
         test_dataset = load_json_dataset(test_data_path)
     else:
-        raise ValueError(f"Unknown dataset: {dataset_args.dataset_name}. Allowed: gsm8k, mathematics_dataset, multiplication")
+        raise ValueError(
+            f"Unknown dataset: {dataset_args.dataset_name}. Allowed: gsm8k, mathematics_dataset, multiplication, arithmetic"
+        )
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"Number of parameters {num_params} of type {type(model)}")
