@@ -371,19 +371,20 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     else:
         logger.info("Skipping training.")
 
-    logger.info("*** Evaluate on validation data ***")
-    eval_results_val = trainer.evaluate(eval_dataset=eval_dataset)
-    logger.info(f"eval_results validation data: {eval_results_val}")
+    if not (dataset_args.dataset_name == "mathematics_dataset" and dataset_args.mode == "dataset_comparison"):
+        logger.info("*** Evaluate on validation data ***")
+        eval_results_val = trainer.evaluate(eval_dataset=eval_dataset)
+        logger.info(f"eval_results validation data: {eval_results_val}")
 
-    if not training_args.do_only_eval:
-        return eval_results_val, model
+        if not training_args.do_only_eval:
+            return eval_results_val, model
 
     if dataset_args.dataset_name in ["gsm8k", "multiplication"]:
         logger.info("*** Evaluate on test set ***")
         eval_results_test = trainer.evaluate(eval_dataset=test_dataset)
         logger.info(f"eval_results test data: {eval_results_test}")
         return eval_results_val, eval_results_test
-    elif dataset_args.dataset_name == "mathematics_dataset":
+    elif dataset_args.dataset_name == "mathematics_dataset" and dataset_args.mode == "interpolate_extrapolate":
         logger.info("*** Evaluate on interpolate data ***")
         eval_results_test_interpolate = trainer.evaluate(eval_dataset=test_interpolate_dataset)
         logger.info(f"eval_results interpolate data: {eval_results_test_interpolate}")
@@ -392,6 +393,54 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         eval_results_test_extrapolate = trainer.evaluate(eval_dataset=test_extrapolate_dataset)
         logger.info(f"eval_results extrapolate data: {eval_results_test_extrapolate}")
         return eval_results_val, eval_results_test_interpolate, eval_results_test_extrapolate
+    elif dataset_args.dataset_name == "mathematics_dataset" and dataset_args.mode == "dataset_comparison":
+        logger.info("*** Comparing loss on individuals datasets ***")
+
+        # interpolation
+        int_categories = [
+            "algebra__linear_1d.txt",
+            "algebra__linear_1d_composed.txt",
+            "algebra__linear_2d.txt",
+            "algebra__linear_2d_composed.txt",
+            "algebra__sequence_next_term.txt",
+            "arithmetic__add_or_sub.txt",
+            "arithmetic__add_sub_multiple.txt",
+            "arithmetic__mul.txt",
+            "numbers__div_remainder.txt",
+            "numbers__div_remainder_composed.txt",
+            "numbers__place_value.txt",
+            "numbers__round_number.txt",
+            "numbers__round_number_composed.txt",
+        ]
+        int_results = []
+        for name in int_categories:
+            path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/interpolate/' + name
+            test_dataset = load_txt_dataset(path)
+            logger.info("*** Testing interpolation on " + name + " data ***")
+            result = trainer.evaluate(eval_dataset=test_dataset)
+            logger.info(f"Test results: {result}")
+            int_results.append(result)
+
+        #extrapolation
+        ext_categories = [
+        "arithmetic__add_or_sub_big.txt",
+        "arithmetic__add_sub_multiple_longer.txt",
+        "arithmetic__mixed_longer.txt",
+        "arithmetic__mul_big.txt",
+        "arithmetic__mul_div_multiple_longer.txt",
+        "numbers__place_value_big.txt",
+        "numbers__round_number_big.txt",
+        ]
+        ext_results = []
+        for name in ext_categories:
+            path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/extrapolate/' + name
+            test_dataset = load_txt_dataset(path)
+            logger.info("*** Testing extrapolation on " + name + " data ***")
+            result = trainer.evaluate(eval_dataset=test_dataset)
+            logger.info(f"Test results: {result}")
+            ext_results.append(result)
+
+        return int_results, ext_results
 
 
 def get_data_collator(model_args: ModelArguments, tokenizer, training_args: TrainingArguments) -> transformers.DataCollator:

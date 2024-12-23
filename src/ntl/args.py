@@ -139,3 +139,10 @@ class DatasetArguments:
             "help": "Name of the dataset. Allowed: mathematics_dataset, gsm8k, multiplication"
         },
     )
+
+    mode: Optional[str] = field(
+        default="interpolate_extrapolate",
+        metadata={
+            "help": "Whether we combine datasets in testing, or test individually. Allowed: interpolate_extrapolate, dataset_comparison"
+        },
+    )
