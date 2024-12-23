@@ -11,7 +11,7 @@ import numpy as np
 import pdb
 
 
-class TestNumberTokenLoss(unittest.TestCase):
+class TestExpressionLoss(unittest.TestCase):
 
     def setUp(self):
         self.device = torch.device("cpu")
@@ -83,16 +83,13 @@ class TestNumberTokenLoss(unittest.TestCase):
 
         logits = self.create_logits(self.t5_tokenizer, token_logit_value_dict_list)
         logits = logits[:, :, self.expression_loss.number_tokens]
-        softmaxed_logits = F.softmax(logits, dim=-1)
 
         labels = torch.tensor(
             self.t5_tokenizer.convert_tokens_to_ids(["1", "2"]), dtype=torch.long
         ).unsqueeze(0)
 
         # call convert_logit_seq_to_number from the ExpressionLoss instance
-        result = self.expression_loss.convert_logit_seq_to_number(
-            softmaxed_logits, labels
-        )
+        result = self.expression_loss.convert_logit_seq_to_number(logits, labels)
 
         expected = 16.5
         self.assertAlmostEqual(result.item(), expected, places=2)
