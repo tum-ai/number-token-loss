@@ -1243,6 +1243,7 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
             labels = inputs.pop("labels")
         else:
             labels = None
+        model.to("cpu")
         outputs = model(**inputs)
         # Save past state if it exists
         # TODO: this needs to be fixed and made cleaner later.

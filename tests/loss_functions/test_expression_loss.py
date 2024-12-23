@@ -34,7 +34,7 @@ class TestNumberTokenLoss(unittest.TestCase):
         # logits dim = (batch_size, num_tokens, vocab_size)
         logits = torch.full(
             (1, len(token_logit_value_dict_list), self.vocab_size),
-            -np.inf,
+            -10000,
             dtype=torch.float32,
         )
         for sentence_idx, token_logit_value_dict in enumerate(
@@ -83,9 +83,10 @@ class TestNumberTokenLoss(unittest.TestCase):
 
         logits = self.create_logits(self.t5_tokenizer, token_logit_value_dict_list)
         logits = logits[:, :, self.expression_loss.number_tokens]
+        labels = torch.tensor([1, 2], dtype=torch.long).unsqueeze(0)
 
         # call convert_logit_seq_to_number from the ExpressionLoss instance
-        result = self.expression_loss.convert_logit_seq_to_number(logits)
+        result = self.expression_loss.convert_logit_seq_to_number(logits, labels)
 
         expected = 16.5
         self.assertAlmostEqual(result.item(), expected, places=2)
@@ -189,6 +190,90 @@ class TestNumberTokenLoss(unittest.TestCase):
             )
             - 171
         ) ** 2
+
+        self.assertAlmostEqual(loss.item(), expected_loss.item(), places=2)
+
+    def test_negative_number_handling(self):
+        logits = self.create_logits(
+            self.t5_tokenizer,
+            [
+                {"<<": 1},
+                {"_": 1},
+                {"(": 1},
+                {"-": 1},
+                {"8": 6.0, "2": 5.0, "9": 3.0},
+                {"1": 6.0, "3": 5.0, "4": 3.0},
+                {")": 1},
+                {"+": 1},
+                {"7": 5.0, "3": 7.0, "6": 3.0},
+                {"1": 6.0, "3": 5.0, "4": 3.0},
+                {"=": 1},
+                {"-": 1},
+                {"1": 5.0, "2": 3.0, "3": 7.5},
+                {"0": 1, "3": 4, "1": 1},
+                {">>": 3},
+            ],
+        )
+
+        labels = self.t5_tokenizer.convert_tokens_to_ids(
+            [
+                "<<",
+                "_",
+                "(",
+                "-",
+                "8",
+                "1",
+                ")",
+                "+",
+                "7",
+                "1",
+                ")",
+                "=",
+                "-" "1",
+                "0",
+                ">>",
+            ]
+        )
+
+        weights = torch.softmax(
+            torch.Tensor(
+                [
+                    [6, 5, 3],
+                    [6, 5, 3],
+                    [5, 7, 3],
+                    [6, 5, 3],
+                    [5, 3, 7.5],
+                    [1, 4, 1],
+                ]
+            ),
+            dim=-1,
+        )
+
+        numbers = torch.Tensor(
+            [
+                [8, 2, 9],
+                [1, 3, 4],
+                [7, 3, 6],
+                [1, 3, 4],
+                [1, 2, 3],
+                [0, 3, 1],
+            ]
+        )
+
+        weighted_numbers = torch.sum(weights * numbers, dim=-1)
+        expected_loss = (
+            (
+                -weighted_numbers[0] * 10
+                - weighted_numbers[1]
+                + weighted_numbers[2] * 10
+                + weighted_numbers[3]
+            )
+            - (-10)
+        ) ** 2
+
+        loss = self.expression_loss.forward(
+            logits, torch.tensor(labels, dtype=torch.long).unsqueeze(0)
+        )
 
         self.assertAlmostEqual(loss.item(), expected_loss.item(), places=2)
 

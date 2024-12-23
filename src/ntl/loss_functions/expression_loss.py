@@ -5,7 +5,7 @@ from torch._tensor import Tensor
 from ntl.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 
 
-class ExpressionLoss:
+class ExpressionLoss(object):
     def __init__(
         self,
         tokenizer: NumberEncodingTokenizer,
@@ -17,6 +17,8 @@ class ExpressionLoss:
         self.tokenizer = tokenizer
         self.loss_function = loss_function
         self.weight = weight
+
+        # Extract ids of all necessary tokens to generate expressions
         hashed_num_tokens = set(self.tokenizer.get_num_tokens())
         self.num_token_ids = self.tokenizer.convert_tokens_to_ids(
             self.tokenizer.get_num_tokens()
@@ -31,9 +33,12 @@ class ExpressionLoss:
         )
         self.equal_token_id = self.tokenizer.convert_tokens_to_ids("=")
         self.operator_ids = self.tokenizer.convert_tokens_to_ids(["+", "-", "*"])
-        self.underscore_id = self.tokenizer.convert_tokens_to_ids("_")
+        self.minus_id = self.tokenizer.convert_tokens_to_ids("-")
+        self.neg_prec_ind = self.tokenizer.convert_tokens_to_ids(
+            ["(", "▁(", "=", "▁", ">>"]
+        )
 
-        # create a tensor of shape (vocab_size,) with the number tokens replaced by their corresponding number
+        # Create a tensor of shape (vocab_size,) with the number tokens replaced by their corresponding number
         self.nvocab = torch.full((vocab_size,), float("nan"), device=device)
 
         for token, id in self.tokenizer.get_vocab().items():
@@ -44,18 +49,43 @@ class ExpressionLoss:
 
         self.number_tokens = ~torch.isnan(self.nvocab)
 
-    def convert_logit_seq_to_number(self, logits: Tensor):
-        # extract weighted number according to probability
+    def extract_unary_negative_mask(
+        self, negative_mask, preceding_bracket_locs, number_locs
+    ):
+        unary_negative_mask = (
+            negative_mask
+            & (
+                torch.roll(
+                    preceding_bracket_locs, shifts=1, dims=1
+                )  # Preceded by a bracked index (dim=1: sequence)
+            )
+            & torch.roll(
+                number_locs, shifts=-1, dims=1
+            )  # Followed by a number (dim=1: sequence)
+        )
+        return unary_negative_mask
+
+    def convert_logit_seq_to_number(self, logits: Tensor, labels: Tensor) -> Tensor:
+        # Check if number is negative
+        neg_factor = -1 if torch.isin(labels, self.minus_id).any() else 1
+
+        # Reduce to number tokens only
+        num_mask = torch.isin(labels, torch.tensor(self.num_token_ids))
+        logits = logits[num_mask, :]
+
+        # Extract weighted number according to probability
         softmaxed = F.softmax(logits, dim=-1)
         yhat_i = torch.sum(softmaxed * self.nvocab[self.number_tokens], dim=-1)
 
-        # weight the predictions according to their decimal place
+        # Weight the predictions according to their decimal place
         reversed_y_hat_i = yhat_i.flip(0)
         powers_of_10 = torch.pow(10, torch.arange(reversed_y_hat_i.shape[-1]))
-        y_hat = torch.sum(reversed_y_hat_i * powers_of_10)
+        y_hat = neg_factor * torch.sum(reversed_y_hat_i * powers_of_10)
         return y_hat
 
-    def apply_operator(self, first_num, second_num, operator):
+    def apply_operator(
+        self, first_num: Tensor, second_num: Tensor, operator: Tensor
+    ) -> Tensor:
         if operator == "+":
             return first_num + second_num
         elif operator == "-":
@@ -81,66 +111,73 @@ class ExpressionLoss:
             labels, torch.tensor(self.num_token_ids)
         ).unsqueeze(-1)
 
-        # Create a mask for the expression
+        # Create masks for all expression parts
         start_locs = labels == self.start_token_id
         end_locs = labels == self.end_token_id
         equal_locs = labels == self.equal_token_id
         operator_locs = torch.isin(labels, torch.tensor(self.operator_ids))
-        number_locs = torch.isin(labels, torch.tensor(self.number_tokens))
+        number_locs = torch.isin(labels, torch.tensor(self.num_token_ids))
+        negative_mask = labels == self.tokenizer.convert_tokens_to_ids("-")
+        preceding_bracket_locs = torch.isin(labels, torch.tensor(self.neg_prec_ind))
 
-        # do not compute a loss if no complete expression is found
-        if (
-            start_locs.sum() == 0
-            or end_locs.sum() == 0
-            or equal_locs.sum() == 0
-            or operator_locs.sum() == 0
+        # Do not compute a loss if no complete expression is found
+        if not (
+            start_locs.any()
+            or end_locs.any()
+            or equal_locs.any()
+            or operator_locs.any()
         ):
             return torch.tensor(0.0, device=logits.device, requires_grad=True)
 
-        # extract expression locations
+        # Refine operator_locs to exclude negative signs for numbers
+        unary_negative_mask = self.extract_unary_negative_mask(
+            negative_mask, preceding_bracket_locs, number_locs
+        )
+        operator_locs &= ~unary_negative_mask
+
+        # Extract expression locations
         batch_indices, start_indices = torch.where(start_locs)
         _, equal_indices = torch.where(equal_locs)
         _, end_indices = torch.where(end_locs)
         _, op_indices = torch.where(operator_locs)
-        _, num_indices = torch.where(number_locs)
 
-        if (
-            len(start_indices)
-            != len(end_indices)
-            != len(equal_indices)
-            != len(op_indices)
-        ):
+        # Check if the number of partial expressions found is consistent
+        lengths = [
+            len(start_indices),
+            len(end_indices),
+            len(equal_indices),
+            len(op_indices),
+        ]
+        if set(lengths) != {lengths[0]}:
             raise ValueError("Mismatch in number of partial expressions found!")
-
-        # filter out negative signs for numbers from the operators
 
         consistent_solution = []
         solution = []
         for batch, start, end, eq, op in zip(
             batch_indices, start_indices, end_indices, equal_indices, op_indices
         ):
-            # extract operator
+            # Extract operator
             operator_id = labels[batch, op]
             operator = self.tokenizer.convert_ids_to_tokens(operator_id.item())
 
-            # extract label solutions
+            # Extract label solutions
             solution_numbers = self.tokenizer.convert_ids_to_tokens(
                 labels[batch, eq + 1 : end]
             )
             solution.append(float("".join(solution_numbers)))
 
-            # extract predicted first number
+            # Extract predicted first number
             first_num = self.convert_logit_seq_to_number(
-                logits[batch, start + 2 : op, :], labels[batch, start + 2 : op, :]
+                logits[batch, start + 2 : op, :], labels[batch, start + 2 : op]
             )  # @TODO: Look at tokenization some reason the first token is always a '_' token.
             second_num = self.convert_logit_seq_to_number(
-                logits[batch, op + 1 : eq, :], labels[batch, start + 2 : op, :]
+                logits[batch, op + 1 : eq, :], labels[batch, op + 1 : eq]
             )
 
             # extract predicted solution
             # pred_solution.append(self.convert_logit_seq_to_number(logits[batch, eq+1:end,:]))
 
-            # compute result based on individual predicted numbers
+            # Compute result based on individual predicted numbers
             consistent_solution.append(
                 self.apply_operator(first_num, second_num, operator)
             )
