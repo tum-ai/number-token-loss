@@ -106,11 +106,6 @@ class ExpressionLoss(object):
         # Create a mask to filter out non-digit tokens
         logits = logits[:, :, self.number_tokens]
 
-        # Set all logits where label is not a number to 0 as we do not want to compute gradients for them
-        logits = logits * torch.isin(
-            labels, torch.tensor(self.num_token_ids)
-        ).unsqueeze(-1)
-
         # Create masks for all expression parts
         start_locs = labels == self.start_token_id
         end_locs = labels == self.end_token_id

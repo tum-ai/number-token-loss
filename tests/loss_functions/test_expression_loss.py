@@ -34,7 +34,7 @@ class TestNumberTokenLoss(unittest.TestCase):
         # logits dim = (batch_size, num_tokens, vocab_size)
         logits = torch.full(
             (1, len(token_logit_value_dict_list), self.vocab_size),
-            -10000,
+            -np.inf,
             dtype=torch.float32,
         )
         for sentence_idx, token_logit_value_dict in enumerate(
@@ -83,10 +83,16 @@ class TestNumberTokenLoss(unittest.TestCase):
 
         logits = self.create_logits(self.t5_tokenizer, token_logit_value_dict_list)
         logits = logits[:, :, self.expression_loss.number_tokens]
-        labels = torch.tensor([1, 2], dtype=torch.long).unsqueeze(0)
+        softmaxed_logits = F.softmax(logits, dim=-1)
+
+        labels = torch.tensor(
+            self.t5_tokenizer.convert_tokens_to_ids(["1", "2"]), dtype=torch.long
+        ).unsqueeze(0)
 
         # call convert_logit_seq_to_number from the ExpressionLoss instance
-        result = self.expression_loss.convert_logit_seq_to_number(logits, labels)
+        result = self.expression_loss.convert_logit_seq_to_number(
+            softmaxed_logits, labels
+        )
 
         expected = 16.5
         self.assertAlmostEqual(result.item(), expected, places=2)
