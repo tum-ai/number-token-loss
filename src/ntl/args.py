@@ -110,6 +110,12 @@ class ModelArguments:
             "help": "Loss function for number token loss. Allowed: mse, huber, mae."
         },
     )
+    gaussian_label_smoother: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "Adds Gaussian Label Smoother"
+        },
+    )
     log_scale_embeddings: Optional[bool] = field(
         default=False,
         metadata={

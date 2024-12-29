@@ -45,6 +45,10 @@ from ntl.tokenizer.xval_tokenizer import XvalTokenizer
 from ntl.loss_functions.number_token_loss import NumberTokenLoss
 from ntl.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
 
+from ntl.loss_functions.number_token_loss import NumberTokenSelector
+from ntl.utils.label_smoother import GaussianLabelSmoother
+
+
 transformers.logging.set_verbosity_info()
 logger = logging.getLogger(__name__)
 # logger.setLevel(level=logging.DEBUG)
@@ -248,6 +252,17 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
                 weight=model_args.number_token_loss_weight
             )
 
+    if model_args.gaussian_label_smoother: 
+        selector = NumberTokenSelector(tokenizer, vocab_size=config.vocab_size) 
+        label_smoother = GaussianLabelSmoother(
+            sigma=1.0,           
+            ignore_index=-100,   
+            selector=selector    
+        )
+    else: 
+        selector = None
+        label_smoother = None
+
     if model_args.model_name_or_path:
 
         # delete generation config, as not deleting leads to model not being loadable
@@ -349,6 +364,8 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         tokenizer=tokenizer,
+        selector=selector, 
+        label_smoother=label_smoother,
         # callbacks=[early_stopping_callback],
         compute_metrics=custom_metrics,
     )
