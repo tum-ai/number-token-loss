@@ -116,6 +116,12 @@ class ModelArguments:
             "help": "Adds Gaussian Label Smoother"
         },
     )
+    label_smoother_sigma: Optional[bool] = field(
+        default=1.0,
+        metadata={
+            "help": "Parameter that defines the width of the Gaussian distribution used for label smoothing."
+        },
+    )
     log_scale_embeddings: Optional[bool] = field(
         default=False,
         metadata={
