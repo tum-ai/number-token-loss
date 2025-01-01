@@ -30,6 +30,7 @@ class GaussianLabelSmoother(LabelSmoother):
         """
         Compute the Gaussian-smoothed cross-entropy loss.
         """
+        print("CALLED LABEL_SMOOTHER")
         # Get logits from model output
         if isinstance(model_output, dict):
             logits = model_output["logits"]
