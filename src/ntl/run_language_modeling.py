@@ -255,7 +255,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     if model_args.gaussian_label_smoother: 
         selector = NumberTokenSelector(tokenizer, vocab_size=config.vocab_size) 
         label_smoother = GaussianLabelSmoother(
-            sigma=1.0,           
+            sigma=model_args.label_smoother_sigma,           
             ignore_index=-100,   
             selector=selector    
         )
@@ -364,7 +364,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         tokenizer=tokenizer,
-        selector=selector, 
+        # selector=selector, 
         label_smoother=label_smoother,
         # callbacks=[early_stopping_callback],
         compute_metrics=custom_metrics,
