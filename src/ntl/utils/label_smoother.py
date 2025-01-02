@@ -51,12 +51,7 @@ class GaussianLabelSmoother(LabelSmoother):
 
         # Mask for valid number labels and non-padding tokens
         valid_mask = (labels != self.ignore_index) & (number_tokens)
-            # Example: 
-            # tensor([[   1,    2, -100],           
-            #         [   0, -100,    4]])
-            # tensor([[ True,  True, False],
-            #         [ True, False,  True]])
-            
+        
         # Replace ignore_index with a valid class index (e.g., 0) for one-hot encoding
         labels_non_neg = labels.clone()
         labels_non_neg[~valid_mask] = 0  # Set invalid labels to 0
@@ -68,54 +63,51 @@ class GaussianLabelSmoother(LabelSmoother):
         # Set one-hot vectors of invalid labels to zero
         one_hot_labels[~valid_mask] = 0.0
         
+        # Case differenciation: if sigma is zero, use one-hot labels directly without smoothing
         if self.sigma == 0.0:
             # When sigma is zero, use one-hot labels directly without smoothing
             labels_to_calculate_loss = one_hot_labels
-        else:
             
-            # Gaussian smoothing. Computation is vectorized, which is why reshaping is done.
+        else:
+            # Gaussian smoothing. 
+            # Computation is vectorized, which is why reshaping is done. 
             # Gaussian distribution around each label index:
             #    Over [0..num_classes-1] for each label l_i: 
             #       dist_j = exp(-((j - l_i)^2 / (2*sigma^2)))
             
             # Flatten for vectorized computation >> shape [B*S, ...]
             labels_flat = labels[valid_mask].view(-1)  # only the valid positions
-            if labels_flat.numel() == 0: # If there are no valid number tokens, return 0.0 as loss
-                return torch.tensor(0.0, device=logits.device, dtype=logits.dtype)
-            classes_arange = torch.arange(num_classes, device=logits.device).unsqueeze(0)  # shape [1, num_classes]
-            labels_flat_expanded = labels_flat.unsqueeze(1) # shape [V, 1], where V is number of valid tokens
+            
+            if labels_flat.numel() > 0:
+                # To maintain higher precision during Gaussian computation, cast to float32 if necessary
+                if labels_flat.dtype != torch.float32:
+                    labels_flat = labels_flat.float()
+                
+                classes_arange = torch.arange(num_classes, device=logits.device).unsqueeze(0)  # shape [1, num_classes]
+                labels_flat_expanded = labels_flat.unsqueeze(1) # shape [V, 1], where V is number of valid tokens
 
-            # Compute Gaussian
-            print(classes_arange)
-                # tensor([[0, 1, 2, 3, 4]]) 
-            print(labels_flat_expanded)
-                # tensor([[1],
-                        # [2],
-                        # [0],
-                        # [4]])
-            dist_sq = (classes_arange - labels_flat_expanded) ** 2
-            print(dist_sq)
-                # tensor([[ 1,  0,  1,  4,  9],
-                #         [ 4,  1,  0,  1,  4],
-                #         [ 0,  1,  4,  9, 16],
-                #         [16,  9,  4,  1,  0]])
-            gauss = torch.exp(-dist_sq / (2 * (self.sigma ** 2)))
-            # Normalize
-            print(gauss.sum(dim=-1))
-                # tensor([2.3595, 2.4837, 1.7533, 1.7533])
-            gauss = gauss / gauss.sum(dim=-1, keepdim=True)  # shape [V, num_classes]
+                # Compute Gaussian
+                dist_sq = (classes_arange - labels_flat_expanded) ** 2
+                gauss = torch.exp(-dist_sq / (2 * (self.sigma ** 2)))
+                # Normalize
+                gauss = gauss / gauss.sum(dim=-1, keepdim=True)  # shape [V, num_classes]
 
-            # Reshape >> [batch_size, seq_len, num_classes]
-            labels_to_calculate_loss = torch.zeros_like(one_hot_labels)  
-            labels_to_calculate_loss[valid_mask] = gauss # Computed distribution is assigned only to valid positions
+                # Reshape >> [batch_size, seq_len, num_classes]
+                labels_to_calculate_loss = torch.zeros_like(one_hot_labels)
+                labels_to_calculate_loss[valid_mask] = gauss # Computed distribution is assigned only to valid positions
+            else:
+                # If there are no valid number tokens, create a zero tensor connected to logits - this is needed to 
+                # ensure that the loss remains part of the computational graph
+                labels_to_calculate_loss = torch.zeros_like(one_hot_labels, device=logits.device, dtype=logits.dtype) + 0.0 * logits
 
         # Compute cross-entropy using smoothed label distribution
         log_probs = F.log_softmax(logits, dim=-1)  # shape [B, S, num_classes]
         loss_per_token = -(labels_to_calculate_loss * log_probs).sum(dim=-1) # distribution = - sum_{j} (smoothed_label_j * log_probs_j)
 
-        # Average across the valid tokens
-        loss_per_token = torch.where(valid_mask, loss_per_token, torch.tensor(0.0, device=loss_per_token.device))
-        num_valid = valid_mask.sum().item()
-        loss = loss_per_token.sum() / max(num_valid, 1)
-
+        # Average across the valid tokens. Also works in the case that num_valid == 0. Invalid positions are replaced with zero, 
+        # ensuring that the tensor remains connected to the graph
+        loss_per_token = torch.where(valid_mask, loss_per_token, torch.zeros_like(loss_per_token))
+        num_valid = valid_mask.sum().float()
+        loss = loss_per_token.sum() / torch.clamp(num_valid, min=1.0)
+            
         return loss
