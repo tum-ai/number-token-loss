@@ -430,68 +430,68 @@ class TestGaussianLabelSmoother(unittest.TestCase):
         self.assertTrue(torch.any(logits.grad != 0),
                         msg="Gradients should not be zero")
 
-def test_shift_labels(self):
-    """
-    Test that label shifting works correctly.
-    We'll create a scenario with (B=1, S=4, C=3) and verify that
-    the smoother correctly shifts labels and logits, and that the computed loss matches manual computation.
-    """
-    smoother = GaussianLabelSmoother(sigma=1.0, ignore_index=-100, selector=None)
+    def test_shift_labels(self):
+        """
+        Test that label shifting works correctly.
+        We'll create a scenario with (B=1, S=4, C=3) and verify that
+        the smoother correctly shifts labels and logits, and that the computed loss matches manual computation.
+        """
+        smoother = GaussianLabelSmoother(sigma=1.0, ignore_index=-100, selector=None)
 
-    logits = torch.tensor(
-        [
+        logits = torch.tensor(
             [
-                [0.0, 1.0, 2.0],  # token_0
-                [0.1, 0.2, 0.3],  # token_1
-                [1.0, 1.0, 1.0],  # token_2
-                [2.0, 2.0, 2.0],  # token_3
-            ]
-        ],
-        dtype=torch.float,
-    )  # shape [1, 4, 3]
-    labels = torch.tensor([[0, 1, 2, 2]])  # shape [1,4]
+                [
+                    [0.0, 1.0, 2.0],  # token_0
+                    [0.1, 0.2, 0.3],  # token_1
+                    [1.0, 1.0, 1.0],  # token_2
+                    [2.0, 2.0, 2.0],  # token_3
+                ]
+            ],
+            dtype=torch.float,
+        )  # shape [1, 4, 3]
+        labels = torch.tensor([[0, 1, 2, 2]])  # shape [1,4]
 
-    # Compute loss with shift_labels=True
-    model_output_shifted = {"logits": logits}
-    loss_shifted = smoother(model_output_shifted, labels, shift_labels=True)
+        # Compute loss with shift_labels=True
+        model_output_shifted = {"logits": logits}
+        loss_shifted = smoother(model_output_shifted, labels, shift_labels=True)
 
-    # Manually shift labels and logits
-    shifted_labels = labels[:, 1:].contiguous()    # Shape: [1,3]
-    shifted_logits = logits[:, :-1, :].contiguous()  # Shape: [1,3,3]
+        # Manually shift labels and logits
+        shifted_labels = labels[:, 1:].contiguous()    # Shape: [1,3]
+        shifted_logits = logits[:, :-1, :].contiguous()  # Shape: [1,3,3]
 
-    # Manually compute the expected loss
-    # Flatten the tensors
-    labels_flat = shifted_labels.view(-1)          # Shape: [3]
-    logits_flat = shifted_logits.view(-1, 3)      # Shape: [3,3]
+        # Manually compute the expected loss
+        # Flatten the tensors
+        labels_flat = shifted_labels.view(-1)          # Shape: [3]
+        logits_flat = shifted_logits.view(-1, 3)      # Shape: [3,3]
 
-    # Create valid mask (all labels are valid in this test case)
-    valid_mask = labels_flat != -100
-    labels_valid = labels_flat[valid_mask]         # Shape: [3]
-    logits_valid = logits_flat[valid_mask]         # Shape: [3,3]
+        # Create valid mask (all labels are valid in this test case)
+        valid_mask = labels_flat != -100
+        labels_valid = labels_flat[valid_mask]         # Shape: [3]
+        logits_valid = logits_flat[valid_mask]         # Shape: [3,3]
 
-    # One-hot encode the valid labels
-    one_hot = F.one_hot(labels_valid, num_classes=3).float()  # Shape: [3,3]
+        # One-hot encode the valid labels
+        one_hot = F.one_hot(labels_valid, num_classes=3).float()  # Shape: [3,3]
 
-    # Compute Gaussian smoothing
-    classes_arange = torch.arange(3).unsqueeze(0)            # Shape: [1,3]
-    labels_expanded = labels_valid.unsqueeze(1)             # Shape: [3,1]
-    dist_sq = (classes_arange - labels_expanded) ** 2        # Shape: [3,3]
-    gauss = torch.exp(-dist_sq / (2 * (smoother.sigma ** 2)))  # Shape: [3,3]
-    gauss = gauss / gauss.sum(dim=-1, keepdim=True)        # Normalize to shape: [3,3]
+        # Compute Gaussian smoothing
+        classes_arange = torch.arange(3).unsqueeze(0)            # Shape: [1,3]
+        labels_expanded = labels_valid.unsqueeze(1)             # Shape: [3,1]
+        dist_sq = (classes_arange - labels_expanded) ** 2        # Shape: [3,3]
+        gauss = torch.exp(-dist_sq / (2 * (smoother.sigma ** 2)))  # Shape: [3,3]
+        gauss = gauss / gauss.sum(dim=-1, keepdim=True)        # Normalize to shape: [3,3]
 
-    # Compute log probabilities
-    log_probs = F.log_softmax(logits_valid, dim=-1)          # Shape: [3,3]
+        # Compute log probabilities
+        log_probs = F.log_softmax(logits_valid, dim=-1)          # Shape: [3,3]
 
-    # Compute manual loss
-    loss_manual = -(gauss * log_probs).sum(dim=-1).mean()
+        # Compute manual loss
+        loss_manual = -(gauss * log_probs).sum(dim=-1).mean()
 
-    # Compare the smoother's loss with the manual loss
-    self.assertAlmostEqual(
-        loss_shifted.item(),
-        loss_manual.item(),
-        places=6,
-        msg=f"Smoothed loss ({loss_shifted.item()}) does not match manually computed loss ({loss_manual.item()})"
-    )
+        # Compare the smoother's loss with the manual loss
+        self.assertAlmostEqual(
+            loss_shifted.item(),
+            loss_manual.item(),
+            places=6,
+            msg=f"Smoothed loss ({loss_shifted.item()}) does not match manually computed loss ({loss_manual.item()})"
+        )
 
 
     # def test_float16_dtype(self): # >> TODO: Gets currently skipped
