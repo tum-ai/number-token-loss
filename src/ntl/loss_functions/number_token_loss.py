@@ -11,12 +11,8 @@ class NumberTokenLoss:
         self.loss_function = loss_function
         self.weight = weight
         
-        # create a tensor of shape (vocab_size,) with the number tokens replaced by their corresponding number
-        # self.nvocab = torch.full((vocab_size,), float("nan"), device=device)
-
         self.selector = NumberTokenSelector(tokenizer, vocab_size, device) # self.nvocab)
         self.nvocab = self.selector.nvocab # torch.full((vocab_size,), float("nan"), device=device) 
-
 
 
     def forward(self, logits: Tensor, labels: Tensor):

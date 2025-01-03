@@ -168,7 +168,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         model_class = T5RegressionModelXval
         tokenizer_class = XvalTokenizer
     elif model_args.number_encoding.lower() == "none":
-        if model_args.number_token_loss:
+        if model_args.number_token_loss or model_args.gaussian_label_smoother:
             model_class = T5VanillaForNumberTokenLoss
             tokenizer_class = T5Custom_Tokenizer
         else:
@@ -253,7 +253,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
             )
 
     if model_args.gaussian_label_smoother: 
-        selector = NumberTokenSelector(tokenizer, vocab_size=config.vocab_size) 
+        selector = NumberTokenSelector(tokenizer, vocab_size=config.vocab_size, device=training_args.device) 
         label_smoother = GaussianLabelSmoother(
             sigma=model_args.label_smoother_sigma,           
             ignore_index=-100,   
