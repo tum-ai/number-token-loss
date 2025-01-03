@@ -8,16 +8,15 @@ class NumberTokenSelector:
     '''
     Select number tokens 
     '''
-    
-    def __init__(self, tokenizer: NumberEncodingTokenizer, nvocab):
+    def __init__(self, tokenizer: NumberEncodingTokenizer, vocab_size, device): # nvocab):
         self.tokenizer = tokenizer
-        self.nvocab = nvocab
+        self.nvocab = torch.full((vocab_size,), float("nan"), device=device)
+
         hashed_num_tokens = set(self.tokenizer.get_num_tokens())
         
         for token, id in self.tokenizer.get_vocab().items():
             if token in hashed_num_tokens:
                 self.nvocab[id] = self.tokenizer.decode_number_token(token, ignore_order=True)
-
 
     def select_number_tokens(self, logits: Tensor, labels: Tensor):
         
