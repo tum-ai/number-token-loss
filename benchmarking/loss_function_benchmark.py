@@ -12,13 +12,13 @@ The suite supports various loss functions including:
 - CE with NTL using Absolute Difference
 """
 
+
 import argparse
 import time
 import random
 import string
 import logging
 import csv
-import shutil
 import copy
 from typing import Dict, List, Tuple, Any
 
@@ -26,6 +26,7 @@ import torch
 import numpy as np
 from torch.optim import AdamW
 import yaml
+import transformers
 
 from ntl.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
 from ntl.transformer_backbone.t5.t5_vanilla_for_number_token_loss import T5VanillaForNumberTokenLoss
@@ -424,7 +425,7 @@ def initialize_benchmarking_environment():
     Initialize all components needed for benchmarking.
     
     Returns:
-        Tuple of (device, vocab_size, tokenizer, model, loss_functions)
+        Tuple of (device, vocab_size, tokenizer_dict, model_dict, loss_functions)
     """
     logger.info("Initializing benchmarking environment...")
 
@@ -432,24 +433,39 @@ def initialize_benchmarking_environment():
     device = CUDA_DEVICE if torch.cuda.is_available() else "cpu"
     logger.info(f"Using device: {device}")
 
-    # Initialize components
-    tokenizer = T5Custom_Tokenizer.from_pretrained("t5-small")
-    model = T5VanillaForNumberTokenLoss.from_pretrained("t5-small")
+    # Initialize components for CE Loss
+    ce_tokenizer = transformers.AutoTokenizer.from_pretrained("t5-small")
+    ce_model = transformers.T5ForConditionalGeneration.from_pretrained("t5-small")
     
-    # Calculate vocabulary size
-    vocab_size = len(tokenizer) + PAD_TO_MULTIPLE_OF - (len(tokenizer) % PAD_TO_MULTIPLE_OF)
+    # Initialize components for other losses
+    custom_tokenizer = T5Custom_Tokenizer.from_pretrained("t5-small")
+    custom_model = T5VanillaForNumberTokenLoss.from_pretrained("t5-small")
+    
+    # Calculate vocabulary size for custom components
+    vocab_size = len(custom_tokenizer) + PAD_TO_MULTIPLE_OF - (len(custom_tokenizer) % PAD_TO_MULTIPLE_OF)
+
+    # Create dictionaries to store models and tokenizers
+    tokenizer_dict = {
+        "CE": ce_tokenizer,
+        "custom": custom_tokenizer
+    }
+    
+    model_dict = {
+        "CE": ce_model,
+        "custom": custom_model
+    }
 
     # Initialize loss functions
     ce_loss = CrossEntropyLoss()
-    mse_ntl = NumberTokenLoss(tokenizer=tokenizer, vocab_size=vocab_size, device=device)
+    mse_ntl = NumberTokenLoss(tokenizer=custom_tokenizer, vocab_size=vocab_size, device=device)
     wasserstein_ntl = WassersteinNumberTokenLoss(
-        tokenizer=tokenizer,
+        tokenizer=custom_tokenizer,
         vocab_size=vocab_size,
         order_numbers=False,
         device=device
     )
     abs_diff_ntl = AbsDiffNumberTokenLoss(
-        tokenizer=tokenizer,
+        tokenizer=custom_tokenizer,
         vocab_size=vocab_size,
         device=device
     )
@@ -463,26 +479,7 @@ def initialize_benchmarking_environment():
     }
     
     logger.info("Initialization complete")
-    return device, vocab_size, tokenizer, model, loss_functions
-
-def load_config(file_path: str = "config.yaml") -> Dict[str, Any]:
-    """
-    Load benchmark configuration from YAML file.
-    
-    Args:
-        file_path: Path to configuration file
-        
-    Returns:
-        Configuration dictionary
-        
-    Raises:
-        FileNotFoundError: If config file doesn't exist
-    """
-    try:
-        with open(file_path, 'r') as file:
-            return yaml.safe_load(file)
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Config file not found: {file_path}")
+    return device, vocab_size, tokenizer_dict, model_dict, loss_functions
 
 def run_benchmarks(config: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -495,7 +492,7 @@ def run_benchmarks(config: Dict[str, Any]) -> Dict[str, Any]:
         Dictionary containing all benchmark results
     """
     results = {}
-    device, vocab_size, tokenizer, model, loss_functions = initialize_benchmarking_environment()
+    device, vocab_size, tokenizer_dict, model_dict, loss_functions = initialize_benchmarking_environment()
 
     # Perform warmup runs with minimal steps
     logger.info("Performing warmup runs...")
@@ -528,10 +525,10 @@ def run_benchmarks(config: Dict[str, Any]) -> Dict[str, Any]:
     results["forward_pass"] = {
         name: run_model_benchmark(
             config=config['forward pass benchmark'],
-            model=model,
+            model=model_dict["CE"] if name == "CE" else model_dict["custom"],
             loss_fn=loss_fn,
             loss_name=name,
-            tokenizer=tokenizer,
+            tokenizer=tokenizer_dict["CE"] if name == "CE" else tokenizer_dict["custom"],
             device=device,
             update_gradients=False
         )
@@ -542,10 +539,10 @@ def run_benchmarks(config: Dict[str, Any]) -> Dict[str, Any]:
     results["training_step"] = {
         name: run_model_benchmark(
             config=config['training step benchmark'],
-            model=model,
+            model=model_dict["CE"] if name == "CE" else model_dict["custom"],
             loss_fn=loss_fn,
             loss_name=name,
-            tokenizer=tokenizer,
+            tokenizer=tokenizer_dict["CE"] if name == "CE" else tokenizer_dict["custom"],
             device=device,
             update_gradients=True
         )
@@ -553,6 +550,26 @@ def run_benchmarks(config: Dict[str, Any]) -> Dict[str, Any]:
     }
 
     return results
+
+# The rest of the code remains the same as it doesn't interact with model/tokenizer initialization
+def load_config(file_path: str = "config.yaml") -> Dict[str, Any]:
+    """
+    Load benchmark configuration from YAML file.
+    
+    Args:
+        file_path: Path to configuration file
+        
+    Returns:
+        Configuration dictionary
+        
+    Raises:
+        FileNotFoundError: If config file doesn't exist
+    """
+    try:
+        with open(file_path, 'r') as file:
+            return yaml.safe_load(file)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Config file not found: {file_path}")
 
 def run_number_share_analysis(
     base_config_path: str = "benchmarking/config.yaml",
