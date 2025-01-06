@@ -382,3 +382,8 @@ class TestNumberTokenLoss(unittest.TestCase):
                           lambda: self.rt_number_token_loss.forward(torch.tensor([]), torch.tensor([])))
         self.assertRaises(ValueError,
                           lambda: self.t5_number_token_loss.forward(torch.tensor([]), torch.tensor([])))
+
+
+
+if __name__ == '__main__':
+    unittest.main(argv=[''], exit=False)
