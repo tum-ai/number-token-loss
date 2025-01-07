@@ -125,7 +125,10 @@ class TestExpressionLoss(unittest.TestCase):
         numbers = torch.Tensor([[8, 2, 9], [9, 3, 6], [1, 2, 3], [7, 3, 1]])
 
         weighted_numbers = torch.sum(weights * numbers, dim=-1)
-        expected_loss = ((weighted_numbers[0] + weighted_numbers[1]) - 17) ** 2
+        expected_loss = (
+            (weighted_numbers[0] + weighted_numbers[1])
+            - (weighted_numbers[2] * 10 + weighted_numbers[3])
+        ) ** 2
 
         self.assertAlmostEqual(loss.item(), expected_loss.item(), places=2)
 
@@ -191,7 +194,11 @@ class TestExpressionLoss(unittest.TestCase):
                 + weighted_numbers[2] * 10
                 + weighted_numbers[3]
             )
-            - 171
+            - (
+                weighted_numbers[4] * 100
+                + weighted_numbers[5] * 10
+                + weighted_numbers[6]
+            )
         ) ** 2
 
         self.assertAlmostEqual(loss.item(), expected_loss.item(), places=2)
@@ -230,9 +237,9 @@ class TestExpressionLoss(unittest.TestCase):
                 "+",
                 "7",
                 "1",
-                ")",
                 "=",
-                "-" "1",
+                "-",
+                "1",
                 "0",
                 ">>",
             ]
@@ -271,7 +278,7 @@ class TestExpressionLoss(unittest.TestCase):
                 + weighted_numbers[2] * 10
                 + weighted_numbers[3]
             )
-            - (-10)
+            - (-weighted_numbers[4] * 10 - weighted_numbers[5])
         ) ** 2
 
         loss = self.expression_loss.forward(

@@ -146,6 +146,7 @@ class ExpressionLoss(object):
         if set(lengths) != {lengths[0]}:
             raise ValueError("Mismatch in number of partial expressions found!")
 
+        pred_solution = []
         consistent_solution = []
         solution = []
         for batch, start, end, eq, op in zip(
@@ -170,7 +171,11 @@ class ExpressionLoss(object):
             )
 
             # extract predicted solution
-            # pred_solution.append(self.convert_logit_seq_to_number(logits[batch, eq+1:end,:]))
+            pred_solution.append(
+                self.convert_logit_seq_to_number(
+                    logits[batch, eq + 1 : end, :], labels[batch, eq + 1 : end]
+                )
+            )
 
             # Compute result based on individual predicted numbers
             consistent_solution.append(
@@ -178,7 +183,7 @@ class ExpressionLoss(object):
             )
 
         loss = self.loss_function(
-            torch.stack(consistent_solution), torch.tensor(solution)
+            torch.stack(pred_solution), torch.tensor(consistent_solution)
         )
 
         return loss
