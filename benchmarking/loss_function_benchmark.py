@@ -138,13 +138,14 @@ class BenchmarkTimer:
 
     def get_overall_statistics(self) -> Tuple[float, float]:
         """
-        Calculate overall mean and standard deviation across all checkpoints.
+        Calculate overall sum and standard deviation across all checkpoints.
         
         Returns:
             Tuple of (mean, standard_deviation)
         """
         all_means = [np.mean(segment) for segment in self.times.values()]
-        return np.mean(all_means), np.std(all_means)
+        all_means_std = [np.std(segment) for segment in self.times.values()]
+        return np.sum(all_means), np.sqrt(np.sum(np.square(all_means_std)))
 
 def generate_synthetic_data(
     batch_size: int,
@@ -495,20 +496,22 @@ def run_benchmarks(config: Dict[str, Any]) -> Dict[str, Any]:
     device, vocab_size, tokenizer_dict, model_dict, loss_functions = initialize_benchmarking_environment()
 
     # Perform warmup runs with minimal steps
-    logger.info("Performing warmup runs...")
+    logger.info("Performing warmup runs for standalone benchmarks...")
     warmup_config = copy.deepcopy(config)
     for benchmark_type in warmup_config.values():
         benchmark_type['steps'] = 1
 
-    run_standalone_benchmark(
-        config=warmup_config['standalone benchmark'],
-        loss_fn=next(iter(loss_functions.values())),  # Use first loss function
-        loss_name="warmup",
-        vocab_size=vocab_size,
-        device=device
-    )
+    # Warmup standalone benchmarks
+    for name, loss_fn in loss_functions.items():
+        run_standalone_benchmark(
+            config=warmup_config['standalone benchmark'],
+            loss_fn=loss_fn,  
+            loss_name=name,
+            vocab_size=vocab_size,
+            device=device
+        )
 
-    # Run actual benchmarks
+    # Run standalone benchmarks
     logger.info("Running standalone loss computation benchmarks...")
     results["standalone"] = {
         name: run_standalone_benchmark(
@@ -521,6 +524,18 @@ def run_benchmarks(config: Dict[str, Any]) -> Dict[str, Any]:
         for name, loss_fn in loss_functions.items()
     }
 
+    # Warmup forward pass benchmarks
+    logger.info("Performing warmup runs for forward pass benchmarks...")
+    for name, loss_fn in loss_functions.items():
+        run_standalone_benchmark(
+            config=warmup_config['forward pass benchmark'],
+            loss_fn=loss_fn,  
+            loss_name=name,
+            vocab_size=vocab_size,
+            device=device
+        )
+
+    # Run forward pass benchmarks
     logger.info("Running forward pass benchmarks...")
     results["forward_pass"] = {
         name: run_model_benchmark(
@@ -535,6 +550,18 @@ def run_benchmarks(config: Dict[str, Any]) -> Dict[str, Any]:
         for name, loss_fn in loss_functions.items()
     }
 
+    # Warmup training step benchmarks
+    logger.info("Performing warmup runs for training step benchmarks...")
+    for name, loss_fn in loss_functions.items():
+        run_standalone_benchmark(
+            config=warmup_config['training step benchmark'],
+            loss_fn=loss_fn,  
+            loss_name=name,
+            vocab_size=vocab_size,
+            device=device
+        )
+
+    # Run training step benchmarks
     logger.info("Running training step benchmarks...")
     results["training_step"] = {
         name: run_model_benchmark(
