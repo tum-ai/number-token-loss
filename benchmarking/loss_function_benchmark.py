@@ -197,7 +197,7 @@ def generate_random_text(
     """
     text = ""
     token_count = 0
-    max_attempts = 4 * n_tokens
+    max_attempts = 10 * n_tokens
 
     while token_count < n_tokens and len(text) < max_attempts:
         text += (random.choice(string.digits) if random.random() <= number_share 
