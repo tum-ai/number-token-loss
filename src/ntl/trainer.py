@@ -59,7 +59,19 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
         - additionally return next_token_prediction_logits for calculating perplexity
         - also handle the number_predictions from xval as they are an additional output of the model
         - log both normal token loss and number token loss
+        - include a custom gaussian label smoother
     """
+    
+    def __init__(
+        self,
+        *args,
+        label_smoother=None, #     label_smoother: Optional[LabelSmoother] = None,
+        **kwargs
+    ):
+        # Capture label_smoother manually
+        super().__init__(*args, **kwargs)
+        self.label_smoother = label_smoother
+        
 
     def prediction_step(
             self,
