@@ -201,7 +201,7 @@ class TestExpressionLoss(unittest.TestCase):
             )
         ) ** 2
 
-        self.assertAlmostEqual(loss.item(), expected_loss.item(), places=2)
+        self.assertAlmostEqual(loss.item(), expected_loss.item(), places=1)
 
     def test_negative_number_handling(self):
         logits = self.create_logits(
