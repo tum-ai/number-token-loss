@@ -145,6 +145,7 @@ cython_debug/
 *.stored_yaml
 *.log
 *.csv
+*.png
 
 # Mac OS
 .DS_Store

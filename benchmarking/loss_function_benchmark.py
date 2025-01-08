@@ -432,9 +432,6 @@ def initialize_benchmarking_environment():
     # Set device
     device = CUDA_DEVICE if torch.cuda.is_available() else "cpu"
     logger.info(f"Using device: {device}")
-
-    # Initialize components for CE Loss
-    ce_tokenizer = transformers.AutoTokenizer.from_pretrained("t5-small")
     
     # Initialize components for other losses
     custom_tokenizer = T5Custom_Tokenizer.from_pretrained("t5-small", )
