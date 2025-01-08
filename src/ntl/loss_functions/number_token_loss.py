@@ -21,7 +21,7 @@ class NumberTokenLoss:
         if labels.numel() == 0:
             raise ValueError("Labels passed to the NumberTokenLoss are empty!")
 
-        logits, labels, number_tokens = self.selector.select_number_tokens(logits, labels)
+        logits, number_tokens = self.selector.select_number_tokens(logits)
 
         # Compute the weighted average of number tokens (yhat)
         softmaxed = F.softmax(logits, dim=-1)
