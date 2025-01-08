@@ -582,7 +582,6 @@ def run_benchmarks(config: Dict[str, Any]) -> Dict[str, Any]:
 
     return results
 
-# The rest of the code remains the same as it doesn't interact with model/tokenizer initialization
 def load_config(file_path: str = "config.yaml") -> Dict[str, Any]:
     """
     Load benchmark configuration from YAML file.
