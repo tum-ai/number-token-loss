@@ -260,7 +260,6 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
             selector=selector    
         )
     else: 
-        selector = None
         label_smoother = None
 
     if model_args.model_name_or_path:
@@ -364,7 +363,6 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         tokenizer=tokenizer,
-        # selector=selector, 
         label_smoother=label_smoother,
         # callbacks=[early_stopping_callback],
         compute_metrics=custom_metrics,
