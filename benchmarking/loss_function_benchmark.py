@@ -288,7 +288,6 @@ def run_standalone_benchmark(
 def run_model_benchmark(
     config: Dict[str, Any],
     model: T5VanillaForNumberTokenLoss,
-    loss_fn: Any,
     loss_name: str,
     tokenizer: T5Custom_Tokenizer,
     device: str,
@@ -300,7 +299,6 @@ def run_model_benchmark(
     Args:
         config: Benchmark configuration
         model: Model to benchmark
-        loss_fn: Loss function to use
         loss_name: Name of the loss function
         tokenizer: Tokenizer for input processing
         device: Device to run on
@@ -353,16 +351,17 @@ def run_model_benchmark(
         
         timer.stop("preprocessing", device)
 
-        # Forward pass
+        # Forward pass and loss computation
         outputs = model(
             input_ids=input_ids,
             attention_mask=attention_mask,
             labels=labels
         )
+        loss = outputs.loss
+
         timer.stop("forward_pass", device)            
 
-        # Loss computation and backward pass
-        loss = loss_fn.forward(outputs.logits, labels)
+        # Backward pass
         loss.backward()
         timer.stop("backward_pass", device)
 
@@ -436,25 +435,12 @@ def initialize_benchmarking_environment():
 
     # Initialize components for CE Loss
     ce_tokenizer = transformers.AutoTokenizer.from_pretrained("t5-small")
-    ce_model = transformers.T5ForConditionalGeneration.from_pretrained("t5-small")
     
     # Initialize components for other losses
-    custom_tokenizer = T5Custom_Tokenizer.from_pretrained("t5-small")
-    custom_model = T5VanillaForNumberTokenLoss.from_pretrained("t5-small")
+    custom_tokenizer = T5Custom_Tokenizer.from_pretrained("t5-small", )
     
     # Calculate vocabulary size for custom components
     vocab_size = len(custom_tokenizer) + PAD_TO_MULTIPLE_OF - (len(custom_tokenizer) % PAD_TO_MULTIPLE_OF)
-
-    # Create dictionaries to store models and tokenizers
-    tokenizer_dict = {
-        "CE": ce_tokenizer,
-        "custom": custom_tokenizer
-    }
-    
-    model_dict = {
-        "CE": ce_model,
-        "custom": custom_model
-    }
 
     # Initialize loss functions
     ce_loss = CrossEntropyLoss()
@@ -477,6 +463,27 @@ def initialize_benchmarking_environment():
         "CE+MSE": CompositeLoss([ce_loss, mse_ntl]),
         "CE+Wasserstein": CompositeLoss([ce_loss, wasserstein_ntl]),
         "CE+AbsDiff": CompositeLoss([ce_loss, abs_diff_ntl])
+    }
+
+    # Initialize models
+    ce_model = T5VanillaForNumberTokenLoss.from_pretrained("t5-small", number_token_loss = None)
+    mse_model = T5VanillaForNumberTokenLoss.from_pretrained("t5-small", number_token_loss = mse_ntl)
+    wasserstein_model = T5VanillaForNumberTokenLoss.from_pretrained("t5-small", number_token_loss = wasserstein_ntl)
+    abs_diff_model = T5VanillaForNumberTokenLoss.from_pretrained("t5-small", number_token_loss = abs_diff_ntl)
+
+    # Create dictionaries to store models and tokenizers
+    tokenizer_dict = {
+        "CE": custom_tokenizer,
+        "CE+MSE": custom_tokenizer,
+        "CE+Wasserstein": custom_tokenizer,
+        "CE+AbsDiff": custom_tokenizer,
+    }
+    
+    model_dict = {
+        "CE": ce_model,
+        "CE+MSE": mse_model,
+        "CE+Wasserstein": wasserstein_model,
+        "CE+AbsDiff": abs_diff_model
     }
     
     logger.info("Initialization complete")
@@ -526,13 +533,14 @@ def run_benchmarks(config: Dict[str, Any]) -> Dict[str, Any]:
 
     # Warmup forward pass benchmarks
     logger.info("Performing warmup runs for forward pass benchmarks...")
-    for name, loss_fn in loss_functions.items():
-        run_standalone_benchmark(
+    for name, model in model_dict.items():
+        run_model_benchmark(
             config=warmup_config['forward pass benchmark'],
-            loss_fn=loss_fn,  
+            model=model,
             loss_name=name,
-            vocab_size=vocab_size,
-            device=device
+            tokenizer=tokenizer_dict[name],
+            device=device,
+            update_gradients=False
         )
 
     # Run forward pass benchmarks
@@ -540,25 +548,25 @@ def run_benchmarks(config: Dict[str, Any]) -> Dict[str, Any]:
     results["forward_pass"] = {
         name: run_model_benchmark(
             config=config['forward pass benchmark'],
-            model=model_dict["CE"] if name == "CE" else model_dict["custom"],
-            loss_fn=loss_fn,
+            model=model,
             loss_name=name,
-            tokenizer=tokenizer_dict["CE"] if name == "CE" else tokenizer_dict["custom"],
+            tokenizer=tokenizer_dict[name],
             device=device,
             update_gradients=False
         )
-        for name, loss_fn in loss_functions.items()
+        for name, model in model_dict.items()
     }
 
     # Warmup training step benchmarks
     logger.info("Performing warmup runs for training step benchmarks...")
-    for name, loss_fn in loss_functions.items():
-        run_standalone_benchmark(
+    for name, model in model_dict.items():
+        run_model_benchmark(
             config=warmup_config['training step benchmark'],
-            loss_fn=loss_fn,  
+            model=model,
             loss_name=name,
-            vocab_size=vocab_size,
-            device=device
+            tokenizer=tokenizer_dict[name],
+            device=device,
+            update_gradients=True
         )
 
     # Run training step benchmarks
@@ -566,14 +574,13 @@ def run_benchmarks(config: Dict[str, Any]) -> Dict[str, Any]:
     results["training_step"] = {
         name: run_model_benchmark(
             config=config['training step benchmark'],
-            model=model_dict["CE"] if name == "CE" else model_dict["custom"],
-            loss_fn=loss_fn,
+            model=model,
             loss_name=name,
-            tokenizer=tokenizer_dict["CE"] if name == "CE" else tokenizer_dict["custom"],
+            tokenizer=tokenizer_dict[name],
             device=device,
             update_gradients=True
         )
-        for name, loss_fn in loss_functions.items()
+        for name, model in model_dict.items()
     }
 
     return results

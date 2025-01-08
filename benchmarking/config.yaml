@@ -1,17 +1,17 @@
 standalone benchmark:
-  steps: 20
-  batch_size: 32
+  steps: 1
+  batch_size: 2
   sequence_length: 128
   number_share: 0.1
 
-forwad pass benchmark:
-  steps: 10
-  batch_size: 32
+forward pass benchmark:
+  steps: 1
+  batch_size: 2
   sequence_length: 128
   number_share: 0.1
 
 training step benchmark:
-  steps: 10
-  batch_size: 32
+  steps: 1
+  batch_size: 2
   sequence_length: 128
   number_share: 0.1
