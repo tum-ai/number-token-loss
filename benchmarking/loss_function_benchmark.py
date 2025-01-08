@@ -1,5 +1,5 @@
 """
-Benchmarking suite for comparing different loss functions in neural network training.
+Benchmarking suite for comparing different loss functions in T5 training.
 Measures performance across three scenarios:
 1. Standalone loss computation
 2. Forward pass through the model
