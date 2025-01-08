@@ -2,6 +2,10 @@
 ![ntl-image.jpg](resources%2Fntl-image.jpg)
 
 Introducing "Number Token Loss" (NTL) for language models to improve numerical reasoning by using regression-based loss functions that account for the proximity of numbers, achieving better performance on math tasks without increasing computational overhead.
+
+## Resources
+Find our paper [here](https://arxiv.org/abs/2411.02083) and the poster of the NeurIPS 2024 MathAI workshop [here](https://github.com/tum-ai/number-token-loss/blob/main/resources/neurips_mathai_poster.pdf "Poster")
+
 ## Setup
 
 ### Via Python
@@ -42,23 +46,22 @@ Introducing "Number Token Loss" (NTL) for language models to improve numerical r
   - The Arguments are configured via Hydra (Yadan, Omry. *Hydra - A framework for elegantly configuring complex applications*. Github, 2019. Available at: [https://github.com/facebookresearch/hydra](https://github.com/facebookresearch/hydra).)
   - Therefore the script can be called via 
     ```bash
-    export PYTHONPATH=".:src/"
-    python src/run_language_modeling.py dataset_args=<gsm8k or mathematics_dataset, default mathematics_dataset>
+    python src/ntl/run_language_modeling.py dataset_args=<gsm8k or mathematics_dataset, default mathematics_dataset>
                                         model_args=<rt, rt_ntl, vanilla_t5, vanilla_t5_ntl, xval>
                                         training_args=<eval or train>
     ```
   - You can override the default config via the command line, e.g. 
     ```bash
-    python src/run_language_modeling.py model_args=vanilla_t5 training_args=train training_args.per_device_train_batch_size=8
+    python src/ntl/run_language_modeling.py model_args=vanilla_t5 training_args=train training_args.per_device_train_batch_size=8
     ```
     or override them in the [config/run_specific_config/config.yaml](config%2Frun_specific_config%2Fconfig.yaml) file.
   - For debugging, you can use the [config/run_specific_config/debug_config.yaml](config%2Frun_specific_config%2Fdebug_config.yaml) file via
     ```bash
-    python src/run_language_modeling.py model_args=vanilla_t5 training_args=train run_specific_config@_global_=debug_config
+    python src/ntl/run_language_modeling.py model_args=vanilla_t5 training_args=train run_specific_config@_global_=debug_config
     ```
   - For running in nohup mode, use
     ```bash
-    nohup python src/run_language_modeling.py dataset_args=mathematics_dataset model_args=vanilla_t5 training_args=train >logs/log_<run_name>.txt &
+    nohup python src/ntl/run_language_modeling.py dataset_args=mathematics_dataset model_args=vanilla_t5 training_args=train >logs/log_<run_name>.txt &
     ```
 ## Reproduce our results
 1. Get the data from https://console.cloud.google.com/storage/browser/mathematics-dataset;tab=objects?pli=1&prefix=&forceOnObjectsSortingFiltering=false
@@ -67,33 +70,33 @@ Introducing "Number Token Loss" (NTL) for language models to improve numerical r
 4. Execute the run_language_modeling.py script with the following arguments:
 - Standard T5: 
   ```
-  python src/run_language_modeling.py model_args=vanilla_t5 +training_args.max_steps=1050000
+  python src/ntl/run_language_modeling.py model_args=vanilla_t5 +training_args.max_steps=1050000
   ```
 - Standard T5 + **NTL-MSE**:
   ```
-  python src/run_language_modeling.py model_args=vanilla_t5_ntl +training_args.max_steps=1050000
+  python src/ntl/run_language_modeling.py model_args=vanilla_t5_ntl +training_args.max_steps=1050000
   ```
 - Standard T5 + **NTL-WAS**: 
   ```
-  python src/run_language_modeling.py model_args=vanilla_t5_ntl  model_args.number_token_loss_with_wasserstein=true +training_args.max_steps=1050000
+  python src/ntl/run_language_modeling.py model_args=vanilla_t5_ntl  model_args.number_token_loss_with_wasserstein=true +training_args.max_steps=1050000
   ```
 - RT: 
   ```
-  python src/run_language_modeling.py model_args=rt +training_args.max_steps=1050000
+  python src/ntl/run_language_modeling.py model_args=rt +training_args.max_steps=1050000
   ```
 - RT + **NTL-MSE**: 
   ```
-  python src/run_language_modeling.py model_args=rt_ntl +training_args.max_steps=1050000
+  python src/ntl/run_language_modeling.py model_args=rt_ntl +training_args.max_steps=1050000
   ```
 - xVal: 
   ```
-  python src/xval/train.py
+  python src/nlt/xval/train.py
   ```
 
 For evaluating instead of training a model, add those two parameters to the respective python command: ```training_args=eval model_args.model_name_or_path=<path to checkpoint file>``` 
 e.g for Standard T5 + **NTL-WAS**: 
 ```
-python src/run_language_modeling.py model_args=vanilla_t5_ntl  model_args.number_token_loss_with_wasserstein=true training_args=eval model_args.model_name_or_path=<path to checkpoint file>
+python src/ntl/run_language_modeling.py model_args=vanilla_t5_ntl  model_args.number_token_loss_with_wasserstein=true training_args=eval model_args.model_name_or_path=<path to checkpoint file>
 ```
 
 ## Citation
