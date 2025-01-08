@@ -52,7 +52,7 @@ class GaussianLabelSmoother(LabelSmoother):
                 raise AttributeError("The selector must have an attribute 'nvocab' representing the number of valid vocab tokens.")
     
             # Select number tokens
-            logits, labels, number_tokens = self.selector.select_number_tokens(logits, labels)
+            logits, number_tokens = self.selector.select_number_tokens(logits)
             
             # Get the number of classes and the mask for number tokens
             tokens_encoding_numbers = self.selector.nvocab[number_tokens]  
