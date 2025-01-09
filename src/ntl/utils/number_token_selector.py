@@ -18,13 +18,10 @@ class NumberTokenSelector:
             if token in hashed_num_tokens:
                 self.nvocab[id] = self.tokenizer.decode_number_token(token, ignore_order=True)
 
-
     def select_number_tokens(self, logits: Tensor):
-        
         # Create a mask to filter out non-digit tokens and labels
         number_tokens = ~torch.isnan(self.nvocab)
         logits = logits[:, :, number_tokens] 
-
         return logits, number_tokens
 
 
