@@ -403,11 +403,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         end_time=time.time()
         logger.info("Elapsed time:")
         logger.info(end_time - start_time)
-        trainer.save_model()
-        # For convenience, we also re-save the tokenizer to the same directory,
-        # so that you can share your model easily on huggingface.co/models =)
-        if trainer.state.is_world_process_zero:
-            tokenizer.save_pretrained(training_args.output_dir)
+
     else:
         logger.info("Skipping training.")
 
@@ -417,8 +413,8 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         eval_results_val = trainer.evaluate(eval_dataset=eval_dataset) 
         logger.info(f"eval_results validation data: {eval_results_val}")
  
-        if not training_args.do_only_eval:
-            return eval_results_val, model
+        # if not training_args.do_only_eval:
+        #     return eval_results_val, model
             
 
     if dataset_args.dataset_name in ["gsm8k", "multiplication"]:
