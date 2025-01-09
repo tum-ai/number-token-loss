@@ -53,7 +53,12 @@ rt_ntl_ext = [
 ]
 
 
-criterion = 'eval_loss'
+criterion = 'eval_token_accuracy'
 sorted_list = sorted(vanilla_t5_int, key=lambda x: x[criterion], reverse=False)
 for dict in sorted_list:
-    print(dict['name'] + ': ' + str(dict[criterion]))
+    print(str(dict[criterion]) + ' - ' + dict['name'])
+print('_______________')
+
+sorted_list = sorted(rt_ntl_int, key=lambda x: x[criterion], reverse=False)
+for dict in sorted_list:
+    print(str(dict[criterion]) + ' - ' + dict['name'])
