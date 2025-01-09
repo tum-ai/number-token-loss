@@ -45,6 +45,10 @@ from ntl.tokenizer.xval_tokenizer import XvalTokenizer
 from ntl.loss_functions.number_token_loss import NumberTokenLoss
 from ntl.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
 
+from ntl.loss_functions.number_token_loss import NumberTokenSelector
+from ntl.utils.label_smoother import GaussianLabelSmoother
+
+
 transformers.logging.set_verbosity_info()
 logger = logging.getLogger(__name__)
 # logger.setLevel(level=logging.DEBUG)
@@ -164,7 +168,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         model_class = T5RegressionModelXval
         tokenizer_class = XvalTokenizer
     elif model_args.number_encoding.lower() == "none":
-        if model_args.number_token_loss:
+        if model_args.number_token_loss or model_args.gaussian_label_smoother:
             model_class = T5VanillaForNumberTokenLoss
             tokenizer_class = T5Custom_Tokenizer
         else:
@@ -247,6 +251,16 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
                 loss_function=loss_function,
                 weight=model_args.number_token_loss_weight
             )
+
+    if model_args.gaussian_label_smoother: 
+        selector = NumberTokenSelector(tokenizer, vocab_size=config.vocab_size, device=training_args.device) 
+        label_smoother = GaussianLabelSmoother(
+            sigma=model_args.label_smoother_sigma,           
+            ignore_index=-100,   
+            selector=selector    
+        )
+    else: 
+        label_smoother = None
 
     if model_args.model_name_or_path:
 
@@ -349,6 +363,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         tokenizer=tokenizer,
+        label_smoother=label_smoother,
         # callbacks=[early_stopping_callback],
         compute_metrics=custom_metrics,
     )
