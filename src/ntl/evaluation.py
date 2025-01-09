@@ -18,6 +18,24 @@ PADDING_TOKEN = -100
 MASKED_OUT = -1
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# helper function to calculate Spearman coefficient, returns ranks of values where same values get the same rank
+def rank_with_ties(values):
+    sorted_indices = np.argsort(values)
+    rank = np.empty_like(values)
+    cnt=1
+    sum=0
+    for i in range(1,len(sorted_indices)+1):
+        if(i<len(sorted_indices) and values[sorted_indices[i-1]] == values[sorted_indices[i]]):
+            cnt+=1
+            sum+=i
+        else:
+            rank[sorted_indices[(i-cnt):i]] = sum/cnt
+            sum=i
+            cnt=1
+    return rank
+
+
+
 
 class CustomMetrics:
     """
@@ -80,6 +98,7 @@ class CustomMetrics:
         label_number = float(label_number.replace(" ", ""))
 
         return prediction_number, label_number
+    
 
     def calculate_metrics(self, number_results, total_count):
         mae = np.mean([np.abs(result[0] - result[1]) for result in number_results if not np.isnan(result[0])])
@@ -96,6 +115,16 @@ class CustomMetrics:
         log_r2 = 1 - np.nansum((log_transformed_data[:, 0] - log_transformed_data[:, 1]) ** 2) / np.nansum(
             (log_transformed_data[:, 1] - np.nanmean(log_transformed_data[:, 1])) ** 2)
         log_mae = np.mean([np.abs(result[0] - result[1]) for result in log_transformed_data if not np.isnan(result[0])])
+     
+        v1 = number_results[:,0] 
+        v2 = number_results[:,1] 
+        valid_count = total_count - count_not_produced_valid_results
+        pearson = ( valid_count * np.nansum(v1*v2) - np.nansum(v1)*np.nansum(v2) ) / np.sqrt(
+            (valid_count * np.nansum(v1*v1) - np.nansum(v1)**2) * (valid_count * np.nansum(v2*v2) - np.nansum(v2)**2))
+      
+        rank1 = rank_with_ties(v1[~np.isnan(v1) & ~np.isnan(v2)])
+        rank2 = rank_with_ties(v2[~np.isnan(v1) & ~np.isnan(v2)])
+        spearman = 1 - (6 * np.sum((rank1-rank2)**2)) / (valid_count * (valid_count**2 - 1)) 
 
         return (
             mae,
@@ -107,6 +136,8 @@ class CustomMetrics:
             median_absolute_error,
             log_mae,
             log_r2,
+            pearson,
+            spearman,
         )
 
     def perplexity(self, logits, labels):
@@ -265,6 +296,8 @@ class CustomMetrics:
                 median_absolute_error,
                 log_mae,
                 log_r2,
+                pearson,
+                spearman
             ) = self.calculate_metrics(number_results, total_count)
 
             computed_metrics = {
@@ -292,6 +325,8 @@ class CustomMetrics:
                 "rouge1": np.mean([stat['rouge1'] for stat in self.batch_stats]),
                 "rouge2": np.mean([stat['rouge2'] for stat in self.batch_stats]),
                 "rougeL": np.mean([stat['rougeL'] for stat in self.batch_stats]),
+                'pearson': pearson,
+                'spearman': spearman,
             }
             self.batch_stats = []
             return computed_metrics

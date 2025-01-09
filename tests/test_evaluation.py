@@ -61,6 +61,8 @@ class TestEvaluationMethods(unittest.TestCase):
             median_absolute_error,
             log_mae,
             log_r2,
+            pearson,
+            spearman
         ) = self.metrics_xval.calculate_metrics(number_results, 5)
 
         expected_mae = np.mean([abs(-1.0 - -4.0), abs(34.452 - 34.452), abs(80 - 78), abs(-1 - 0)])
@@ -83,6 +85,11 @@ class TestEvaluationMethods(unittest.TestCase):
         expected_count_not_produced_valid_results = 1
         expected_average_count_not_produced_valid_results = 1/5
 
+        expected_pearson = ( 4 * (4 + 34.452**2 + 80*78) - (-1+34.452+80-1)*(-4+34.452+78) ) / np.sqrt(
+            (4 * (1+34.452**2+80**2+1) - (-1+34.452+80-1)**2) * (4 * (16+34.452**2+78**2) - (-4+34.452+78)**2))
+        expected_spearman = 1. - (6 * np.sum((np.array([.5,2.,3.,.5]) - np.array([0.,2.,3.,1.]))**2)) / (4. * (4.**2 - 1.))
+     
+
         self.assertEqual(mae, expected_mae)
         self.assertEqual(mse, expected_mse)
         self.assertEqual(r2, expected_r2)
@@ -92,6 +99,8 @@ class TestEvaluationMethods(unittest.TestCase):
         self.assertEqual(median_absolute_error, expected_median_absolute_error)
         self.assertEqual(log_mae, expected_log_mae)
         self.assertEqual(log_r2, expected_log_r2)
+        self.assertEqual(pearson, expected_pearson)
+        self.assertEqual(spearman, expected_spearman)
 
 
 if __name__ == "__main__":
