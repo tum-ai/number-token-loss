@@ -141,4 +141,11 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-*.DS_Store
+# Benchmark logging
+*.stored_yaml
+*.log
+*.csv
+*.png
+
+# Mac OS
+.DS_Store
