@@ -10,6 +10,7 @@ import os
 sys.path.append(".")
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
+import time
 import json
 import logging
 import numpy as np
@@ -94,6 +95,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         training_args.n_gpu,
         bool(training_args.local_rank != -1),
     )
+
     logger.info("Training on dataset: %s", dataset_args.dataset_name)
     logger.info("Training/evaluation parameters %s", training_args)
 
@@ -121,6 +123,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     # Set seed
     set_seed(training_args.seed)
 
+
     if model_args.config_name:
         # if file exists load it otherwise just use config name
         if os.path.isfile(model_args.config_name):
@@ -134,8 +137,10 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
             cache_dir=model_args.cache_dir,
             mem_len=model_params.get("mem_len", 1024),
         )
+    
 
     elif model_args.model_name_or_path:
+     
         if "checkpoint" not in model_args.model_name_or_path:
             model_args.model_name_or_path = get_latest_checkpoint(
                 model_args.model_name_or_path,
@@ -148,10 +153,13 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         )
         model_params = config.__dict__
 
+
     else:
         config = CONFIG_MAPPING[model_args.model_type]()
         model_params = config.__dict__
         logger.warning("You are instantiating a new config instance from scratch.")
+
+   
 
     if training_args.language_modelling == "clm":
         # Set generation arguments
@@ -324,6 +332,18 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         eval_dataset = load_txt_dataset(eval_data_path)
         test_interpolate_dataset = load_txt_dataset(test_interpolate_data_path)
         test_extrapolate_dataset = load_txt_dataset(test_extrapolate_data_path)
+    elif dataset_args.dataset_name == "arithmetic":
+        logger.info("Training on arithmetic dataset")
+        train_data_path = 'data/mathematics_dataset-v1.0/arithmetic_train.txt'
+        eval_data_path = 'data/mathematics_dataset-v1.0/arithmetic_val.txt'
+        test_interpolate_data_path = 'data/mathematics_dataset-v1.0/arithmetic_test_interpolate.txt'
+        test_extrapolate_data_path = 'data/mathematics_dataset-v1.0/arithmetic_test_extrapolate.txt'
+
+        train_dataset = load_txt_dataset(train_data_path)
+        eval_dataset = load_txt_dataset(eval_data_path)
+        test_interpolate_dataset = load_txt_dataset(test_interpolate_data_path)
+        test_extrapolate_dataset = load_txt_dataset(test_extrapolate_data_path)
+
     elif dataset_args.dataset_name == "multiplication":
         train_data_path = 'data/digit-multiplication/data/train.jsonl'
         eval_data_path = 'data/digit-multiplication/data/val.jsonl'
@@ -354,6 +374,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         early_stopping_threshold=0.001)
 
     # custom_trainer_params = get_trainer_dict(model_params)
+   
 
     # Initialize our Trainer
     trainer = CustomSeq2SeqTrainer(
@@ -377,7 +398,11 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     )
 
     if not training_args.do_only_eval:
+        start_time = time.time()
         trainer.train(model_path=model_path)
+        end_time=time.time()
+        logger.info("Elapsed time:")
+        logger.info(end_time - start_time)
         trainer.save_model()
         # For convenience, we also re-save the tokenizer to the same directory,
         # so that you can share your model easily on huggingface.co/models =)
@@ -386,19 +411,32 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     else:
         logger.info("Skipping training.")
 
-    logger.info("*** Evaluate on validation data ***")
-    eval_results_val = trainer.evaluate(eval_dataset=eval_dataset)
-    logger.info(f"eval_results validation data: {eval_results_val}")
-
-    if not training_args.do_only_eval:
-        return eval_results_val, model
+    if not (dataset_args.dataset_name == "mathematics_dataset" and dataset_args.mode == "dataset_comparison"):
+        
+        logger.info("*** Evaluate on validation data ***")
+        eval_results_val = trainer.evaluate(eval_dataset=eval_dataset) 
+        logger.info(f"eval_results validation data: {eval_results_val}")
+ 
+        if not training_args.do_only_eval:
+            return eval_results_val, model
+            
 
     if dataset_args.dataset_name in ["gsm8k", "multiplication"]:
         logger.info("*** Evaluate on test set ***")
         eval_results_test = trainer.evaluate(eval_dataset=test_dataset)
         logger.info(f"eval_results test data: {eval_results_test}")
         return eval_results_val, eval_results_test
-    elif dataset_args.dataset_name == "mathematics_dataset":
+    elif dataset_args.dataset_name == "arithmetic":
+        logger.info("*** Evaluate on interpolation data for arithmetic ***")
+        eval_results_test_interpolate = trainer.evaluate(eval_dataset=test_interpolate_dataset) 
+        logger.info(f"eval_results interpolate data: {eval_results_test_interpolate}")
+
+        logger.info("*** Evaluate on extrapolation data for arithmetic ***")
+        eval_results_test_extrapolate = trainer.evaluate(eval_dataset=test_extrapolate_dataset)
+        logger.info(f"eval_results extrapolate data: {eval_results_test_extrapolate}")
+
+        return eval_results_val, eval_results_test_interpolate, eval_results_test_extrapolate
+    elif dataset_args.dataset_name == "mathematics_dataset" and dataset_args.mode == "interpolate_extrapolate":
         logger.info("*** Evaluate on interpolate data ***")
         eval_results_test_interpolate = trainer.evaluate(eval_dataset=test_interpolate_dataset)
         logger.info(f"eval_results interpolate data: {eval_results_test_interpolate}")
@@ -407,6 +445,54 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         eval_results_test_extrapolate = trainer.evaluate(eval_dataset=test_extrapolate_dataset)
         logger.info(f"eval_results extrapolate data: {eval_results_test_extrapolate}")
         return eval_results_val, eval_results_test_interpolate, eval_results_test_extrapolate
+    elif dataset_args.dataset_name == "mathematics_dataset" and dataset_args.mode == "dataset_comparison":
+        logger.info("*** Comparing loss on individuals datasets ***")
+
+        # interpolation
+        int_categories = [
+            "algebra__linear_1d.txt",
+            "algebra__linear_1d_composed.txt",
+            "algebra__linear_2d.txt",
+            "algebra__linear_2d_composed.txt",
+            "algebra__sequence_next_term.txt",
+            "arithmetic__add_or_sub.txt",
+            "arithmetic__add_sub_multiple.txt",
+            "arithmetic__mul.txt",
+            "numbers__div_remainder.txt",
+            "numbers__div_remainder_composed.txt",
+            "numbers__place_value.txt",
+            "numbers__round_number.txt",
+            "numbers__round_number_composed.txt",
+        ]
+        int_results = []
+        for name in int_categories:
+            path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/interpolate/' + name
+            test_dataset = load_txt_dataset(path)
+            logger.info("*** Testing interpolation on " + name + " data ***")
+            result = trainer.evaluate(eval_dataset=test_dataset)
+            logger.info(f"Test results: {result}")
+            int_results.append(result)
+
+        #extrapolation
+        ext_categories = [
+        "arithmetic__add_or_sub_big.txt",
+        "arithmetic__add_sub_multiple_longer.txt",
+        "arithmetic__mixed_longer.txt",
+        "arithmetic__mul_big.txt",
+        "arithmetic__mul_div_multiple_longer.txt",
+        "numbers__place_value_big.txt",
+        "numbers__round_number_big.txt",
+        ]
+        ext_results = []
+        for name in ext_categories:
+            path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/extrapolate/' + name
+            test_dataset = load_txt_dataset(path)
+            logger.info("*** Testing extrapolation on " + name + " data ***")
+            result = trainer.evaluate(eval_dataset=test_dataset)
+            logger.info(f"Test results: {result}")
+            ext_results.append(result)
+
+        return int_results, ext_results
 
 
 def get_data_collator(model_args: ModelArguments, tokenizer, training_args: TrainingArguments) -> transformers.DataCollator:

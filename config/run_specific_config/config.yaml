@@ -1,6 +1,7 @@
 training_args:
-  trial: trial_6
+  trial:
   special_name:
 
 model_args:
-  model_name_or_path: google-t5/t5-base
+  model_name_or_path: google-t5/t5-small
+  config_name: t5-small

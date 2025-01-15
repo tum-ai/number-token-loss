@@ -14,9 +14,13 @@ from ntl.tokenizer.abstract_tokenizer import NumberEncodingTokenizer, NUMBER_REG
 from ntl.tokenizer.t5custom_tokenizer import check_number_predictions
 from ntl.utils.numerical_operations import inverse_signed_log
 
+from scipy import stats
+
 PADDING_TOKEN = -100
 MASKED_OUT = -1
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 
 
 class CustomMetrics:
@@ -80,6 +84,7 @@ class CustomMetrics:
         label_number = float(label_number.replace(" ", ""))
 
         return prediction_number, label_number
+    
 
     def calculate_metrics(self, number_results, total_count):
         mae = np.mean([np.abs(result[0] - result[1]) for result in number_results if not np.isnan(result[0])])
@@ -96,6 +101,13 @@ class CustomMetrics:
         log_r2 = 1 - np.nansum((log_transformed_data[:, 0] - log_transformed_data[:, 1]) ** 2) / np.nansum(
             (log_transformed_data[:, 1] - np.nanmean(log_transformed_data[:, 1])) ** 2)
         log_mae = np.mean([np.abs(result[0] - result[1]) for result in log_transformed_data if not np.isnan(result[0])])
+     
+        v1 = number_results[:,0] 
+        v2 = number_results[:,1] 
+        v1_valid = v1[~np.isnan(v1) & ~np.isnan(v2)]
+        v2_valid = v2[~np.isnan(v1) & ~np.isnan(v2)]
+        pearson = stats.pearsonr(v1_valid, v2_valid).statistic
+        spearman = stats.spearmanr(v1_valid, v2_valid).statistic
 
         return (
             mae,
@@ -107,6 +119,8 @@ class CustomMetrics:
             median_absolute_error,
             log_mae,
             log_r2,
+            pearson,
+            spearman,
         )
 
     def perplexity(self, logits, labels):
@@ -265,6 +279,8 @@ class CustomMetrics:
                 median_absolute_error,
                 log_mae,
                 log_r2,
+                pearson,
+                spearman
             ) = self.calculate_metrics(number_results, total_count)
 
             computed_metrics = {
@@ -292,6 +308,8 @@ class CustomMetrics:
                 "rouge1": np.mean([stat['rouge1'] for stat in self.batch_stats]),
                 "rouge2": np.mean([stat['rouge2'] for stat in self.batch_stats]),
                 "rougeL": np.mean([stat['rougeL'] for stat in self.batch_stats]),
+                'pearson': pearson,
+                'spearman': spearman,
             }
             self.batch_stats = []
             return computed_metrics
