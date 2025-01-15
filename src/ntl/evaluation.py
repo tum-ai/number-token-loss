@@ -20,26 +20,6 @@ PADDING_TOKEN = -100
 MASKED_OUT = -1
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# helper function to calculate Spearman coefficient, returns ranks of values where same values get the same rank
-def rank_with_ties(values):
-    sorted_indices = np.argsort(values)
-    rank = np.empty_like(values)
-    cnt=1
-    sum=0
-    for i in range(1,len(sorted_indices)+1):
-        if(i<len(sorted_indices) and values[sorted_indices[i-1]] == values[sorted_indices[i]]):
-            cnt+=1
-            sum+=i
-        else:
-            rank[sorted_indices[(i-cnt):i]] = sum/cnt
-            sum=i
-            cnt=1
-    return rank
-
-
-
-
-
 
 class CustomMetrics:
     """
