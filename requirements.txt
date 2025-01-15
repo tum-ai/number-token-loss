@@ -66,3 +66,4 @@ xxhash==3.5.0
 yarl==1.9.4
 hydra-core===1.3.2
 pytest
+scipy==1.13.1
