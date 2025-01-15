@@ -59,7 +59,19 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
         - additionally return next_token_prediction_logits for calculating perplexity
         - also handle the number_predictions from xval as they are an additional output of the model
         - log both normal token loss and number token loss
+        - include a custom gaussian label smoother
     """
+    
+    def __init__(
+        self,
+        *args,
+        label_smoother=None, #     label_smoother: Optional[LabelSmoother] = None,
+        **kwargs
+    ):
+        # Capture label_smoother manually
+        super().__init__(*args, **kwargs)
+        self.label_smoother = label_smoother
+        
 
     def prediction_step(
             self,
@@ -167,7 +179,18 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
                     outputs = model(**inputs)
                     next_token_prediction_logits = outputs.logits
                 if self.label_smoother is not None:
-                    next_token_prediction_loss = self.label_smoother(outputs, inputs["labels"]).mean().detach()
+                    next_token_prediction_loss = self.label_smoother(outputs, inputs["labels"])
+                    if "number_loss" in outputs:
+                        outputs["token_loss"] = next_token_prediction_loss
+                        next_token_prediction_loss = next_token_prediction_loss + self.model.number_token_loss.weight * outputs["number_loss"]
+                        next_token_prediction_loss = (
+                            next_token_prediction_loss.mean().detach(),
+                            outputs["token_loss"].mean().detach(),
+                            outputs["number_loss"].mean().detach()
+                        )
+                    else:
+                        next_token_prediction_loss = next_token_prediction_loss.mean().detach()
+
                 else:
                     next_token_prediction_loss = (outputs["loss"] if isinstance(outputs, dict) else outputs[0]).mean().detach()
                     if "number_loss" in outputs and "token_loss" in outputs:
@@ -1245,7 +1268,7 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
         Subclass and override for custom behavior.
         """
         if self.label_smoother is not None and "labels" in inputs:
-            labels = inputs.pop("labels")
+            labels = inputs["labels"]
         else:
             labels = None
         outputs = model(**inputs)
@@ -1264,6 +1287,9 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
                 loss = self.label_smoother(outputs, labels, shift_labels=True)
             else:
                 loss = self.label_smoother(outputs, labels)
+                outputs["token_loss"] = loss
+                if "number_loss" in outputs:
+                    loss = loss + self.model.number_token_loss.weight * outputs["number_loss"]
         else:
             if isinstance(outputs, dict) and "loss" not in outputs:
                 raise ValueError(

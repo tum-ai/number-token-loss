@@ -11,6 +11,7 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+outputs/
 downloads/
 eggs/
 .eggs/
@@ -139,3 +140,12 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# Benchmark logging
+*.stored_yaml
+*.log
+*.csv
+*.png
+
+# Mac OS
+.DS_Store

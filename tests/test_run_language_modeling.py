@@ -41,6 +41,8 @@ class TestRunLanguageModeling(unittest.TestCase):
         )
 
     def generate_training_args(self, output_dir, do_only_eval=False, language_modelling: Literal["clm", "mlm"] = "clm"):
+        use_cpu = not torch.cuda.is_available()
+        
         return TrainingArguments(
             output_dir=output_dir,
             overwrite_output_dir=True,
@@ -57,6 +59,7 @@ class TestRunLanguageModeling(unittest.TestCase):
             batch_eval_metrics=True,
             do_only_eval=do_only_eval,
             language_modelling=language_modelling,
+            use_cpu=use_cpu,
         )
 
     def mock_load_json_dataset(self, path):

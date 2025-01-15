@@ -46,6 +46,10 @@ from ntl.tokenizer.xval_tokenizer import XvalTokenizer
 from ntl.loss_functions.number_token_loss import NumberTokenLoss
 from ntl.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
 
+from ntl.loss_functions.number_token_loss import NumberTokenSelector
+from ntl.utils.label_smoother import GaussianLabelSmoother
+
+
 transformers.logging.set_verbosity_info()
 logger = logging.getLogger(__name__)
 # logger.setLevel(level=logging.DEBUG)
@@ -172,7 +176,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         model_class = T5RegressionModelXval
         tokenizer_class = XvalTokenizer
     elif model_args.number_encoding.lower() == "none":
-        if model_args.number_token_loss:
+        if model_args.number_token_loss or model_args.gaussian_label_smoother:
             model_class = T5VanillaForNumberTokenLoss
             tokenizer_class = T5Custom_Tokenizer
         else:
@@ -255,6 +259,16 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
                 loss_function=loss_function,
                 weight=model_args.number_token_loss_weight
             )
+
+    if model_args.gaussian_label_smoother: 
+        selector = NumberTokenSelector(tokenizer, vocab_size=config.vocab_size, device=training_args.device) 
+        label_smoother = GaussianLabelSmoother(
+            sigma=model_args.label_smoother_sigma,           
+            ignore_index=-100,   
+            selector=selector    
+        )
+    else: 
+        label_smoother = None
 
     if model_args.model_name_or_path:
 
@@ -370,6 +384,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         tokenizer=tokenizer,
+        label_smoother=label_smoother,
         # callbacks=[early_stopping_callback],
         compute_metrics=custom_metrics,
     )
@@ -388,11 +403,6 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         end_time=time.time()
         logger.info("Elapsed time:")
         logger.info(end_time - start_time)
-        trainer.save_model()
-        # For convenience, we also re-save the tokenizer to the same directory,
-        # so that you can share your model easily on huggingface.co/models =)
-        if trainer.state.is_world_process_zero:
-            tokenizer.save_pretrained(training_args.output_dir)
     else:
         logger.info("Skipping training.")
 
@@ -402,10 +412,9 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         eval_results_val = trainer.evaluate(eval_dataset=eval_dataset) 
         logger.info(f"eval_results validation data: {eval_results_val}")
  
-        if not training_args.do_only_eval:
-            return eval_results_val, model
+        # if not training_args.do_only_eval:
+        #     return eval_results_val, model
             
-
     if dataset_args.dataset_name in ["gsm8k", "multiplication"]:
         logger.info("*** Evaluate on test set ***")
         eval_results_test = trainer.evaluate(eval_dataset=test_dataset)

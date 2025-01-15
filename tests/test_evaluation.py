@@ -88,7 +88,6 @@ class TestEvaluationMethods(unittest.TestCase):
         expected_pearson = 0.9989029443838093
         expected_spearman = 0.9486832980505139
 
-
         self.assertEqual(mae, expected_mae)
         self.assertEqual(mse, expected_mse)
         self.assertEqual(r2, expected_r2)
