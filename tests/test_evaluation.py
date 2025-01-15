@@ -85,10 +85,8 @@ class TestEvaluationMethods(unittest.TestCase):
         expected_count_not_produced_valid_results = 1
         expected_average_count_not_produced_valid_results = 1/5
 
-        expected_pearson = ( 4 * (4 + 34.452**2 + 80*78) - (-1+34.452+80-1)*(-4+34.452+78) ) / np.sqrt(
-            (4 * (1+34.452**2+80**2+1) - (-1+34.452+80-1)**2) * (4 * (16+34.452**2+78**2) - (-4+34.452+78)**2))
-        expected_spearman = 1. - (6 * np.sum((np.array([.5,2.,3.,.5]) - np.array([0.,2.,3.,1.]))**2)) / (4. * (4.**2 - 1.))
-     
+        expected_pearson = 0.9989029443838093
+        expected_spearman = 0.9486832980505139
 
         self.assertEqual(mae, expected_mae)
         self.assertEqual(mse, expected_mse)

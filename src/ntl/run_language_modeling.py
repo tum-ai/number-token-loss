@@ -403,7 +403,6 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         end_time=time.time()
         logger.info("Elapsed time:")
         logger.info(end_time - start_time)
-
     else:
         logger.info("Skipping training.")
 
@@ -416,7 +415,6 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         # if not training_args.do_only_eval:
         #     return eval_results_val, model
             
-
     if dataset_args.dataset_name in ["gsm8k", "multiplication"]:
         logger.info("*** Evaluate on test set ***")
         eval_results_test = trainer.evaluate(eval_dataset=test_dataset)

@@ -14,6 +14,8 @@ from ntl.tokenizer.abstract_tokenizer import NumberEncodingTokenizer, NUMBER_REG
 from ntl.tokenizer.t5custom_tokenizer import check_number_predictions
 from ntl.utils.numerical_operations import inverse_signed_log
 
+from scipy import stats
+
 PADDING_TOKEN = -100
 MASKED_OUT = -1
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -33,6 +35,8 @@ def rank_with_ties(values):
             sum=i
             cnt=1
     return rank
+
+
 
 
 
@@ -118,13 +122,10 @@ class CustomMetrics:
      
         v1 = number_results[:,0] 
         v2 = number_results[:,1] 
-        valid_count = total_count - count_not_produced_valid_results
-        pearson = ( valid_count * np.nansum(v1*v2) - np.nansum(v1)*np.nansum(v2) ) / np.sqrt(
-            (valid_count * np.nansum(v1*v1) - np.nansum(v1)**2) * (valid_count * np.nansum(v2*v2) - np.nansum(v2)**2))
-      
-        rank1 = rank_with_ties(v1[~np.isnan(v1) & ~np.isnan(v2)])
-        rank2 = rank_with_ties(v2[~np.isnan(v1) & ~np.isnan(v2)])
-        spearman = 1 - (6 * np.sum((rank1-rank2)**2)) / (valid_count * (valid_count**2 - 1)) 
+        v1_valid = v1[~np.isnan(v1) & ~np.isnan(v2)]
+        v2_valid = v2[~np.isnan(v1) & ~np.isnan(v2)]
+        pearson = stats.pearsonr(v1_valid, v2_valid).statistic
+        spearman = stats.spearmanr(v1_valid, v2_valid).statistic
 
         return (
             mae,
