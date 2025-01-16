@@ -137,10 +137,8 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
             cache_dir=model_args.cache_dir,
             mem_len=model_params.get("mem_len", 1024),
         )
-    
 
     elif model_args.model_name_or_path:
-     
         if "checkpoint" not in model_args.model_name_or_path:
             model_args.model_name_or_path = get_latest_checkpoint(
                 model_args.model_name_or_path,
@@ -153,13 +151,10 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         )
         model_params = config.__dict__
 
-
     else:
         config = CONFIG_MAPPING[model_args.model_type]()
         model_params = config.__dict__
         logger.warning("You are instantiating a new config instance from scratch.")
-
-   
 
     if training_args.language_modelling == "clm":
         # Set generation arguments
@@ -350,6 +345,13 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         train_dataset = load_json_dataset(train_data_path)
         eval_dataset = load_json_dataset(eval_data_path)
         test_dataset = load_json_dataset(test_data_path)
+    elif dataset_args.dataset_name == "multirc":
+        train_data_path = 'data/multirc/data/preprocessed/train_clean.jsonl'
+        eval_data_path = 'data/multirc/data/preprocessed/test_clean.jsonl'
+        test_data_path = 'data/multirc/data/preprocessed/val_clean.jsonl'
+        train_dataset = load_json_dataset(train_data_path)
+        eval_dataset = load_json_dataset(eval_data_path)
+        test_dataset = load_json_dataset(test_data_path)
     elif dataset_args.dataset_name == "debug":
         train_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
         eval_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
@@ -380,7 +382,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         early_stopping_threshold=0.001)
 
     # custom_trainer_params = get_trainer_dict(model_params)
-   
+
 
     # Initialize our Trainer
     trainer = CustomSeq2SeqTrainer(
