@@ -47,7 +47,7 @@ class TestRunLanguageModeling(unittest.TestCase):
             output_dir=output_dir,
             overwrite_output_dir=True,
             per_device_train_batch_size=1,
-            num_train_epochs=10,
+            max_steps=10,
             save_steps=10,
             save_total_limit=1,
             eval_strategy="no",
@@ -64,15 +64,13 @@ class TestRunLanguageModeling(unittest.TestCase):
 
     def mock_load_json_dataset(self, path):
         def read_json():
-            yield {"question": "What is 2 + 2?", "answer": "4"}
+            for i in range(2):
+                yield {"question": "What is 2 + 2?", "answer": "4"}
 
         return Dataset.from_generator(read_json)
 
     def mock_load_txt_dataset(self, path):
-        def read_txt():
-            yield {"question": "What is 2 + 2?", "answer": "4"}
-
-        return Dataset.from_generator(read_txt)
+        return self.mock_load_json_dataset(path)
 
     @mock.patch('ntl.run_language_modeling.load_json_dataset')
     @mock.patch('ntl.run_language_modeling.load_txt_dataset')
