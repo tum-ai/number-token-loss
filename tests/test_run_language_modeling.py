@@ -140,11 +140,11 @@ class TestRunLanguageModeling(unittest.TestCase):
                                                   number_token_loss=number_token_loss,
                                                   log_scale_embeddings=log_scale_embeddings):
                                     try:
-                                        eval_results_expected, _ = run_language_modeling(
+                                        eval_results_expected = run_language_modeling(
                                             model_args=model_training_args,
                                             training_args=training_args,
                                             dataset_args=dataset_args,
-                                        )
+                                        )[0]
                                     except Exception as e:
                                         logging.error(f"Training failed with exception: {e}", exc_info=True)
                                         self.fail(f"Training failed with exception: {e}")
@@ -154,7 +154,7 @@ class TestRunLanguageModeling(unittest.TestCase):
                                     self.assertTrue(os.path.isdir(checkpoint_dir), "Checkpoint directory was not created.")
 
                                     try:
-                                        eval_results_val, eval_results_test = run_language_modeling(
+                                        eval_results_val, eval_results_test, _ = run_language_modeling(
                                             model_args=model_eval_args,
                                             training_args=eval_args,
                                             dataset_args=dataset_args,
@@ -191,7 +191,7 @@ class TestRunLanguageModeling(unittest.TestCase):
 
         # Run training
         try:
-            eval_results_expected, model = run_language_modeling(
+            eval_results_expected, _, model = run_language_modeling(
                 model_args=model_args,
                 training_args=training_args,
                 dataset_args=dataset_args,
@@ -225,7 +225,7 @@ class TestRunLanguageModeling(unittest.TestCase):
 
         # Run training for the model without log scaling
         try:
-            eval_results_expected, model_no_log = run_language_modeling(
+            eval_results_expected, _, model_no_log = run_language_modeling(
                 model_args=model_args_no_log,
                 training_args=training_args_no_log,
                 dataset_args=dataset_args,

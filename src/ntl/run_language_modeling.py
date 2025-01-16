@@ -343,11 +343,17 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         eval_dataset = load_txt_dataset(eval_data_path)
         test_interpolate_dataset = load_txt_dataset(test_interpolate_data_path)
         test_extrapolate_dataset = load_txt_dataset(test_extrapolate_data_path)
-
     elif dataset_args.dataset_name == "multiplication":
         train_data_path = 'data/digit-multiplication/data/train.jsonl'
         eval_data_path = 'data/digit-multiplication/data/val.jsonl'
         test_data_path = 'data/digit-multiplication/data/test.jsonl'
+        train_dataset = load_json_dataset(train_data_path)
+        eval_dataset = load_json_dataset(eval_data_path)
+        test_dataset = load_json_dataset(test_data_path)
+    elif dataset_args.dataset_name == "debug":
+        train_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
+        eval_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
+        test_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
         train_dataset = load_json_dataset(train_data_path)
         eval_dataset = load_json_dataset(eval_data_path)
         test_dataset = load_json_dataset(test_data_path)
@@ -406,40 +412,32 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     else:
         logger.info("Skipping training.")
 
-    if not (dataset_args.dataset_name == "mathematics_dataset" and dataset_args.mode == "dataset_comparison"):
-        
+    if dataset_args.mode != "dataset_comparison":
         logger.info("*** Evaluate on validation data ***")
-        eval_results_val = trainer.evaluate(eval_dataset=eval_dataset) 
+        eval_results_val = trainer.evaluate(eval_dataset=eval_dataset)
         logger.info(f"eval_results validation data: {eval_results_val}")
- 
-        # if not training_args.do_only_eval:
-        #     return eval_results_val, model
-            
-    if dataset_args.dataset_name in ["gsm8k", "multiplication"]:
-        logger.info("*** Evaluate on test set ***")
-        eval_results_test = trainer.evaluate(eval_dataset=test_dataset)
-        logger.info(f"eval_results test data: {eval_results_test}")
-        return eval_results_val, eval_results_test
-    elif dataset_args.dataset_name == "arithmetic":
-        logger.info("*** Evaluate on interpolation data for arithmetic ***")
-        eval_results_test_interpolate = trainer.evaluate(eval_dataset=test_interpolate_dataset) 
-        logger.info(f"eval_results interpolate data: {eval_results_test_interpolate}")
 
-        logger.info("*** Evaluate on extrapolation data for arithmetic ***")
-        eval_results_test_extrapolate = trainer.evaluate(eval_dataset=test_extrapolate_dataset)
-        logger.info(f"eval_results extrapolate data: {eval_results_test_extrapolate}")
+        if dataset_args.dataset_name in ["arithmetic", "mathematics_dataset"]:
+            logger.info("*** Evaluate on interpolation data for arithmetic ***")
+            eval_results_test_interpolate = trainer.evaluate(eval_dataset=test_interpolate_dataset)
+            logger.info(f"eval_results interpolate data: {eval_results_test_interpolate}")
 
-        return eval_results_val, eval_results_test_interpolate, eval_results_test_extrapolate
-    elif dataset_args.dataset_name == "mathematics_dataset" and dataset_args.mode == "interpolate_extrapolate":
-        logger.info("*** Evaluate on interpolate data ***")
-        eval_results_test_interpolate = trainer.evaluate(eval_dataset=test_interpolate_dataset)
-        logger.info(f"eval_results interpolate data: {eval_results_test_interpolate}")
+            logger.info("*** Evaluate on extrapolation data for arithmetic ***")
+            eval_results_test_extrapolate = trainer.evaluate(eval_dataset=test_extrapolate_dataset)
+            logger.info(f"eval_results extrapolate data: {eval_results_test_extrapolate}")
 
-        logger.info("*** Evaluate on extrapolate data ***")
-        eval_results_test_extrapolate = trainer.evaluate(eval_dataset=test_extrapolate_dataset)
-        logger.info(f"eval_results extrapolate data: {eval_results_test_extrapolate}")
-        return eval_results_val, eval_results_test_interpolate, eval_results_test_extrapolate
-    elif dataset_args.dataset_name == "mathematics_dataset" and dataset_args.mode == "dataset_comparison":
+            return eval_results_val, eval_results_test_interpolate, eval_results_test_extrapolate, model
+        else:
+            logger.info("*** Evaluate on test set ***")
+            eval_results_test = trainer.evaluate(eval_dataset=test_dataset)
+            logger.info(f"eval_results test data: {eval_results_test}")
+            return eval_results_val, eval_results_test, model
+
+
+    else:
+        if dataset_args.dataset_name != "mathematics_dataset":
+            raise ValueError("dataset_args.mode=dataset_comparison only supported for mathematics_dataset")
+
         logger.info("*** Comparing loss on individuals datasets ***")
 
         # interpolation
