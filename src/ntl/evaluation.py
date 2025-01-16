@@ -236,12 +236,12 @@ class CustomMetrics:
         bleu = self.compute_bleu(decoded_preds, decoded_labels)
         rouge = self.compute_rouge(decoded_preds, decoded_labels)
 
-        number_results = self.parse_number_result(decoded_preds, decoded_labels)
+        # number_results = self.parse_number_result(decoded_preds, decoded_labels)
 
         self.batch_stats.append({
             'token_accuracy_whole': accuracy_w,
             'token_accuracy': accuracy,
-            "number_results": number_results,
+            # "number_results": number_results,
             "total_count": predictions.shape[0],
             "count_invalid_number_prediction": count_invalid_number_prediction,
             "count_no_number_prediction": count_no_number_prediction,
@@ -254,31 +254,31 @@ class CustomMetrics:
 
         if compute_result:
             total_count = np.sum([stat['total_count'] for stat in self.batch_stats])
-            number_results = np.concatenate([stat['number_results'] for stat in self.batch_stats])
-            (
-                mae,
-                mse,
-                r2,
-                number_accuracy,
-                count_not_produced_valid_results,
-                average_count_not_produced_valid_results,
-                median_absolute_error,
-                log_mae,
-                log_r2,
-            ) = self.calculate_metrics(number_results, total_count)
+            # number_results = np.concatenate([stat['number_results'] for stat in self.batch_stats])
+            # (
+            #     mae,
+            #     mse,
+            #     r2,
+            #     number_accuracy,
+            #     count_not_produced_valid_results,
+            #     average_count_not_produced_valid_results,
+            #     median_absolute_error,
+            #     log_mae,
+            #     log_r2,
+            # ) = self.calculate_metrics(number_results, total_count)
 
             computed_metrics = {
                 'token_accuracy_whole': np.mean([stat['token_accuracy_whole'] for stat in self.batch_stats]),
                 'token_accuracy': np.mean([stat['token_accuracy'] for stat in self.batch_stats]),
-                'MSE': mse,
-                'MAE': mae,
-                'R2': r2,
-                'number_accuracy': number_accuracy,
-                'median_absolute_error': median_absolute_error,
-                'log_mae': log_mae,
-                'log_r2': log_r2,
-                "count_not_produced_valid_results": count_not_produced_valid_results,
-                "average_count_not_produced_valid_results": average_count_not_produced_valid_results,
+                # 'MSE': mse,
+                # 'MAE': mae,
+                # 'R2': r2,
+                # 'number_accuracy': number_accuracy,
+                # 'median_absolute_error': median_absolute_error,
+                # 'log_mae': log_mae,
+                # 'log_r2': log_r2,
+                # "count_not_produced_valid_results": count_not_produced_valid_results,
+                # "average_count_not_produced_valid_results": average_count_not_produced_valid_results,
                 "count_invalid_number_prediction": np.sum(
                     [stat['count_invalid_number_prediction'] for stat in self.batch_stats]),
                 "count_no_number_prediction": np.sum(

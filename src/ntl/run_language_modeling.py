@@ -8,7 +8,7 @@ The file is an adaptation of https://github.com/huggingface/transformers/blob/v3
 import sys
 import os
 sys.path.append(".")
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 import json
 import logging
@@ -333,8 +333,8 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         test_dataset = load_json_dataset(test_data_path)
     elif dataset_args.dataset_name == "multirc":
         train_data_path = 'data/multirc/data/preprocessed/train_clean.jsonl'
-        eval_data_path = 'data/multirc/data/preprocessed/test_clean.jsonl'
-        test_data_path = 'data/multirc/data/preprocessed/val_clean.jsonl'
+        eval_data_path = 'data/multirc/data/preprocessed/val_clean.jsonl'
+        test_data_path = 'data/multirc/data/preprocessed/test_clean.jsonl'
         train_dataset = load_json_dataset(train_data_path)
         eval_dataset = load_json_dataset(eval_data_path)
         test_dataset = load_json_dataset(test_data_path)

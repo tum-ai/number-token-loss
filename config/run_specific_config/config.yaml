@@ -1,6 +1,6 @@
 training_args:
-  trial: trial_6
+  trial: nlp_task_jonas_run
   special_name:
 
 model_args:
-  model_name_or_path: google-t5/t5-base
+  model_name_or_path: google-t5/t5-small
