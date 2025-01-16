@@ -158,3 +158,10 @@ class DatasetArguments:
             "help": "Whether we combine mathematics datasets in testing, or test individually. Allowed: interpolate_extrapolate, dataset_comparison"
         },
     )
+
+    compute_number_metrics: Optional[bool] = field(
+        default=True,
+        metadata={
+            "help": "Compute number metrics."
+        },
+    )

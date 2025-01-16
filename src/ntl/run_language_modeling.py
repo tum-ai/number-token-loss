@@ -374,6 +374,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         output_dir=training_args.output_dir,
         save_all_output=True,
         log_scale=model_args.log_scale_embeddings,
+        compute_number_metrics=dataset_args.compute_number_metrics,
     )
 
     # Early stopping
