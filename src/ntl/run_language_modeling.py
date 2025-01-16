@@ -354,9 +354,9 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         train_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
         eval_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
         test_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
-        train_dataset = load_json_dataset(train_data_path)
-        eval_dataset = load_json_dataset(eval_data_path)
-        test_dataset = load_json_dataset(test_data_path)
+        train_dataset = load_txt_dataset(train_data_path)
+        eval_dataset = load_txt_dataset(eval_data_path)
+        test_dataset = load_txt_dataset(test_data_path)
     else:
         raise ValueError(f"Unknown dataset: {dataset_args.dataset_name}. Allowed: gsm8k, mathematics_dataset, multiplication")
 
