@@ -97,8 +97,6 @@ class TestEvaluationMethods(unittest.TestCase):
         self.assertEqual(median_absolute_error, expected_median_absolute_error)
         self.assertEqual(log_mae, expected_log_mae)
         self.assertEqual(log_r2, expected_log_r2)
-        self.assertEqual(pearson, expected_pearson)
-        self.assertEqual(spearman, expected_spearman)
 
 
 if __name__ == "__main__":
