@@ -106,8 +106,13 @@ class CustomMetrics:
         v2 = number_results[:,1] 
         v1_valid = v1[~np.isnan(v1) & ~np.isnan(v2)]
         v2_valid = v2[~np.isnan(v1) & ~np.isnan(v2)]
-        pearson = stats.pearsonr(v1_valid, v2_valid).statistic
-        spearman = stats.spearmanr(v1_valid, v2_valid).statistic
+
+        if len(v1_valid) < 2 and len(v2_valid) < 2:
+            pearson = 0
+            spearman = 0
+        else:
+            pearson = stats.pearsonr(v1_valid, v2_valid).statistic
+            spearman = stats.spearmanr(v1_valid, v2_valid).statistic
 
         return (
             mae,
