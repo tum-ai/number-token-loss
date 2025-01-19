@@ -61,6 +61,22 @@ def calculate_errors(dev_file, train_mean):
 
     return mse, rmse, mae
 
+def validate_answers(jsonl_file):
+    invalid_count = 0
+
+    with open(jsonl_file, 'r', encoding='utf-8') as file:
+        for line_number, line in enumerate(file, start=1):
+            entry = json.loads(line)
+            answer = entry.get("answer", None)
+
+            # Check if the `answer` is a string
+            if not isinstance(answer, str):
+                invalid_count += 1
+                print(f"Invalid answer in file {jsonl_file.name} at line {line_number}: {answer}")
+
+    
+    return invalid_count
+
 
 base_dir = Path(__file__).resolve().parent/'data'
 file_names = ['train', 'dev', 'test']
@@ -73,6 +89,14 @@ distribution_files = [base_dir / f"{file_name}_distribution.json" for file_name 
 for tsv_file, jsonl_file, dist_file in zip(tsv_files, jsonl_files, distribution_files):
     tsv_to_jsonl(tsv_file, jsonl_file, dist_file)
 
+for jsonl_file in jsonl_files:
+    print(f"Validating file: {jsonl_file.name}")
+    invalid_entries = validate_answers(jsonl_file)
+    if invalid_entries == 0:
+        print(f"All answers in {jsonl_file.name} are valid strings.")
+    else:
+        print(f"Found {invalid_entries} invalid answers in {jsonl_file.name}.")
+
 with open(base_dir / "dev_distribution.json", 'r', encoding='utf-8') as dev_dist_file:
         train_distribution = json.load(dev_dist_file)
 print(train_distribution)
@@ -83,7 +107,7 @@ train_mean = train_total / train_count
 print(f"Mean of train upvote distribution: {train_mean}")
 
 # Calculate RMSE for the dev set using the train mean
-dev_jsonl_file = base_dir / "dev.jsonl"
-mse, rmse, mae = calculate_errors(dev_jsonl_file, train_mean)
+# dev_jsonl_file = base_dir / "dev.jsonl"
+# mse, rmse, mae = calculate_errors(dev_jsonl_file, train_mean)
 # calculate_rmse(dev_jsonl_file, train_mean)
 
