@@ -18,7 +18,8 @@ def tsv_to_jsonl(input_file, output_file, distribution_output_file):
                 parts = line.strip().split('\t', 1)
                 if len(parts) == 2:
                     number, text = parts
-                    upvotes = int(number)  
+                    upvotes = number
+                    # upvotes = int(number)  
                     upvote_distribution[upvotes] += 1  
                     data = {"question": text, "answer": upvotes}
                     jsonl_file.write(json.dumps(data) + '\n')
