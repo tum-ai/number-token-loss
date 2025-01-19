@@ -3,7 +3,7 @@ from pathlib import Path
 from collections import Counter
 from math import sqrt
 import numpy as np 
-from sklearn.metrics import mean_squared_error, mean_absolute_error
+# from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 
 def tsv_to_jsonl(input_file, output_file, distribution_output_file):
@@ -68,11 +68,12 @@ def validate_answers(jsonl_file):
         for line_number, line in enumerate(file, start=1):
             entry = json.loads(line)
             answer = entry.get("answer", None)
+            question = entry.get("question", None)
 
             # Check if the `answer` is a string
-            if not isinstance(answer, str):
+            if not (isinstance(answer, str)& isinstance(question, str)):
                 invalid_count += 1
-                print(f"Invalid answer in file {jsonl_file.name} at line {line_number}: {answer}")
+                print(f"Invalid answer in file {jsonl_file.name} at line {line_number}")
 
     
     return invalid_count
