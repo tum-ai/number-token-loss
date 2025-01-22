@@ -49,12 +49,12 @@ class TestNumberHead(unittest.TestCase):
         return TrainingArguments(
             output_dir=output_dir,
             overwrite_output_dir=True,
-            per_device_train_batch_size=8,
-            max_steps=50000,
-            save_steps=500,
-            eval_steps=500,
+            per_device_train_batch_size=32,
+            max_steps=1000,
+            save_steps=200,
+            eval_steps=200,
             save_total_limit=1,
-            learning_rate=1e-4,
+            learning_rate=5e-4,
             logging_steps=50,
             eval_strategy="steps",
             report_to="none",
@@ -67,33 +67,26 @@ class TestNumberHead(unittest.TestCase):
         )
 
     def mock_load_json_dataset(self, path):
-        def generate_text(length):
-            words = ["calculate", "compute", "determine", "find", "solve", "evaluate", 
-                    "number", "value", "result", "sum", "product", "quotient",
-                    "large", "small", "medium", "complex", "simple", "basic"]
-            return " ".join(np.random.choice(words, size=length))
+        def generate_simple_math_question(a, b):
+            return f"What is {a} plus {b}?", str(a + b)
 
         def read_json():
-            # Generate 100 samples for training
+            numbers = range(1, 31)
+            train_numbers = np.random.choice(numbers, 20, replace=False)
+            val_numbers = [n for n in numbers if n not in train_numbers]
             if "train" in path.lower():
-                for i in range(100):
-                    length = np.random.randint(3, 21)  # Random length between 3-20 words
-                    question = generate_text(length)
-                    answer = str(length * 10) # + np.random.randint(-2, 3))  # Some noise around length*10
+                # Generate 100 simple addition problems with numbers 1-20
+                for _ in range(100):
+                    a = np.random.choice(train_numbers)
+                    b = np.random.choice(train_numbers)
+                    question, answer = generate_simple_math_question(a, b)
                     yield {"question": question, "answer": answer}
-            # Generate 20 different samples for validation
-            elif "val" in path.lower():
-                for i in range(20):
-                    length = np.random.randint(21, 31)  # Length between 21-30 words
-                    question = generate_text(length)
-                    answer = str(length * 10)
-                    yield {"question": question, "answer": answer}
-            # Generate 20 different samples for testing
             else:
-                for i in range(20):
-                    length = np.random.randint(31, 41)  # Length between 31-40 words
-                    question = generate_text(length)
-                    answer = str(length * 10)# + np.random.randint(-2, 3))
+                # Generate 20 validation/test problems with similar range
+                for _ in range(20):
+                    a = np.random.choice(val_numbers)
+                    b = np.random.choice(val_numbers)
+                    question, answer = generate_simple_math_question(a, b)
                     yield {"question": question, "answer": answer}
 
         return Dataset.from_generator(read_json)
