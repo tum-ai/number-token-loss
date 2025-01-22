@@ -1,0 +1,4 @@
+name: vanilla_t5
+config_name: t5-small
+number_encoding: none
+tokenizer_type: custom

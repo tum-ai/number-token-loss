@@ -74,6 +74,13 @@ class ModelArguments:
             "help": "Pretrained tokenizer name or path if not the same as model_name"
         },
     )
+    tokenizer_type: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "If custom or auto tokenizer",
+        },
+    )
+
     cache_dir: Optional[str] = field(
         default=None,
         metadata={
