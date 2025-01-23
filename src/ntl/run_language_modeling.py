@@ -8,7 +8,7 @@ The file is an adaptation of https://github.com/huggingface/transformers/blob/v3
 import sys
 import os
 sys.path.append(".")
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import time
 import json
@@ -351,6 +351,13 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         train_data_path = 'data/digit-multiplication/data/train.jsonl'
         eval_data_path = 'data/digit-multiplication/data/val.jsonl'
         test_data_path = 'data/digit-multiplication/data/test.jsonl'
+        train_dataset = load_json_dataset(train_data_path)
+        eval_dataset = load_json_dataset(eval_data_path)
+        test_dataset = load_json_dataset(test_data_path)
+    elif dataset_args.dataset_name == "rjokes":
+        train_data_path = 'data/rjokes-dataset/data/train.jsonl'
+        eval_data_path = 'data/rjokes-dataset/data/dev.jsonl'
+        test_data_path = 'data/rjokes-dataset/data/test.jsonl'
         train_dataset = load_json_dataset(train_data_path)
         eval_dataset = load_json_dataset(eval_data_path)
         test_dataset = load_json_dataset(test_data_path)
