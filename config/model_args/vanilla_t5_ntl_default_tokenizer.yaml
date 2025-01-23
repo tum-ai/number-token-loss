@@ -1,4 +1,4 @@
-name: vanilla_t5_ntl
+name: vanilla_t5_ntl_default_tokenizer
 config_name: t5-small
 number_encoding: none
 number_token_loss: true

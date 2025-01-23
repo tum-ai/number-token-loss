@@ -1,4 +1,4 @@
-name: vanilla_t5
+name: vanilla_t5_custom_tokenizer
 config_name: t5-small
 number_encoding: none
 tokenizer_type: custom
