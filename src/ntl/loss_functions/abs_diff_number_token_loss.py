@@ -12,7 +12,7 @@ class AbsDiffNumberTokenLoss:
     """
 
     def __init__(
-        self, tokenizer: NumberEncodingTokenizer, vocab_size: int, device, loss_function=F.mse_loss, weight=0.5
+            self, tokenizer: NumberEncodingTokenizer, vocab_size: int, device, loss_function=F.mse_loss, weight=0.5
     ):
         self.tokenizer = tokenizer
         self.loss_function = loss_function
@@ -46,9 +46,9 @@ class AbsDiffNumberTokenLoss:
         softmax_probs = F.softmax(logits, dim=-1)
 
         # compute absolute difference between the true numbers and all possible number values
-        abs_diff = torch.abs(y.unsqueeze(-1) - self.number_values)
+        abs_diff = torch.abs(y[valid_positions].unsqueeze(-1) - self.number_values)
 
         # loss is the absolute difference weighted by the softmax probs
-        loss = (abs_diff * softmax_probs).sum(axis=-1)
+        loss = (abs_diff * softmax_probs[valid_positions]).sum(axis=-1)
 
-        return torch.mean(loss[valid_positions])
+        return torch.mean(loss)
