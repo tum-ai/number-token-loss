@@ -44,8 +44,8 @@ from ntl.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
 from ntl.tokenizer.rt_tokenizer import RtTokenizer
 from ntl.tokenizer.xval_tokenizer import XvalTokenizer
 from ntl.loss_functions.number_token_loss import NumberTokenLoss
-from ntl.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
-
+from ntl.loss_functions.abs_diff_number_token_loss import AbsDiffNumberTokenLoss
+from ntl.tokenizer.auto_number_tokenizer import AutoNumberTokenizer
 from ntl.loss_functions.number_token_loss import NumberTokenSelector
 from ntl.utils.label_smoother import GaussianLabelSmoother
 
@@ -173,10 +173,20 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     elif model_args.number_encoding.lower() == "none":
         if model_args.number_token_loss or model_args.gaussian_label_smoother:
             model_class = T5VanillaForNumberTokenLoss
-            tokenizer_class = T5Custom_Tokenizer
+            if model_args.tokenizer_type is None or model_args.tokenizer_type == "custom":
+                tokenizer_class = T5Custom_Tokenizer
+            elif model_args.tokenizer_type == "auto":
+                tokenizer_class = AutoNumberTokenizer
+            else:
+                raise ValueError(f"Unknown tokenizer type: {model_args.tokenizer_type}")
         else:
             model_class = T5ForConditionalGeneration
-            tokenizer_class = transformers.AutoTokenizer
+            if model_args.tokenizer_type is None or model_args.tokenizer_type == "auto":
+                tokenizer_class = AutoNumberTokenizer
+            elif model_args.tokenizer_type == "custom":
+                tokenizer_class = T5Custom_Tokenizer
+            else:
+                raise ValueError(f"Unknown tokenizer type: {model_args.tokenizer_type}")
     elif model_args.number_encoding.lower() == "none_regression_head":
         config.num_labels = 1
         model_class = T5ForSequenceClassification
@@ -237,11 +247,10 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
 
         if model_args.number_token_loss_with_wasserstein:
             logger.info("Using Wasserstein distance for number token loss")
-            model_init_kwargs["number_token_loss"] = WassersteinNumberTokenLoss(
+            model_init_kwargs["number_token_loss"] = AbsDiffNumberTokenLoss(
                 tokenizer,
                 vocab_size=config.vocab_size,
                 device=training_args.device,
-                order_numbers=model_args.number_encoding != "rt",
                 loss_function=loss_function,
                 weight=model_args.number_token_loss_weight
             )
