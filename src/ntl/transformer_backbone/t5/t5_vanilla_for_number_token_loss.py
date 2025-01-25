@@ -59,7 +59,6 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-        print("TYPE outputs", type(outputs))
 
         # If labels are provided, calculate and combine the NumberTokenLoss
         if labels is not None and self.number_token_loss is not None:
@@ -70,6 +69,5 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
                 token_loss=outputs.loss,
                 loss=(outputs.loss + self.number_token_loss.weight * number_token_loss),
             )
-            print("type", type(outputs), outputs.loss, outputs.number_loss)
 
         return outputs

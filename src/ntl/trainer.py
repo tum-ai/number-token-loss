@@ -1297,9 +1297,7 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
             labels = inputs["labels"]
         else:
             labels = None
-        print('Before IN', type(model))
         outputs = model(**inputs)
-        print('Done with forward pass')
         # Save past state if it exists
         # TODO: this needs to be fixed and made cleaner later.
         if self.args.past_index >= 0:
