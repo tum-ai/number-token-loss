@@ -67,7 +67,7 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
             outputs.loss = outputs.loss + self.number_token_loss.weight * number_token_loss
             print('Entered NTL', type(outputs))
             for k,v in asdict(outputs).items():
-            print(k, type(v))
-            if isinstance(v, torch.Tensor):
-                print(v.shape)
+                print(k, type(v))
+                if isinstance(v, torch.Tensor):
+                    print(v.shape)
         return outputs
