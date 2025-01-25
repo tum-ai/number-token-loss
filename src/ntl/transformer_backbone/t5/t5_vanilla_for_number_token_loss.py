@@ -55,6 +55,7 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
         print("TYPE outputs", type(outputs))
         from dataclasses import fields
 
+        import torch
         import transformers
 
         # If labels are provided, calculate and combine the NumberTokenLoss
@@ -67,5 +68,5 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
             )
             print("Entered NTL", type(outputs))
             print(outputs.loss, outputs.keys(), outputs.number_loss)
-            print(transformers.__version__)
+            print(transformers.__version__, torch.__version__)
         return outputs
