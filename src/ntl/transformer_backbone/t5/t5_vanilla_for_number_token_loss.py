@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Optional, Tuple, Union
 
 import torch
@@ -5,6 +6,12 @@ from transformers import T5ForConditionalGeneration
 from transformers.modeling_outputs import Seq2SeqLMOutput
 
 from ntl.loss_functions.number_token_loss import NumberTokenLoss
+
+
+@dataclass
+class NTLSeq2SeqLMOutput(Seq2SeqLMOutput):
+    number_loss: Optional[torch.FloatTensor] = None
+    token_loss: Optional[torch.FloatTensor] = None
 
 
 class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
@@ -32,7 +39,7 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-    ):
+    ) -> Union[Tuple[torch.FloatTensor], Seq2SeqLMOutput]:
         # Call the parent's forward method
         outputs = super().forward(
             input_ids=input_ids,
@@ -53,20 +60,16 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
             return_dict=return_dict,
         )
         print("TYPE outputs", type(outputs))
-        from dataclasses import fields
-
-        import torch
-        import transformers
 
         # If labels are provided, calculate and combine the NumberTokenLoss
         if labels is not None and self.number_token_loss is not None:
             number_token_loss = self.number_token_loss.forward(outputs.logits, labels)
-            outputs["number_loss"] = number_token_loss
-            outputs["token_loss"] = outputs.loss
-            outputs.loss = (
-                outputs.loss + self.number_token_loss.weight * number_token_loss
+            outputs = NTLSeq2SeqLMOutput(
+                **{k: v for k, v in outputs.items() if k != "loss"},
+                number_loss=number_token_loss,
+                token_loss=outputs.loss,
+                loss=(outputs.loss + self.number_token_loss.weight * number_token_loss),
             )
-            print("Entered NTL", type(outputs))
-            print(outputs.loss, outputs.keys(), outputs.number_loss)
-            print(transformers.__version__, torch.__version__)
+            print("type", type(outputs), outputs.loss, outputs.number_loss)
+
         return outputs
