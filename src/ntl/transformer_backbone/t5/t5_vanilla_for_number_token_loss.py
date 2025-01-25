@@ -34,7 +34,6 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
             return_dict: Optional[bool] = None,
     ) -> Union[Tuple[torch.FloatTensor], Seq2SeqLMOutput]:
         # Call the parent's forward method
-        print('IN', input_ids.shape)
         outputs = super().forward(
             input_ids=input_ids,
             attention_mask=attention_mask,
