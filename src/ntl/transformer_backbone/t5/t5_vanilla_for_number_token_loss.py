@@ -53,11 +53,8 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
             return_dict=return_dict,
         )
         print('Out meta', type(outputs))
-        from dataclasses import asdict
-        for k,v in asdict(outputs).items():
-            print(k, type(v))
-            if isinstance(v, torch.Tensor):
-                print(v.shape)
+        from dataclasses import fields
+        print(outputs)
 
         # If labels are provided, calculate and combine the NumberTokenLoss
         if labels is not None and self.number_token_loss is not None:
@@ -66,8 +63,6 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
             outputs["token_loss"] = outputs.loss
             outputs.loss = outputs.loss + self.number_token_loss.weight * number_token_loss
             print('Entered NTL', type(outputs))
-            for k,v in asdict(outputs).items():
-                print(k, type(v))
-                if isinstance(v, torch.Tensor):
-                    print(v.shape)
+            for field in fields(outputs):
+                print(f"{field.name}: {getattr(outputs, field.name)}")
         return outputs
