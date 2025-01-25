@@ -15,23 +15,23 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
         self.number_token_loss = number_token_loss
 
     def forward(
-            self,
-            input_ids: Optional[torch.LongTensor] = None,
-            attention_mask: Optional[torch.FloatTensor] = None,
-            decoder_input_ids: Optional[torch.LongTensor] = None,
-            decoder_attention_mask: Optional[torch.BoolTensor] = None,
-            head_mask: Optional[torch.FloatTensor] = None,
-            decoder_head_mask: Optional[torch.FloatTensor] = None,
-            cross_attn_head_mask: Optional[torch.Tensor] = None,
-            encoder_outputs: Optional[Tuple[Tuple[torch.Tensor]]] = None,
-            past_key_values: Optional[Tuple[Tuple[torch.Tensor]]] = None,
-            inputs_embeds: Optional[torch.FloatTensor] = None,
-            decoder_inputs_embeds: Optional[torch.FloatTensor] = None,
-            labels: Optional[torch.LongTensor] = None,
-            use_cache: Optional[bool] = None,
-            output_attentions: Optional[bool] = None,
-            output_hidden_states: Optional[bool] = None,
-            return_dict: Optional[bool] = None,
+        self,
+        input_ids: Optional[torch.LongTensor] = None,
+        attention_mask: Optional[torch.FloatTensor] = None,
+        decoder_input_ids: Optional[torch.LongTensor] = None,
+        decoder_attention_mask: Optional[torch.BoolTensor] = None,
+        head_mask: Optional[torch.FloatTensor] = None,
+        decoder_head_mask: Optional[torch.FloatTensor] = None,
+        cross_attn_head_mask: Optional[torch.Tensor] = None,
+        encoder_outputs: Optional[Tuple[Tuple[torch.Tensor]]] = None,
+        past_key_values: Optional[Tuple[Tuple[torch.Tensor]]] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        decoder_inputs_embeds: Optional[torch.FloatTensor] = None,
+        labels: Optional[torch.LongTensor] = None,
+        use_cache: Optional[bool] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
     ) -> Union[Tuple[torch.FloatTensor], Seq2SeqLMOutput]:
         # Call the parent's forward method
         outputs = super().forward(
@@ -52,16 +52,20 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-        print('Out meta', type(outputs))
+        print("TYPE outputs", type(outputs))
         from dataclasses import fields
+
+        import transformers
 
         # If labels are provided, calculate and combine the NumberTokenLoss
         if labels is not None and self.number_token_loss is not None:
             number_token_loss = self.number_token_loss.forward(outputs.logits, labels)
-            # outputs["number_loss"] = number_token_loss
-            # outputs["token_loss"] = outputs.loss
-            outputs.loss = outputs.loss + self.number_token_loss.weight * number_token_loss
-            print('Entered NTL', type(outputs))
-            for field in fields(outputs):
-                print(f"{field.name}: {type(getattr(outputs, field.name))}")
+            outputs["number_loss"] = number_token_loss
+            outputs["token_loss"] = outputs.loss
+            outputs.loss = (
+                outputs.loss + self.number_token_loss.weight * number_token_loss
+            )
+            print("Entered NTL", type(outputs))
+            print(outputs.loss, outputs.keys(), outputs.number_loss)
+            print(transformers.__version__)
         return outputs
