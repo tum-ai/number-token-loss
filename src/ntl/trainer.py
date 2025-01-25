@@ -3,28 +3,49 @@ import os
 import shutil
 import sys
 import time
-from typing import Dict, Optional, Union, List, Any, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
-from accelerate import skip_first_batches, DistributedType
+import torch.distributed as dist
+from accelerate import DistributedType, skip_first_batches
 from torch import nn
 from torch.utils.data import DataLoader
 from transformers import Seq2SeqTrainer, TrainerState, is_apex_available
 from transformers.debug_utils import DebugOption
-from transformers.integrations import is_deepspeed_zero3_enabled, deepspeed_init, deepspeed_load_checkpoint, hp_params
+from transformers.integrations import (
+    deepspeed_init,
+    deepspeed_load_checkpoint,
+    hp_params,
+    is_deepspeed_zero3_enabled,
+)
 from transformers.integrations.tpu import tpu_spmd_dataloader
 from transformers.models.auto.modeling_auto import MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
-from transformers.trainer import _is_peft_model, TRAINER_STATE_NAME
+from transformers.trainer import TRAINER_STATE_NAME, _is_peft_model
 from transformers.trainer_callback import ExportableState
-from transformers.trainer_pt_utils import EvalLoopContainer, find_batch_size, IterableDatasetShard, \
-    get_model_param_count, nested_detach
-from transformers.trainer_utils import EvalLoopOutput, has_length, EvalPrediction, denumpify_detensorize, \
-    HPSearchBackend, TrainOutput, speed_metrics
+from transformers.trainer_pt_utils import (
+    EvalLoopContainer,
+    IterableDatasetShard,
+    find_batch_size,
+    get_model_param_count,
+    nested_detach,
+)
+from transformers.trainer_utils import (
+    EvalLoopOutput,
+    EvalPrediction,
+    HPSearchBackend,
+    TrainOutput,
+    denumpify_detensorize,
+    has_length,
+    speed_metrics,
+)
 from transformers.training_args import OptimizerNames, ParallelMode
-from transformers.utils import logging, is_torch_xla_available, is_sagemaker_mp_enabled, is_accelerate_available
-import torch.distributed as dist
-
+from transformers.utils import (
+    is_accelerate_available,
+    is_sagemaker_mp_enabled,
+    is_torch_xla_available,
+    logging,
+)
 
 if is_apex_available():
     from apex import amp
@@ -46,7 +67,12 @@ if is_sagemaker_mp_enabled():
 
     IS_SAGEMAKER_MP_POST_1_10 = version.parse(SMP_VERSION) >= version.parse("1.10")
 
-    from .trainer_pt_utils import smp_forward_backward, smp_forward_only, smp_gather, smp_nested_concat
+    from .trainer_pt_utils import (
+        smp_forward_backward,
+        smp_forward_only,
+        smp_gather,
+        smp_nested_concat,
+    )
 else:
     IS_SAGEMAKER_MP_POST_1_10 = False
 
@@ -1271,7 +1297,7 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
             labels = inputs["labels"]
         else:
             labels = None
-        print('Before IN')
+        print('Before IN', type(model))
         outputs = model(**inputs)
         print('Done with forward pass')
         # Save past state if it exists
