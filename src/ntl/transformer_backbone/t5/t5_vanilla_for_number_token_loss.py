@@ -54,15 +54,14 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
         )
         print('Out meta', type(outputs))
         from dataclasses import fields
-        print(outputs)
 
         # If labels are provided, calculate and combine the NumberTokenLoss
         if labels is not None and self.number_token_loss is not None:
             number_token_loss = self.number_token_loss.forward(outputs.logits, labels)
-            outputs["number_loss"] = number_token_loss
-            outputs["token_loss"] = outputs.loss
+            # outputs["number_loss"] = number_token_loss
+            # outputs["token_loss"] = outputs.loss
             outputs.loss = outputs.loss + self.number_token_loss.weight * number_token_loss
             print('Entered NTL', type(outputs))
             for field in fields(outputs):
-                print(f"{field.name}: {getattr(outputs, field.name)}")
+                print(f"{field.name}: {type(getattr(outputs, field.name))}")
         return outputs
