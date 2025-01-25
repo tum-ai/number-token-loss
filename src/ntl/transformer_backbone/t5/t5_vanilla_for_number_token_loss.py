@@ -1,7 +1,9 @@
+from typing import Optional, Tuple, Union
+
+import torch
 from transformers import T5ForConditionalGeneration
 from transformers.modeling_outputs import Seq2SeqLMOutput
-import torch
-from typing import Optional, Tuple, Union
+
 from ntl.loss_functions.number_token_loss import NumberTokenLoss
 
 
@@ -32,6 +34,7 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
             return_dict: Optional[bool] = None,
     ) -> Union[Tuple[torch.FloatTensor], Seq2SeqLMOutput]:
         # Call the parent's forward method
+        print('IN', input_ids.shape)
         outputs = super().forward(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -50,6 +53,10 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
+        print('Out meta', type(outputs))
+        from dataclasses import asdict
+        for k,v in asdict(outputs).items():
+            print(k, v.shape)
 
         # If labels are provided, calculate and combine the NumberTokenLoss
         if labels is not None and self.number_token_loss is not None:
@@ -57,4 +64,7 @@ class T5VanillaForNumberTokenLoss(T5ForConditionalGeneration):
             outputs["number_loss"] = number_token_loss
             outputs["token_loss"] = outputs.loss
             outputs.loss = outputs.loss + self.number_token_loss.weight * number_token_loss
+            print('Entered NTL', type(outputs))
+            for k,v in asdict(outputs).items():
+                print(k, v.shape)
         return outputs
