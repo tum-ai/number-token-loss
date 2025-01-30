@@ -67,3 +67,15 @@ if __name__ == "__main__":
 
     create_clean_jsonl(input_path, output_path)
     print(f"Finished writing to {output_path}")
+
+    input_path = "../../data/multirc/data/test.jsonl"
+    output_path = "../../data/multirc/data/preprocessed/test_clean.jsonl"
+
+    create_clean_jsonl(input_path, output_path)
+    print(f"Finished writing to {output_path}")
+
+    input_path = "../../data/multirc/data/train.jsonl"
+    output_path = "../../data/multirc/data/preprocessed/train_clean.jsonl"
+
+    create_clean_jsonl(input_path, output_path)
+    print(f"Finished writing to {output_path}")
