@@ -205,11 +205,3 @@ python src/ntl/run_language_modeling.py model_args=vanilla_t5_ntl  model_args.nu
 ## Citation
 If you use this work, please cite:
 
-```bib
-@inproceedings{zausinger24regress,
-  title={Regress, Don't Guess--A Regression-like Loss on Number Tokens for Language Models},
-  author={Zausinger, Jonas and Pennig, Lars and Chlodny, Kacper and Limbach, Vincent and Ketteler, Anna and Prein, Thorben and Singh, Vishwa Mohan and Danziger, Michael and Born, Jannis},
-  booktitle={The 4th Workshop on Mathematical Reasoning and AI at NeurIPS'24},
-  year={2024}
-}
-
