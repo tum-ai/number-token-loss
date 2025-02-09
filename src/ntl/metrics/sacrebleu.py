@@ -13,9 +13,6 @@
 # limitations under the License.
 """ SACREBLEU metric. """
 
-from dataclasses import dataclass
-from typing import Callable, Optional
-
 import datasets
 import sacrebleu as scb
 from packaging import version
@@ -41,14 +38,12 @@ _DESCRIPTION = """\
 SacreBLEU provides hassle-free computation of shareable, comparable, and reproducible BLEU scores.
 Inspired by Rico Sennrich's `multi-bleu-detok.perl`, it produces the official WMT scores but works with plain text.
 It also knows all the standard test sets and handles downloading, processing, and tokenization for you.
-
 See the [README.md] file at https://github.com/mjpost/sacreBLEU for more information.
 """
 
 _KWARGS_DESCRIPTION = """
 Produces BLEU scores along with its sufficient statistics
 from a source against one or more references.
-
 Args:
     predictions (`list` of `str`): list of translations to score. Each translation should be tokenized into a list of tokens.
     references (`list` of `list` of `str`): A list of lists of references. The contents of the first sub-list are the references for the first prediction, the contents of the second sub-list are for the second prediction, etc. Note that there must be the same number of references for each prediction (i.e. all sub-lists must be of the same length).
@@ -68,7 +63,6 @@ Args:
     lowercase (`bool`): If `True`, lowercases the input, enabling case-insensitivity. Defaults to `False`.
     force (`bool`): If `True`, insists that your tokenized input is actually detokenized. Defaults to `False`.
     use_effective_order (`bool`): If `True`, stops including n-gram orders for which precision is 0. This should be `True`, if sentence-level BLEU will be computed. Defaults to `False`.
-
 Returns:
     'score': BLEU score,
     'counts': Counts,
@@ -77,9 +71,7 @@ Returns:
     'bp': Brevity penalty,
     'sys_len': predictions length,
     'ref_len': reference length,
-
 Examples:
-
     Example 1:
         >>> predictions = ["hello there general kenobi", "foo bar foobar"]
         >>> references = [["hello there general kenobi", "hello there !"], ["foo bar foobar", "foo bar foobar"]]
@@ -89,7 +81,6 @@ Examples:
         ['score', 'counts', 'totals', 'precisions', 'bp', 'sys_len', 'ref_len']
         >>> print(round(results["score"], 1))
         100.0
-
     Example 2:
         >>> predictions = ["hello there general kenobi",
         ...                 "on our way to ankh morpork"]
@@ -105,27 +96,9 @@ Examples:
 """
 
 
-@dataclass
-class SacrebleuConfig(evaluate.info.Config):
-
-    name: str = "default"
-
-    smooth_method: str = "exp"
-    average: str = "binary"
-    smooth_value: Optional[float] = None
-    force: bool = False
-    lowercase: bool = False
-    tokenize: Optional[Callable] = None
-    use_effective_order: bool = False
-
-
 @evaluate.utils.file_utils.add_start_docstrings(_DESCRIPTION, _KWARGS_DESCRIPTION)
 class Sacrebleu(evaluate.Metric):
-
-    CONFIG_CLASS = SacrebleuConfig
-    ALLOWED_CONFIG_NAMES = ["default"]
-
-    def _info(self, config):
+    def _info(self):
         if version.parse(scb.__version__) < version.parse("1.4.12"):
             raise ImportWarning(
                 "To use `sacrebleu`, the module `sacrebleu>=1.4.12` is required, and the current version of `sacrebleu` doesn't match this condition.\n"
@@ -136,7 +109,6 @@ class Sacrebleu(evaluate.Metric):
             citation=_CITATION,
             homepage="https://github.com/mjpost/sacreBLEU",
             inputs_description=_KWARGS_DESCRIPTION,
-            config=config,
             features=[
                 datasets.Features(
                     {
@@ -163,6 +135,12 @@ class Sacrebleu(evaluate.Metric):
             self,
             predictions,
             references,
+            smooth_method="exp",
+            smooth_value=None,
+            force=False,
+            lowercase=False,
+            tokenize=None,
+            use_effective_order=False,
     ):
         # if only one reference is provided make sure we still use list of lists
         if isinstance(references[0], str):
@@ -175,12 +153,12 @@ class Sacrebleu(evaluate.Metric):
         output = scb.corpus_bleu(
             predictions,
             transformed_references,
-            smooth_method=self.config.smooth_method,
-            smooth_value=self.config.smooth_value,
-            force=self.config.force,
-            lowercase=self.config.lowercase,
-            use_effective_order=self.config.use_effective_order,
-            **(dict(tokenize=self.config.tokenize) if self.config.tokenize else {}),
+            smooth_method=smooth_method,
+            smooth_value=smooth_value,
+            force=force,
+            lowercase=lowercase,
+            use_effective_order=use_effective_order,
+            **(dict(tokenize=tokenize) if tokenize else {}),
         )
         output_dict = {
             "score": output.score,
