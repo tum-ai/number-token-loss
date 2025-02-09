@@ -40,7 +40,7 @@ class CustomMetrics:
         self.save_all_output = save_all_output
         self.log_scale = log_scale
         self.rouge_metric = evaluate.load(os.path.join(os.path.dirname(__file__), "metrics", "rouge.py"))
-        self.bleu_metric = evaluate.load("sacrebleu")
+        self.bleu_metric = evaluate.load(os.path.join(os.path.dirname(__file__), "metrics", "sacrebleu.py"))
         nltk.download('punkt_tab')
         nltk.download("punkt")
 
