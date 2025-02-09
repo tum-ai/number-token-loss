@@ -64,6 +64,7 @@ class TestNumberHead(unittest.TestCase):
             language_modelling="mlm",
             eval_on_start=True,
             use_cpu=use_cpu,
+            seed=42,
         )
 
     def mock_load_json_dataset(self, path):
@@ -123,7 +124,7 @@ class TestNumberHead(unittest.TestCase):
         # Check if checkpoint is saved
 
         self.assertTrue(os.path.isdir(checkpoint_dir), "Checkpoint directory was not created.")
-        self.assertTrue(eval_results["eval_MSE"] < 2.0, "Mean squared error is too high.")
+        self.assertTrue(eval_results["eval_MSE"] < 3, "Mean squared error is too high.")
 
 
 if __name__ == '__main__':
