@@ -1,5 +1,6 @@
 import logging
 import math
+import os
 import re
 from typing import List, Dict, Tuple
 
@@ -38,7 +39,7 @@ class CustomMetrics:
         self.output_dir = output_dir
         self.save_all_output = save_all_output
         self.log_scale = log_scale
-        self.rouge_metric = evaluate.load("rouge")
+        self.rouge_metric = evaluate.load(os.path.join(os.path.dirname(__file__), "metrics", "rouge.py"))
         self.bleu_metric = evaluate.load("sacrebleu")
         nltk.download('punkt_tab')
         nltk.download("punkt")
