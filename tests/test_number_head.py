@@ -123,6 +123,7 @@ class TestNumberHead(unittest.TestCase):
         # Check if checkpoint is saved
 
         self.assertTrue(os.path.isdir(checkpoint_dir), "Checkpoint directory was not created.")
+        self.assertTrue(eval_results["eval_MSE"] < 2.0, "Mean squared error is too high.")
 
 
 if __name__ == '__main__':
