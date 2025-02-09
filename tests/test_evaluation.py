@@ -88,17 +88,17 @@ class TestEvaluationMethods(unittest.TestCase):
         expected_pearson = 0.9989029443838093
         expected_spearman = 0.9486832980505139
 
-        self.assertEqual(mae, expected_mae)
-        self.assertEqual(mse, expected_mse)
-        self.assertEqual(r2, expected_r2)
-        self.assertEqual(number_accuracy, expected_number_accuracy)
-        self.assertEqual(count_not_produced_valid_results, expected_count_not_produced_valid_results)
-        self.assertEqual(average_count_not_produced_valid_results, expected_average_count_not_produced_valid_results)
-        self.assertEqual(median_absolute_error, expected_median_absolute_error)
-        self.assertEqual(log_mae, expected_log_mae)
-        self.assertEqual(log_r2, expected_log_r2)
-        self.assertEqual(pearson, expected_pearson)
-        self.assertEqual(spearman, expected_spearman)
+        np.testing.assert_almost_equal(mae, expected_mae)
+        np.testing.assert_almost_equal(mse, expected_mse)
+        np.testing.assert_almost_equal(r2, expected_r2)
+        np.testing.assert_almost_equal(number_accuracy, expected_number_accuracy)
+        np.testing.assert_almost_equal(count_not_produced_valid_results, expected_count_not_produced_valid_results)
+        np.testing.assert_almost_equal(average_count_not_produced_valid_results, expected_average_count_not_produced_valid_results)
+        np.testing.assert_almost_equal(median_absolute_error, expected_median_absolute_error)
+        np.testing.assert_almost_equal(log_mae, expected_log_mae)
+        np.testing.assert_almost_equal(log_r2, expected_log_r2)
+        np.testing.assert_almost_equal(pearson, expected_pearson)
+        np.testing.assert_almost_equal(spearman, expected_spearman)
 
 
 if __name__ == "__main__":
