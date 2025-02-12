@@ -47,7 +47,7 @@ class TestRunLanguageModeling(unittest.TestCase):
             output_dir=output_dir,
             overwrite_output_dir=True,
             per_device_train_batch_size=1,
-            num_train_epochs=10,
+            max_steps=10,
             save_steps=10,
             save_total_limit=1,
             eval_strategy="no",
@@ -64,15 +64,13 @@ class TestRunLanguageModeling(unittest.TestCase):
 
     def mock_load_json_dataset(self, path):
         def read_json():
-            yield {"question": "What is 2 + 2?", "answer": "4"}
+            for i in range(2):
+                yield {"question": "What is 2 + 2?", "answer": "4"}
 
         return Dataset.from_generator(read_json)
 
     def mock_load_txt_dataset(self, path):
-        def read_txt():
-            yield {"question": "What is 2 + 2?", "answer": "4"}
-
-        return Dataset.from_generator(read_txt)
+        return self.mock_load_json_dataset(path)
 
     @mock.patch('ntl.run_language_modeling.load_json_dataset')
     @mock.patch('ntl.run_language_modeling.load_txt_dataset')
@@ -140,11 +138,11 @@ class TestRunLanguageModeling(unittest.TestCase):
                                                   number_token_loss=number_token_loss,
                                                   log_scale_embeddings=log_scale_embeddings):
                                     try:
-                                        eval_results_expected, _ = run_language_modeling(
+                                        eval_results_expected = run_language_modeling(
                                             model_args=model_training_args,
                                             training_args=training_args,
                                             dataset_args=dataset_args,
-                                        )
+                                        )[0]
                                     except Exception as e:
                                         logging.error(f"Training failed with exception: {e}", exc_info=True)
                                         self.fail(f"Training failed with exception: {e}")
@@ -154,7 +152,7 @@ class TestRunLanguageModeling(unittest.TestCase):
                                     self.assertTrue(os.path.isdir(checkpoint_dir), "Checkpoint directory was not created.")
 
                                     try:
-                                        eval_results_val, eval_results_test = run_language_modeling(
+                                        eval_results_val, eval_results_test, _ = run_language_modeling(
                                             model_args=model_eval_args,
                                             training_args=eval_args,
                                             dataset_args=dataset_args,
@@ -191,7 +189,7 @@ class TestRunLanguageModeling(unittest.TestCase):
 
         # Run training
         try:
-            eval_results_expected, model = run_language_modeling(
+            eval_results_expected, _, model = run_language_modeling(
                 model_args=model_args,
                 training_args=training_args,
                 dataset_args=dataset_args,
@@ -225,7 +223,7 @@ class TestRunLanguageModeling(unittest.TestCase):
 
         # Run training for the model without log scaling
         try:
-            eval_results_expected, model_no_log = run_language_modeling(
+            eval_results_expected, _, model_no_log = run_language_modeling(
                 model_args=model_args_no_log,
                 training_args=training_args_no_log,
                 dataset_args=dataset_args,
