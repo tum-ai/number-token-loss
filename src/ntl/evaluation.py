@@ -1,5 +1,6 @@
 import logging
 import math
+import os
 import re
 from typing import List, Dict, Tuple
 
@@ -35,6 +36,7 @@ class CustomMetrics:
             output_dir: str,
             save_all_output: bool = False,
             log_scale: bool = False,
+            compute_number_metrics: bool = True,
     ):
         self.tokenizer = tokenizer
         self.index_to_token = {v: k for k, v in tokenizer.get_vocab().items()}
@@ -42,8 +44,10 @@ class CustomMetrics:
         self.output_dir = output_dir
         self.save_all_output = save_all_output
         self.log_scale = log_scale
-        self.rouge_metric = evaluate.load("rouge")
-        self.bleu_metric = evaluate.load("sacrebleu")
+        self.compute_number_metrics = compute_number_metrics
+        experiment_id = output_dir.replace(os.sep, "_")
+        self.rouge_metric = evaluate.load(os.path.join(os.path.dirname(__file__), "metrics", "rouge.py"), experiment_id=experiment_id)
+        self.bleu_metric = evaluate.load(os.path.join(os.path.dirname(__file__), "metrics", "sacrebleu.py"), experiment_id=experiment_id)
         nltk.download('punkt_tab')
         nltk.download("punkt")
 
@@ -84,7 +88,7 @@ class CustomMetrics:
         label_number = float(label_number.replace(" ", ""))
 
         return prediction_number, label_number
-    
+
 
     def calculate_metrics(self, number_results, total_count):
         mae = np.mean([np.abs(result[0] - result[1]) for result in number_results if not np.isnan(result[0])])
@@ -101,13 +105,18 @@ class CustomMetrics:
         log_r2 = 1 - np.nansum((log_transformed_data[:, 0] - log_transformed_data[:, 1]) ** 2) / np.nansum(
             (log_transformed_data[:, 1] - np.nanmean(log_transformed_data[:, 1])) ** 2)
         log_mae = np.mean([np.abs(result[0] - result[1]) for result in log_transformed_data if not np.isnan(result[0])])
-     
-        v1 = number_results[:,0] 
-        v2 = number_results[:,1] 
+
+        v1 = number_results[:,0]
+        v2 = number_results[:,1]
         v1_valid = v1[~np.isnan(v1) & ~np.isnan(v2)]
         v2_valid = v2[~np.isnan(v1) & ~np.isnan(v2)]
-        pearson = stats.pearsonr(v1_valid, v2_valid).statistic
-        spearman = stats.spearmanr(v1_valid, v2_valid).statistic
+
+        if len(v1_valid) < 2 and len(v2_valid) < 2:
+            pearson = 0
+            spearman = 0
+        else:
+            pearson = stats.pearsonr(v1_valid, v2_valid).statistic
+            spearman = stats.spearmanr(v1_valid, v2_valid).statistic
 
         return (
             mae,
@@ -250,7 +259,10 @@ class CustomMetrics:
         bleu = self.compute_bleu(decoded_preds, decoded_labels)
         rouge = self.compute_rouge(decoded_preds, decoded_labels)
 
-        number_results = self.parse_number_result(decoded_preds, decoded_labels)
+        if self.compute_number_metrics:
+            number_results = self.parse_number_result(decoded_preds, decoded_labels)
+        else:
+            number_results = None
 
         self.batch_stats.append({
             'token_accuracy_whole': accuracy_w,
@@ -268,33 +280,10 @@ class CustomMetrics:
 
         if compute_result:
             total_count = np.sum([stat['total_count'] for stat in self.batch_stats])
-            number_results = np.concatenate([stat['number_results'] for stat in self.batch_stats])
-            (
-                mae,
-                mse,
-                r2,
-                number_accuracy,
-                count_not_produced_valid_results,
-                average_count_not_produced_valid_results,
-                median_absolute_error,
-                log_mae,
-                log_r2,
-                pearson,
-                spearman
-            ) = self.calculate_metrics(number_results, total_count)
-
             computed_metrics = {
                 'token_accuracy_whole': np.mean([stat['token_accuracy_whole'] for stat in self.batch_stats]),
                 'token_accuracy': np.mean([stat['token_accuracy'] for stat in self.batch_stats]),
-                'MSE': mse,
-                'MAE': mae,
-                'R2': r2,
-                'number_accuracy': number_accuracy,
-                'median_absolute_error': median_absolute_error,
-                'log_mae': log_mae,
-                'log_r2': log_r2,
-                "count_not_produced_valid_results": count_not_produced_valid_results,
-                "average_count_not_produced_valid_results": average_count_not_produced_valid_results,
+
                 "count_invalid_number_prediction": np.sum(
                     [stat['count_invalid_number_prediction'] for stat in self.batch_stats]),
                 "count_no_number_prediction": np.sum(
@@ -308,9 +297,39 @@ class CustomMetrics:
                 "rouge1": np.mean([stat['rouge1'] for stat in self.batch_stats]),
                 "rouge2": np.mean([stat['rouge2'] for stat in self.batch_stats]),
                 "rougeL": np.mean([stat['rougeL'] for stat in self.batch_stats]),
-                'pearson': pearson,
-                'spearman': spearman,
             }
+
+
+            if self.compute_number_metrics:
+                number_results = np.concatenate([stat['number_results'] for stat in self.batch_stats])
+                (
+                    mae,
+                    mse,
+                    r2,
+                    number_accuracy,
+                    count_not_produced_valid_results,
+                    average_count_not_produced_valid_results,
+                    median_absolute_error,
+                    log_mae,
+                    log_r2,
+                    pearson,
+                    spearman
+                ) = self.calculate_metrics(number_results, total_count)
+                computed_metrics.update({
+                    'MSE': mse,
+                    'MAE': mae,
+                    'R2': r2,
+                    'number_accuracy': number_accuracy,
+                    'median_absolute_error': median_absolute_error,
+                    'log_mae': log_mae,
+                    'log_r2': log_r2,
+                    "count_not_produced_valid_results": count_not_produced_valid_results,
+                    "average_count_not_produced_valid_results": average_count_not_produced_valid_results,
+                    'pearson': pearson,
+                    'spearman': spearman,
+                })
+
+
             self.batch_stats = []
             return computed_metrics
 

@@ -32,7 +32,7 @@ def load_txt_dataset(file_path):
 
 def read_json(file_path):
     data = []
-    with open(file_path, 'r') as file:
+    with open(file_path, 'r', encoding='utf-8') as file:
         for line in file:
             # Parse each line as a JSON object and append it to the list
             data.append(json.loads(line))
