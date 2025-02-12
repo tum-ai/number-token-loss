@@ -119,7 +119,7 @@ class TestNumberHead(unittest.TestCase):
         dataset_args = self.generate_dataset_args()
 
         try:
-            eval_results, _ = run_language_modeling(
+            eval_results, _, _ = run_language_modeling(
                 model_args=model_training_args,
                 training_args=training_args,
                 dataset_args=dataset_args,
