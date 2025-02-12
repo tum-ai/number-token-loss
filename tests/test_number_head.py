@@ -13,6 +13,12 @@ from ntl.args import ModelArguments, TrainingArguments, DatasetArguments
 from ntl.run_language_modeling import run_language_modeling
 
 
+torch.manual_seed(42)
+torch.cuda.manual_seed_all(42)
+np.random.seed(42)
+
+
+
 class TestNumberHead(unittest.TestCase):
     def setUp(self):
         # Configure logging to show all levels
@@ -124,7 +130,6 @@ class TestNumberHead(unittest.TestCase):
         # Check if checkpoint is saved
 
         self.assertTrue(os.path.isdir(checkpoint_dir), "Checkpoint directory was not created.")
-        print("Result!!!!!!!:", eval_results["eval_MSE"])
         self.assertTrue(eval_results["eval_MSE"] < 3, "Mean squared error is too high.")
 
 
