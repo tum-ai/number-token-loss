@@ -74,6 +74,13 @@ class ModelArguments:
             "help": "Pretrained tokenizer name or path if not the same as model_name"
         },
     )
+    tokenizer_type: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "If custom or auto tokenizer",
+        },
+    )
+
     cache_dir: Optional[str] = field(
         default=None,
         metadata={
@@ -148,6 +155,20 @@ class DatasetArguments:
     dataset_name: str = field(
         default="mathematics_dataset",
         metadata={
-            "help": "Name of the dataset. Allowed: mathematics_dataset, gsm8k, multiplication"
+            "help": "Name of the dataset. Allowed: mathematics_dataset, gsm8k, multiplication, arithmetic"
+        },
+    )
+
+    mode: Optional[str] = field(
+        default="interpolate_extrapolate",
+        metadata={
+            "help": "Whether we combine mathematics datasets in testing, or test individually. Allowed: interpolate_extrapolate, dataset_comparison"
+        },
+    )
+
+    compute_number_metrics: Optional[bool] = field(
+        default=True,
+        metadata={
+            "help": "Compute number metrics."
         },
     )

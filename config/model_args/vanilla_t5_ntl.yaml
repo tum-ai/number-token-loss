@@ -1,6 +1,6 @@
 name: vanilla_t5_ntl
-config_name: t5-base
+config_name: t5-small
 number_encoding: none
 number_token_loss: true
 number_token_loss_weight: 0.3
-number_token_loss_with_wasserstein: false
+number_token_loss_with_wasserstein: true

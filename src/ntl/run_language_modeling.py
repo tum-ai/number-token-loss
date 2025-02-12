@@ -10,6 +10,7 @@ import os
 sys.path.append(".")
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
+import time
 import json
 import logging
 import numpy as np
@@ -43,8 +44,8 @@ from ntl.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
 from ntl.tokenizer.rt_tokenizer import RtTokenizer
 from ntl.tokenizer.xval_tokenizer import XvalTokenizer
 from ntl.loss_functions.number_token_loss import NumberTokenLoss
-from ntl.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
-
+from ntl.loss_functions.abs_diff_number_token_loss import AbsDiffNumberTokenLoss
+from ntl.tokenizer.auto_number_tokenizer import AutoNumberTokenizer
 from ntl.loss_functions.number_token_loss import NumberTokenSelector
 from ntl.utils.label_smoother import GaussianLabelSmoother
 
@@ -94,6 +95,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         training_args.n_gpu,
         bool(training_args.local_rank != -1),
     )
+
     logger.info("Training on dataset: %s", dataset_args.dataset_name)
     logger.info("Training/evaluation parameters %s", training_args)
 
@@ -120,6 +122,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
 
     # Set seed
     set_seed(training_args.seed)
+
 
     if model_args.config_name:
         # if file exists load it otherwise just use config name
@@ -170,10 +173,20 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     elif model_args.number_encoding.lower() == "none":
         if model_args.number_token_loss or model_args.gaussian_label_smoother:
             model_class = T5VanillaForNumberTokenLoss
-            tokenizer_class = T5Custom_Tokenizer
+            if model_args.tokenizer_type is None or model_args.tokenizer_type == "custom":
+                tokenizer_class = T5Custom_Tokenizer
+            elif model_args.tokenizer_type == "auto":
+                tokenizer_class = AutoNumberTokenizer
+            else:
+                raise ValueError(f"Unknown tokenizer type: {model_args.tokenizer_type}")
         else:
             model_class = T5ForConditionalGeneration
-            tokenizer_class = transformers.AutoTokenizer
+            if model_args.tokenizer_type is None or model_args.tokenizer_type == "auto":
+                tokenizer_class = AutoNumberTokenizer
+            elif model_args.tokenizer_type == "custom":
+                tokenizer_class = T5Custom_Tokenizer
+            else:
+                raise ValueError(f"Unknown tokenizer type: {model_args.tokenizer_type}")
     elif model_args.number_encoding.lower() == "none_regression_head":
         config.num_labels = 1
         config.problem_type = "regression"
@@ -235,11 +248,10 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
 
         if model_args.number_token_loss_with_wasserstein:
             logger.info("Using Wasserstein distance for number token loss")
-            model_init_kwargs["number_token_loss"] = WassersteinNumberTokenLoss(
+            model_init_kwargs["number_token_loss"] = AbsDiffNumberTokenLoss(
                 tokenizer,
                 vocab_size=config.vocab_size,
                 device=training_args.device,
-                order_numbers=model_args.number_encoding != "rt",
                 loss_function=loss_function,
                 weight=model_args.number_token_loss_weight
             )
@@ -325,6 +337,17 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         eval_dataset = load_txt_dataset(eval_data_path)
         test_interpolate_dataset = load_txt_dataset(test_interpolate_data_path)
         test_extrapolate_dataset = load_txt_dataset(test_extrapolate_data_path)
+    elif dataset_args.dataset_name == "arithmetic":
+        logger.info("Training on arithmetic dataset")
+        train_data_path = 'data/mathematics_dataset-v1.0/arithmetic_train.txt'
+        eval_data_path = 'data/mathematics_dataset-v1.0/arithmetic_val.txt'
+        test_interpolate_data_path = 'data/mathematics_dataset-v1.0/arithmetic_test_interpolate.txt'
+        test_extrapolate_data_path = 'data/mathematics_dataset-v1.0/arithmetic_test_extrapolate.txt'
+
+        train_dataset = load_txt_dataset(train_data_path)
+        eval_dataset = load_txt_dataset(eval_data_path)
+        test_interpolate_dataset = load_txt_dataset(test_interpolate_data_path)
+        test_extrapolate_dataset = load_txt_dataset(test_extrapolate_data_path)
     elif dataset_args.dataset_name == "multiplication":
         train_data_path = 'data/digit-multiplication/data/train.jsonl'
         eval_data_path = 'data/digit-multiplication/data/val.jsonl'
@@ -332,6 +355,27 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         train_dataset = load_json_dataset(train_data_path)
         eval_dataset = load_json_dataset(eval_data_path)
         test_dataset = load_json_dataset(test_data_path)
+    elif dataset_args.dataset_name == "rjokes":
+        train_data_path = 'data/rjokes-dataset/data/train.jsonl'
+        eval_data_path = 'data/rjokes-dataset/data/dev.jsonl'
+        test_data_path = 'data/rjokes-dataset/data/test.jsonl'
+        train_dataset = load_json_dataset(train_data_path)
+        eval_dataset = load_json_dataset(eval_data_path)
+        test_dataset = load_json_dataset(test_data_path)
+    elif dataset_args.dataset_name == "multirc":
+        train_data_path = 'data/multirc/data/preprocessed/train_clean.jsonl'
+        eval_data_path = 'data/multirc/data/preprocessed/val_clean.jsonl'
+        test_data_path = 'data/multirc/data/preprocessed/test_clean.jsonl'
+        train_dataset = load_json_dataset(train_data_path)
+        eval_dataset = load_json_dataset(eval_data_path)
+        test_dataset = load_json_dataset(test_data_path)
+    elif dataset_args.dataset_name == "debug":
+        train_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
+        eval_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
+        test_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
+        train_dataset = load_txt_dataset(train_data_path)
+        eval_dataset = load_txt_dataset(eval_data_path)
+        test_dataset = load_txt_dataset(test_data_path)
     else:
         raise ValueError(f"Unknown dataset: {dataset_args.dataset_name}. Allowed: gsm8k, mathematics_dataset, multiplication")
 
@@ -347,6 +391,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         output_dir=training_args.output_dir,
         save_all_output=True,
         log_scale=model_args.log_scale_embeddings,
+        compute_number_metrics=dataset_args.compute_number_metrics,
     )
 
     # Early stopping
@@ -355,6 +400,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         early_stopping_threshold=0.001)
 
     # custom_trainer_params = get_trainer_dict(model_params)
+
 
     # Initialize our Trainer
     trainer = CustomSeq2SeqTrainer(
@@ -378,36 +424,87 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     )
 
     if not training_args.do_only_eval:
+        start_time = time.time()
         trainer.train(model_path=model_path)
-        trainer.save_model()
-        # For convenience, we also re-save the tokenizer to the same directory,
-        # so that you can share your model easily on huggingface.co/models =)
-        if trainer.state.is_world_process_zero:
-            tokenizer.save_pretrained(training_args.output_dir)
+        end_time=time.time()
+        logger.info("Elapsed time:")
+        logger.info(end_time - start_time)
     else:
         logger.info("Skipping training.")
 
-    logger.info("*** Evaluate on validation data ***")
-    eval_results_val = trainer.evaluate(eval_dataset=eval_dataset)
-    logger.info(f"eval_results validation data: {eval_results_val}")
+    if dataset_args.mode != "dataset_comparison":
+        logger.info("*** Evaluate on validation data ***")
+        eval_results_val = trainer.evaluate(eval_dataset=eval_dataset)
+        logger.info(f"eval_results validation data: {eval_results_val}")
 
-    if not training_args.do_only_eval:
-        return eval_results_val, model
+        if dataset_args.dataset_name in ["arithmetic", "mathematics_dataset"]:
+            logger.info("*** Evaluate on interpolation data for arithmetic ***")
+            eval_results_test_interpolate = trainer.evaluate(eval_dataset=test_interpolate_dataset)
+            logger.info(f"eval_results interpolate data: {eval_results_test_interpolate}")
 
-    if dataset_args.dataset_name in ["gsm8k", "multiplication"]:
-        logger.info("*** Evaluate on test set ***")
-        eval_results_test = trainer.evaluate(eval_dataset=test_dataset)
-        logger.info(f"eval_results test data: {eval_results_test}")
-        return eval_results_val, eval_results_test
-    elif dataset_args.dataset_name == "mathematics_dataset":
-        logger.info("*** Evaluate on interpolate data ***")
-        eval_results_test_interpolate = trainer.evaluate(eval_dataset=test_interpolate_dataset)
-        logger.info(f"eval_results interpolate data: {eval_results_test_interpolate}")
+            logger.info("*** Evaluate on extrapolation data for arithmetic ***")
+            eval_results_test_extrapolate = trainer.evaluate(eval_dataset=test_extrapolate_dataset)
+            logger.info(f"eval_results extrapolate data: {eval_results_test_extrapolate}")
 
-        logger.info("*** Evaluate on extrapolate data ***")
-        eval_results_test_extrapolate = trainer.evaluate(eval_dataset=test_extrapolate_dataset)
-        logger.info(f"eval_results extrapolate data: {eval_results_test_extrapolate}")
-        return eval_results_val, eval_results_test_interpolate, eval_results_test_extrapolate
+            return eval_results_val, eval_results_test_interpolate, eval_results_test_extrapolate, model
+        else:
+            logger.info("*** Evaluate on test set ***")
+            eval_results_test = trainer.evaluate(eval_dataset=test_dataset)
+            logger.info(f"eval_results test data: {eval_results_test}")
+            return eval_results_val, eval_results_test, model
+
+
+    else:
+        if dataset_args.dataset_name != "mathematics_dataset":
+            raise ValueError("dataset_args.mode=dataset_comparison only supported for mathematics_dataset")
+
+        logger.info("*** Comparing loss on individuals datasets ***")
+
+        # interpolation
+        int_categories = [
+            "algebra__linear_1d.txt",
+            "algebra__linear_1d_composed.txt",
+            "algebra__linear_2d.txt",
+            "algebra__linear_2d_composed.txt",
+            "algebra__sequence_next_term.txt",
+            "arithmetic__add_or_sub.txt",
+            "arithmetic__add_sub_multiple.txt",
+            "arithmetic__mul.txt",
+            "numbers__div_remainder.txt",
+            "numbers__div_remainder_composed.txt",
+            "numbers__place_value.txt",
+            "numbers__round_number.txt",
+            "numbers__round_number_composed.txt",
+        ]
+        int_results = []
+        for name in int_categories:
+            path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/interpolate/' + name
+            test_dataset = load_txt_dataset(path)
+            logger.info("*** Testing interpolation on " + name + " data ***")
+            result = trainer.evaluate(eval_dataset=test_dataset)
+            logger.info(f"Test results: {result}")
+            int_results.append(result)
+
+        #extrapolation
+        ext_categories = [
+        "arithmetic__add_or_sub_big.txt",
+        "arithmetic__add_sub_multiple_longer.txt",
+        "arithmetic__mixed_longer.txt",
+        "arithmetic__mul_big.txt",
+        "arithmetic__mul_div_multiple_longer.txt",
+        "numbers__place_value_big.txt",
+        "numbers__round_number_big.txt",
+        ]
+        ext_results = []
+        for name in ext_categories:
+            path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/extrapolate/' + name
+            test_dataset = load_txt_dataset(path)
+            logger.info("*** Testing extrapolation on " + name + " data ***")
+            result = trainer.evaluate(eval_dataset=test_dataset)
+            logger.info(f"Test results: {result}")
+            ext_results.append(result)
+
+        return int_results, ext_results
 
 
 def get_data_collator(model_args: ModelArguments, tokenizer, training_args: TrainingArguments) -> transformers.DataCollator:
