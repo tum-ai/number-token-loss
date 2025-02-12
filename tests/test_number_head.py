@@ -8,6 +8,7 @@ from unittest import mock
 import torch
 from datasets import Dataset
 import numpy as np
+import logging
 
 from ntl.args import ModelArguments, TrainingArguments, DatasetArguments
 from ntl.run_language_modeling import run_language_modeling
@@ -130,6 +131,7 @@ class TestNumberHead(unittest.TestCase):
         # Check if checkpoint is saved
 
         self.assertTrue(os.path.isdir(checkpoint_dir), "Checkpoint directory was not created.")
+        logging.error(f"Result!!!!!!!: {eval_results['eval_MSE']}")
         self.assertTrue(eval_results["eval_MSE"] < 3, "Mean squared error is too high.")
 
 
