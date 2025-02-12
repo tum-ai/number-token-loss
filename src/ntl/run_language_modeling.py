@@ -189,6 +189,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
                 raise ValueError(f"Unknown tokenizer type: {model_args.tokenizer_type}")
     elif model_args.number_encoding.lower() == "none_regression_head":
         config.num_labels = 1
+        config.problem_type = "regression"
         model_class = T5ForSequenceClassification
         tokenizer_class = transformers.AutoTokenizer
     else:
