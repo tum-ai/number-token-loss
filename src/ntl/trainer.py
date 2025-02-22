@@ -1,3 +1,4 @@
+import contextlib
 import math
 import os
 import shutil
@@ -10,6 +11,7 @@ import torch
 import torch.distributed as dist
 from accelerate import DistributedType, skip_first_batches
 from torch import nn
+from torch.distributed.fsdp import FullyShardedDataParallel
 from torch.utils.data import DataLoader
 from transformers import Seq2SeqTrainer, TrainerState, is_apex_available
 from transformers.debug_utils import DebugOption
@@ -100,14 +102,15 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
         
 
     def prediction_step(
-            self,
-            model: nn.Module,
-            inputs: Dict[str, Union[torch.Tensor, Any]],
-            prediction_loss_only: bool,
-            ignore_keys: Optional[List[str]] = None,
-            **gen_kwargs,
+        self,
+        model: nn.Module,
+        inputs: Dict[str, Union[torch.Tensor, Any]],
+        prediction_loss_only: bool,
+        ignore_keys: Optional[List[str]] = None,
+        **gen_kwargs,
     ) -> Tuple[Optional[float], Optional[torch.Tensor], Optional[torch.Tensor]]:
         """
+        Modified prediction step to handle both seq2seq and decoder-only models
         :return: Tuple of (next_token_prediction_loss, (next_token_prediction_logits, generated_tokens), labels)
         Where next_token_prediction_loss is the loss of the next token prediction,
         next_token_prediction_logits are the logits of the next token prediction,
@@ -125,6 +128,9 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
             # Customized code end
             #######################
 
+        # Check if we're dealing with a decoder-only model
+        is_decoder_only = not getattr(model.config, "is_encoder_decoder", False)
+
         has_labels = "labels" in inputs
         inputs = self._prepare_inputs(inputs)
 
@@ -141,32 +147,63 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
         gen_kwargs["synced_gpus"] = (
             gen_kwargs["synced_gpus"] if gen_kwargs.get("synced_gpus") is not None else default_synced_gpus
         )
-
-        generation_inputs = inputs.copy()
-        # If the `decoder_input_ids` was created from `labels`, evict the former, so that the model can freely generate
-        # (otherwise, it would continue generating from the padded `decoder_input_ids`)
-        if (
-                "labels" in generation_inputs
-                and "decoder_input_ids" in generation_inputs
-                and generation_inputs["labels"].shape == generation_inputs["decoder_input_ids"].shape
-        ):
+        
+        # Prepare generation inputs
+        if is_decoder_only:
+            # For decoder-only models, we need to find where the answer starts
+            # This assumes the input is formatted as "question answer"
+            generation_input_ids = inputs["generation_input_ids"]
+            generation_attention_mask = inputs["generation_attention_mask"]
+            generation_labels = inputs["generation_labels"]
+            
             generation_inputs = {
-                k: v for k, v in inputs.items() if k not in ("decoder_input_ids", "decoder_attention_mask")
+                "input_ids": generation_input_ids,
+                "attention_mask": generation_attention_mask,
+                "labels": generation_labels
             }
+
+        else:
+            generation_inputs = inputs.copy()
+            # If the `decoder_input_ids` was created from `labels`, evict the former, so that the model can freely generate
+            # (otherwise, it would continue generating from the padded `decoder_input_ids`)
+            if (
+                    "labels" in generation_inputs
+                    and "decoder_input_ids" in generation_inputs
+                    and generation_inputs["labels"].shape == generation_inputs["decoder_input_ids"].shape
+            ):
+                generation_inputs = {
+                    k: v for k, v in inputs.items() if k not in ("decoder_input_ids", "decoder_attention_mask")
+                }
 
         ########################
         # Customized code start
         ########################
-        # set the max_length to the length of the labels + 10 to ensure that the model can generate the full sequence
-        self.model.generation_config.max_length = inputs["labels"].shape[-1] + 10 if "labels" in inputs else self.model.generation_config.max_length
+        if is_decoder_only:
+            self.model.generation_config.max_length = inputs["labels"].shape[-1] if "labels" in inputs else self.model.generation_config.max_length
+        else:
+            # set the max_length to the length of the labels + 10 to ensure that the model can generate the full sequence
+            self.model.generation_config.max_length = inputs["labels"].shape[-1] + 10 if "labels" in inputs else self.model.generation_config.max_length
         ########################
         # Customized code end
         ########################
 
-        generated_tokens = self.model.generate(**generation_inputs, **gen_kwargs)
+        summon_full_params_context = (
+            FullyShardedDataParallel.summon_full_params(self.model)
+            if isinstance(self.model, FullyShardedDataParallel)
+            else contextlib.nullcontext()
+        )
+
+        with summon_full_params_context:
+            generated_tokens = self.model.generate(**generation_inputs, **gen_kwargs)
 
         if self.model.generation_config._from_model_config:
             self.model.generation_config._from_model_config = False
+
+            # For decoder-only models, trim the prompt
+        if is_decoder_only:
+            # Remove the prompt (question) part from the generated sequence
+            question_lengths = generation_input_ids.shape[1]
+            generated_tokens = generated_tokens[:, question_lengths:]
 
 
         ########################
@@ -179,8 +216,9 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
         else:
             generated_numbers = None
 
-        # remove the first padding token
-        generated_tokens = generated_tokens[:, 1:]
+        # Remove first padding token if present
+        if not is_decoder_only:
+            generated_tokens = generated_tokens[:, 1:]
 
         # Retrieves GenerationConfig from model.generation_config
         gen_config = self.model.generation_config
@@ -232,7 +270,7 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
             return next_token_prediction_loss, None, None
 
         if has_labels:
-            labels = inputs["labels"]
+            labels = generation_labels if is_decoder_only else inputs["labels"]
             if labels.shape[-1] < gen_config.max_length:
                 labels = self._pad_tensors_to_max_len(labels, gen_config.max_length)
             elif gen_config.max_new_tokens is not None and labels.shape[-1] < gen_config.max_new_tokens + 1:
@@ -698,7 +736,7 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
             metrics = self._evaluate(trial, ignore_keys_for_eval)
 
         if self.control.should_save:
-            self._save_checkpoint(model, trial, metrics=metrics)
+            self._save_checkpoint(model, trial)
             self.control = self.callback_handler.on_save(self.args, self.state, self.control)
 
 
@@ -1287,16 +1325,21 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
 
         return loss.detach() / self.args.gradient_accumulation_steps
 
-    def compute_loss(self, model, inputs, return_outputs=False):
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         """
         How the loss is computed by Trainer. By default, all models return the loss in the first element.
 
         Subclass and override for custom behavior.
         """
-        if self.label_smoother is not None and "labels" in inputs:
+        if (self.label_smoother is not None or self.compute_loss_func is not None) and "labels" in inputs:
             labels = inputs["labels"]
         else:
             labels = None
+        if self.model_accepts_loss_kwargs:
+            loss_kwargs = {}
+            if num_items_in_batch is not None:
+                loss_kwargs["num_items_in_batch"] = num_items_in_batch
+            inputs = {**inputs, **loss_kwargs}
         outputs = model(**inputs)
         # Save past state if it exists
         # TODO: this needs to be fixed and made cleaner later.
@@ -1309,7 +1352,12 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
                 model_name = unwrapped_model.base_model.model._get_name()
             else:
                 model_name = unwrapped_model._get_name()
-            if model_name in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES.values():
+
+            # User-defined compute_loss function
+            if self.compute_loss_func is not None:
+                loss = self.compute_loss_func(outputs, labels, num_items_in_batch=num_items_in_batch)
+
+            elif model_name in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES.values():
                 loss = self.label_smoother(outputs, labels, shift_labels=True)
             else:
                 loss = self.label_smoother(outputs, labels)

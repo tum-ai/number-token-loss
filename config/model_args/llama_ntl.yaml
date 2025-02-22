@@ -1,0 +1,7 @@
+name: llama_ntl
+model_type: llama
+tokenizer_type: auto
+number_encoding: none
+number_token_loss: true
+number_token_loss_weight: 0.3
+number_token_loss_with_wasserstein: true

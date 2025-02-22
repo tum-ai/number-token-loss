@@ -32,10 +32,10 @@ class TrainingArguments(Seq2SeqTrainingArguments):
             "help": "Special name for this run"
         },
     )
-    language_modelling: Literal["clm", "mlm"] = field(
-        default="clm",
+    language_modelling: Literal["s2s", "clm", "mlm"] = field(
+        default="s2s",
         metadata={
-            "help": "Choose either clm or mlm for language modelling"
+            "help": "Choose either s2s, clm or mlm for language modelling"
         },
     )
 

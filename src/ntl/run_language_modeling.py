@@ -23,7 +23,7 @@ from transformers import (
     MODEL_WITH_LM_HEAD_MAPPING,
     AutoConfig,
     set_seed,
-    EarlyStoppingCallback, T5ForConditionalGeneration, T5ForSequenceClassification
+    EarlyStoppingCallback, T5ForConditionalGeneration, T5ForSequenceClassification, AutoModelForSeq2SeqLM, AutoModelForCausalLM
 )
 import hydra
 from omegaconf import DictConfig, OmegaConf
@@ -32,12 +32,12 @@ from ntl.trainer import CustomSeq2SeqTrainer
 from ntl.evaluation import CustomMetrics
 from ntl.args import ModelArguments, TrainingArguments, DatasetArguments
 from ntl.data.data import load_txt_dataset, load_json_dataset
-from ntl.collators.question_answer_clm.xval_question_answer_collator import XvalQuestionAnswerCLMCollator
+from ntl.collators.question_answer_s2s.xval_question_answer_collator import XvalQuestionAnswerS2SCollator
+from ntl.collators.question_answer_s2s.vanilla_question_answer_collator import VanillaQuestionAnswerS2SCollator
 from ntl.collators.question_answer_clm.vanilla_question_answer_collator import VanillaQuestionAnswerCLMCollator
 from ntl.collators.question_answer_mlm.regression_head_question_answer_collator import RegressionHeadQuestionAnswerCollator
 from ntl.collators.question_answer_mlm.xval_mask_question_collator import XvalMaskedQuestionAnswerCollator
 from ntl.collators.question_answer_mlm.vanilla_mlm_question_answer_collator import VanillaMaskedQuestionAnswerCollator
-from ntl.transformer_backbone.t5.t5_vanilla_for_number_token_loss import T5VanillaForNumberTokenLoss
 from ntl.transformer_backbone.t5.t5_rt import T5RegressionModelRT
 from ntl.transformer_backbone.t5.t5_xval import T5RegressionModelXval
 from ntl.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
@@ -45,9 +45,10 @@ from ntl.tokenizer.rt_tokenizer import RtTokenizer
 from ntl.tokenizer.xval_tokenizer import XvalTokenizer
 from ntl.loss_functions.number_token_loss import NumberTokenLoss
 from ntl.loss_functions.abs_diff_number_token_loss import AbsDiffNumberTokenLoss
-from ntl.tokenizer.auto_number_tokenizer import AutoNumberTokenizer
+from ntl.tokenizer.auto_number_tokenizer_wrapper import NumberTokenizerWrapper
 from ntl.loss_functions.number_token_loss import NumberTokenSelector
 from ntl.utils.label_smoother import GaussianLabelSmoother
+from ntl.model_wrapper.number_token_loss_wrapper import NumberTokenLossWrapper
 
 
 transformers.logging.set_verbosity_info()
@@ -139,12 +140,6 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         )
 
     elif model_args.model_name_or_path:
-        if "checkpoint" not in model_args.model_name_or_path:
-            model_args.model_name_or_path = get_latest_checkpoint(
-                model_args.model_name_or_path,
-                must_contain="best",
-            )
-
         config = AutoConfig.from_pretrained(
             model_args.model_name_or_path,
             cache_dir=model_args.cache_dir,
@@ -172,17 +167,25 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         tokenizer_class = XvalTokenizer
     elif model_args.number_encoding.lower() == "none":
         if model_args.number_token_loss or model_args.gaussian_label_smoother:
-            model_class = T5VanillaForNumberTokenLoss
+            # Use appropriate model class based on model type
+            
+            if getattr(config, "is_encoder_decoder", False):
+                model_class = AutoModelForSeq2SeqLM
+            # Check if model is decoder-only (causal) architecture
+            else:
+                config.is_decoder = True
+                model_class = AutoModelForCausalLM
+            
             if model_args.tokenizer_type is None or model_args.tokenizer_type == "custom":
                 tokenizer_class = T5Custom_Tokenizer
             elif model_args.tokenizer_type == "auto":
-                tokenizer_class = AutoNumberTokenizer
+                tokenizer_class = transformers.AutoTokenizer
             else:
                 raise ValueError(f"Unknown tokenizer type: {model_args.tokenizer_type}")
         else:
             model_class = T5ForConditionalGeneration
             if model_args.tokenizer_type is None or model_args.tokenizer_type == "auto":
-                tokenizer_class = AutoNumberTokenizer
+                tokenizer_class = transformers.AutoTokenizer
             elif model_args.tokenizer_type == "custom":
                 tokenizer_class = T5Custom_Tokenizer
             else:
@@ -213,16 +216,9 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
             "You are instantiating a new tokenizer from scratch. This is not supported, but you can do it from another script, save it,"
             "and load it from here, using --tokenizer_name"
         )
-
-    if model_args.number_encoding != "none" or model_args.number_token_loss:
-        n_new_tokens = len(tokenizer) - len(transformers.AutoTokenizer.from_pretrained("t5-small"))
-        logger.info(f"Number of new tokens: {n_new_tokens}")
-        logger.info(f"Old vocab size: {config.vocab_size}")
-        pad_to_multiple_of = 64 if torch.cuda.is_available() else 1
-        config.vocab_size = len(tokenizer) + pad_to_multiple_of - (len(tokenizer) % pad_to_multiple_of)
-        config.added_vocab = tokenizer.get_added_vocab()
-        logger.info("Size of new tokenizer: %s", len(tokenizer))
-        logger.info(f"New vocab size: {config.vocab_size}")
+    
+    if model_args.tokenizer_type == "auto":        
+        tokenizer = NumberTokenizerWrapper(tokenizer)
 
     if model_args.number_encoding == "xval":
         model_init_kwargs = {"tokenizer": tokenizer, "bigger_language_head": model_args.xval_bigger_language_head}
@@ -248,7 +244,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
 
         if model_args.number_token_loss_with_wasserstein:
             logger.info("Using Wasserstein distance for number token loss")
-            model_init_kwargs["number_token_loss"] = AbsDiffNumberTokenLoss(
+            ntl = AbsDiffNumberTokenLoss(
                 tokenizer,
                 vocab_size=config.vocab_size,
                 device=training_args.device,
@@ -257,7 +253,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
             )
         else:
             logger.info("Using normal number token loss")
-            model_init_kwargs["number_token_loss"] = NumberTokenLoss(
+            ntl = NumberTokenLoss(
                 tokenizer,
                 vocab_size=config.vocab_size,
                 device=training_args.device,
@@ -413,6 +409,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         label_smoother=label_smoother,
         # callbacks=[early_stopping_callback],
         compute_metrics=custom_metrics,
+        compute_loss_func=NumberTokenLossWrapper(ntl) if model_args.number_token_loss else None
     )
 
     # Training
@@ -508,24 +505,34 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
 
 
 def get_data_collator(model_args: ModelArguments, tokenizer, training_args: TrainingArguments) -> transformers.DataCollator:
-    # Conditional Generation Training
-    if training_args.language_modelling == "clm":
-        logger.info("Using CLM collator")
+    # Sequence to Sequence Language Modeling
+    if training_args.language_modelling == "s2s":
+        logger.info("Using S2S collator")
         if model_args.number_encoding == "rt":
-            data_collator = VanillaQuestionAnswerCLMCollator(
+            data_collator = VanillaQuestionAnswerS2SCollator(
                 tokenizer=tokenizer
             )
         elif model_args.number_encoding == "xval":
-            data_collator = XvalQuestionAnswerCLMCollator(
+            data_collator = XvalQuestionAnswerS2SCollator(
                 tokenizer=tokenizer
             )
         elif model_args.number_encoding.lower() == "none":
             # Rt collator can be used for default T5 as well
-            data_collator = VanillaQuestionAnswerCLMCollator(
+            data_collator = XvalQuestionAnswerS2SCollator(
                 tokenizer=tokenizer
             )
         elif model_args.number_encoding.lower() == "none_regression_head":
             raise ValueError("Regression head not supported for CLM")
+
+    # Conditional Generation Training
+    elif training_args.language_modelling == "clm":
+        logger.info("Using CLM collator")
+        if model_args.number_encoding in ["rt", "none"]:
+            data_collator = VanillaQuestionAnswerCLMCollator(
+                tokenizer=tokenizer
+            )
+        else:
+            raise ValueError(f"Number encoding {model_args.number_encoding} not supported for CLM")        
 
     # Masked Language Modeling
     else:

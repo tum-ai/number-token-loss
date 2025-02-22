@@ -31,7 +31,7 @@ Find our paper [here](https://arxiv.org/abs/2411.02083) and the poster of the Ne
   ```
 - Inside the container, interactively set the transformers library to version  4.42.4 and install wandb and hydra
     ```bash
-    pip install transformers==4.42.4
+    pip install transformers==4.48.3
     pip install wandb
     pip install hydra-core
     ```

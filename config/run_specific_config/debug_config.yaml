@@ -10,7 +10,3 @@ training_args:
   logging_steps: 10
   report_to: none
   eval_on_start: false
-
-model_args:
-  config_name: t5-small
-  model_name_or_path: google-t5/t5-small

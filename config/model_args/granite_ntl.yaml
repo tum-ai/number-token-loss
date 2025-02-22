@@ -1,0 +1,7 @@
+name: granite_ntl
+model_name_or_path: ibm-granite/granite-3.1-3b-a800m-base
+tokenizer_type: auto
+number_encoding: none
+number_token_loss: true
+number_token_loss_weight: 0.3
+number_token_loss_with_wasserstein: true
