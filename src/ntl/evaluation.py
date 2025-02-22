@@ -226,7 +226,7 @@ class CustomMetrics:
 
         if compute_result or self.save_all_output:
             # save decoded predictions and labels for debugging
-            with open(f"{self.output_dir}/decoded_preds_{self.eval_count}.txt", "a") as f:
+            with open(f"{self.output_dir}/decoded_preds_{self.eval_count}.txt", "a", encoding="utf-8") as f:
                 for idx in range(len(decoded_preds)):
                     f.write(f"Prediction {idx}: {decoded_preds[idx]}\n")
                     f.write(f"Label {idx}: {decoded_labels[idx]}\n")
