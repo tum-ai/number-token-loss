@@ -45,6 +45,7 @@ from ntl.tokenizer.rt_tokenizer import RtTokenizer
 from ntl.tokenizer.xval_tokenizer import XvalTokenizer
 from ntl.loss_functions.number_token_loss import NumberTokenLoss
 from ntl.loss_functions.abs_diff_number_token_loss import AbsDiffNumberTokenLoss
+from ntl.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
 from ntl.tokenizer.auto_number_tokenizer import AutoNumberTokenizer
 from ntl.loss_functions.number_token_loss import NumberTokenSelector
 from ntl.utils.label_smoother import GaussianLabelSmoother
@@ -265,12 +266,26 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
                 weight=model_args.number_token_loss_weight
             )
 
-    if model_args.gaussian_label_smoother: 
-        selector = NumberTokenSelector(tokenizer, vocab_size=config.vocab_size, device=training_args.device) 
+    # Initialize label smoother
+    if model_args.gaussian_label_smoother:
+        selector = NumberTokenSelector(tokenizer, vocab_size=config.vocab_size, device=training_args.device)
+        if model_args.number_token_loss:
+            label_smoother_ntl = WassersteinNumberTokenLoss(
+                tokenizer,
+                vocab_size=config.vocab_size,
+                device=training_args.device,
+                loss_function=loss_function,
+                weight=model_args.number_token_loss_weight,
+                order_numbers=True,
+            )
+        else:
+            label_smoother_ntl = None
+
         label_smoother = GaussianLabelSmoother(
-            sigma=model_args.label_smoother_sigma,           
-            ignore_index=-100,   
-            selector=selector    
+            sigma=model_args.label_smoother_sigma,
+            ignore_index=-100,
+            selector=selector,
+            number_token_loss=label_smoother_ntl,
         )
     else: 
         label_smoother = None
