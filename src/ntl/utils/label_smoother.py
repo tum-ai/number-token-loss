@@ -62,15 +62,12 @@ class GaussianLabelSmoother:
         if self.selector is not None:
             if not hasattr(self.selector, 'nvocab'):
                 raise AttributeError("The selector must have an attribute 'nvocab' representing the number of valid vocab tokens.")
-    
-            # Select number tokens
-            number_logits, vocab_numbers_mask = self.selector.select_number_tokens(logits) # (batch_size, seq_len, num_classes_numbers)
-            
+
             # Get the number of classes and the mask for number tokens
             tokens_encoding_numbers = torch.tensor(self.selector.number_token_indices)
             num_classes_numbers = tokens_encoding_numbers.shape[0]
 
-            labels_number_mask = torch.isin(labels, tokens_encoding_numbers)  # (batch_size, seq_len)
+            number_mask = torch.isin(labels, tokens_encoding_numbers)  # (batch_size, seq_len)
 
             # Get the decoded labels
             labels_dec = self.selector.nvocab[labels]
@@ -80,24 +77,21 @@ class GaussianLabelSmoother:
             raise ValueError("A NumberTokenSelector instance must be provided to select number tokens for smoothing.")
 
         # All labels that are not self.ignore_index
-        valid_mask = (labels != self.ignore_index) # (batch_size, seq_len)
-        
+        valid_mask = labels != self.ignore_index  # (batch_size, seq_len)
+
         if not valid_mask.any():
             # If no valid tokens are present, return zero loss that still has grad_fn
             return logits.sum() * 0.0
-        
-        # Mask for valid number labels and non-padding tokens. 
-        number_mask = valid_mask * labels_number_mask # (batch_size, seq_len) # should not change anything, as labels_number_mask is already a subset of valid_mask
-        non_number_mask = valid_mask * ~labels_number_mask # (batch_size, seq_len)
-        
-        # Validation to ensure that labels are within the valid range [0, num_classes_numbers - 1]
-        if not torch.all((labels_dec[number_mask] >= 0) & (labels_dec[number_mask] < num_classes_numbers)):
-            print("min", labels_dec[number_mask].min(), "max", labels_dec[number_mask].max())
-            raise RuntimeError("Some labels are out of the valid range [0, num_classes_numbers - 1].")
-        
+
+        # Mask for valid number labels and non-padding tokens.
+        assert number_mask.shape == valid_mask.shape, (
+            "Number mask should have the same shape as valid_maks!"
+        )  # (batch_size, seq_len) # should not change anything, as number_mask is already a subset of valid_mask
+        non_number_mask = valid_mask * ~number_mask  # (batch_size, seq_len)
+
         # Compute log probabilities once for efficiency
         log_probs = F.log_softmax(logits, dim=-1)  # [B, S, C]
-        
+
         # Initialize loss tensors
         loss_numbers = torch.zeros_like(labels_dec, dtype=logits.dtype, device=logits.device)  # (batch_size, seq_len)
         loss_non_numbers = torch.zeros_like(
@@ -107,7 +101,7 @@ class GaussianLabelSmoother:
         # Compute loss for number tokens
         if number_mask.any():
             if self.sigma == 0.0:
-                # When sigma is zero, use one-hot labels directly without smoothing. 
+                # When sigma is zero, use one-hot labels directly without smoothing.
                 # To avoid F.one_hot error, all labels outside of valid_mask are set to 0
                 number_labels_filled = labels_dec.clone()
                 number_labels_filled = labels_dec.masked_fill(
@@ -115,7 +109,7 @@ class GaussianLabelSmoother:
                 )  # All non-number tokens are filled with zero
                 number_one_hot = F.one_hot(number_labels_filled, num_classes=num_classes_numbers).float()
                 number_one_hot = number_one_hot * number_mask.unsqueeze(-1)  # Zero out non-number tokens
-                                
+
                 # Compute the loss for number tokens
                 loss_numbers = -(number_one_hot * log_probs[..., :num_classes_numbers]).sum(dim=-1)
                 
@@ -156,7 +150,7 @@ class GaussianLabelSmoother:
                 
         # Combine the two losses into a single tensor
         loss_per_token = torch.where(number_mask, loss_numbers, loss_non_numbers)  # (batch_size, seq_len)
-        
+
         # Average across the valid tokens.         
         num_valid = valid_mask.sum().float()
         loss = loss_per_token.sum() / torch.clamp(num_valid, min=1.0)
