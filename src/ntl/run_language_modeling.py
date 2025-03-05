@@ -362,6 +362,13 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         train_dataset = load_json_dataset(train_data_path)
         eval_dataset = load_json_dataset(eval_data_path)
         test_dataset = load_json_dataset(test_data_path)
+    elif dataset_args.dataset_name == "cnn":
+        train_data_path = 'data/cnn-dataset/data/train.jsonl'
+        eval_data_path = 'data/cnn-dataset/data/validation.jsonl'
+        test_data_path = 'data/cnn-dataset/data/test.jsonl'
+        train_dataset = load_json_dataset(train_data_path)
+        eval_dataset = load_json_dataset(eval_data_path)
+        test_dataset = load_json_dataset(test_data_path)
     elif dataset_args.dataset_name == "multirc":
         train_data_path = 'data/multirc/data/preprocessed/train_clean.jsonl'
         eval_data_path = 'data/multirc/data/preprocessed/val_clean.jsonl'
