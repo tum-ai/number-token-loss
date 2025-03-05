@@ -1319,7 +1319,7 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
                     loss = outputs["token_loss"] + self.model.number_token_loss.weight * outputs["number_loss"]
                 else:
                     loss = self.label_smoother(outputs, labels)
-                    outputs["token_loss"] = loss
+                    outputs["loss"] = loss
         else:
             if isinstance(outputs, dict) and "loss" not in outputs:
                 raise ValueError(
