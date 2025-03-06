@@ -21,7 +21,11 @@ Find our paper [here](https://arxiv.org/abs/2411.02083) and the poster of the Ne
     ```
     wandb login
     ```
-  Enter you username and auth token (wandb.ai/auth)
+  Enter you username and auth token (wandb.ai/auth). To specify the wandb entity and project for logging the experiment, set the following environment variables
+    ```
+    export WANDB_ENTITY='<your_entity>'
+    export WANDB_PROJECT='<your_project_name>'  
+    ```
 
 ### Via Docker
 
