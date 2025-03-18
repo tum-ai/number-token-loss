@@ -204,7 +204,8 @@ e.g for Standard T5 + **NTL-WAS**:
 ```
 python src/ntl/run_language_modeling.py model_args=vanilla_t5_ntl  model_args.number_token_loss_with_wasserstein=true training_args=eval model_args.model_name_or_path=<path to checkpoint file>
 ```
-
+---
+The repository also includes a generic version of the NTL (`/src/ntl/loss_functions/base_number_token_loss.py`), which is compatible with a broader range of Hugging Face models and is based on the NTL-WAS.
 
 ## Citation
 If you use this work, please cite:
