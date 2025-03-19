@@ -311,7 +311,6 @@ def run_model_benchmark(
         Tuple of (execution_times, standard_deviations)
     """
     timer = BenchmarkTimer()
-    profiler = []
     model.to(device)
     optimizer = AdamW(model.parameters(), lr=5e-5)
 
@@ -356,34 +355,27 @@ def run_model_benchmark(
         timer.stop("preprocessing", device)
 
         # Forward pass and loss computation
+        outputs = model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            labels=labels
+        )
+        loss = outputs.loss
 
-        with profiler.profile(use_cuda=True) as prof:
-            outputs = model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                labels=labels
-            )
-            loss = outputs.loss
+        timer.stop("forward_pass", device)            
 
-            timer.stop("forward_pass", device)            
-
-            # Backward pass
-            loss.backward()
-            timer.stop("backward_pass", device)
+        # Backward pass
+        loss.backward()
+        timer.stop("backward_pass", device)
 
         # Gradient update if requested
         if update_gradients:
             optimizer.step()
             optimizer.zero_grad()
             timer.stop("optimizer_step", device)
-        
-        profiler.append(prof)
 
     times, stds = timer.get_statistics()
     overall_time, overall_std = timer.get_overall_statistics()
-
-    times["profiler"] = [profiler]
-    stds["profiler"] = [0]
 
     step_type = "Training" if update_gradients else "Forward pass"
     logger.info(
