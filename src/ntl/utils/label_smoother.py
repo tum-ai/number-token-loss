@@ -71,7 +71,6 @@ class GaussianLabelSmoother:
 
             # Get the decoded labels
             labels_dec = self.selector.nvocab[labels]
-            labels_dec = torch.nan_to_num(labels_dec, nan=0.0)  # Zero out non-number tokens
 
         else:
             # If no selector is given, throw an error
@@ -105,14 +104,14 @@ class GaussianLabelSmoother:
                 # When sigma is zero, use one-hot labels directly without smoothing.
                 # To avoid F.one_hot error, all labels outside of valid_mask are set to 0
                 number_labels_filled = labels_dec.clone()
-                number_labels_filled = labels_dec.clone() * number_mask.to(
-                    labels_dec.dtype
+                number_labels_filled = labels_dec.masked_fill(
+                    ~number_mask, 0
                 )  # All non-number tokens are filled with zero
                 number_one_hot = F.one_hot(number_labels_filled, num_classes=num_classes_numbers).float()
                 number_one_hot = number_one_hot * number_mask.unsqueeze(-1)  # Zero out non-number tokens
 
                 # Compute the loss for number tokens
-                loss_numbers = -(number_one_hot * log_probs[..., :tokens_encoding_numbers]).sum(dim=-1)
+                loss_numbers = -(number_one_hot * log_probs[..., :num_classes_numbers]).sum(dim=-1)
                 
             else:      
                 # Gaussian smoothing for number tokens
@@ -136,23 +135,19 @@ class GaussianLabelSmoother:
                 gaussian_probs = gaussian_probs * number_mask.unsqueeze(-1)  # Zero out non-number tokens
 
                 # Compute the loss for number tokens
-                loss_numbers = -(gaussian_probs * log_probs[..., tokens_encoding_numbers]).sum(
-                    dim=-1
-                )  # (batch_size, seq_len)
+                loss_numbers = -(gaussian_probs * log_probs[..., :num_classes_numbers]).sum(dim=-1) # (batch_size, seq_len)
 
         # Compute loss for non-number tokens
         if non_number_mask.any():
             # One-hot encoding for non-number tokens
             non_number_labels_filled = labels.clone()
-            non_number_labels_filled = labels.clone() * non_number_mask.to(labels.dtype)
+            non_number_labels_filled = non_number_labels_filled.masked_fill(~non_number_mask, 0)  # Fill non-valid tokens with 0 # (batch_size, seq_len)
             one_hot_non_num = F.one_hot(non_number_labels_filled, num_classes=logits.size(-1)).float()
-            one_hot_non_num = one_hot_non_num * non_number_mask.unsqueeze(-1).expand(
-                -1, -1, one_hot_non_num.size(-1)
-            )  # non_number_mask.unsqueeze(-1)  # Zero out non-number tokens
+            one_hot_non_num = one_hot_non_num *  non_number_mask.unsqueeze(-1).expand(-1, -1, one_hot_non_num.size(-1)) # non_number_mask.unsqueeze(-1)  # Zero out non-number tokens
 
             # Compute the loss for non-number tokens
             loss_non_numbers = -(one_hot_non_num * log_probs).sum(dim=-1)
-
+                
         # Combine the two losses into a single tensor
         loss_per_token = torch.where(number_mask, loss_numbers, loss_non_numbers)  # (batch_size, seq_len)
 
