@@ -414,6 +414,7 @@ def run_model_profiling(
     Returns:
         List of profiler objects
     """
+    #timer = BenchmarkTimer()
     profilings = []
     model.to(device)
 
@@ -830,6 +831,7 @@ def main():
             yaml.dump(config, file)
         save_profiles(profilings, timestamp)
     else:
+        config = load_config(args.config)
         results = run_benchmarks(config)
         
         timestamp = int(time.time() * 100)
