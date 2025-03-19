@@ -5,7 +5,6 @@ from torch import nn
 from dataclasses import dataclass
 
 from transformers.trainer_pt_utils import LabelSmoother
-from ntl.loss_functions.wasserstein_distance_number_token_loss import WassersteinNumberTokenLoss
 
 
 @dataclass
@@ -27,8 +26,7 @@ class GaussianLabelSmoother:
     sigma: float = 1.0
     ignore_index: int = -100
     selector: object = None  # Instance of `NumberTokenSelector`
-    eps = 1e-8  # epsilon
-    number_token_loss: WassersteinNumberTokenLoss = None  # Only works with this instantiation of the Label Smoother
+    eps = 1e-8 # epsilon
 
     def __call__(self, model_output, labels: Tensor, shift_labels: bool = False) -> Tensor:
         """
@@ -149,11 +147,6 @@ class GaussianLabelSmoother:
         # Average across the valid tokens.         
         num_valid = valid_mask.sum().float()
         loss = loss_per_token.sum() / torch.clamp(num_valid, min=1.0)
-
-        # Compute additional number token loss if available
-        if self.number_token_loss is not None:
-            number_token_loss = self.number_token_loss.forward(logits, labels)
-            return (loss, number_token_loss)
-        else:
-            return loss
+            
+        return loss
         

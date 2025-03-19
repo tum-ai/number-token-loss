@@ -205,19 +205,17 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
                     outputs = model(**inputs)
                     next_token_prediction_logits = outputs.logits
                 if self.label_smoother is not None:
-                    if self.label_smoother.number_token_loss is not None:
-                        outputs["token_loss"], outputs["number_loss"] = self.label_smoother(outputs, inputs["labels"])
-                        next_token_prediction_loss = (
-                            outputs["token_loss"] + self.model.number_token_loss.weight * outputs["number_loss"]
-                        )
+                    next_token_prediction_loss = self.label_smoother(outputs, inputs["labels"])
+                    if "number_loss" in outputs:
+                        outputs["token_loss"] = next_token_prediction_loss
+                        next_token_prediction_loss = next_token_prediction_loss + self.model.number_token_loss.weight * outputs["number_loss"]
                         next_token_prediction_loss = (
                             next_token_prediction_loss.mean().detach(),
                             outputs["token_loss"].mean().detach(),
                             outputs["number_loss"].mean().detach()
                         )
                     else:
-                        outputs["token_loss"] = self.label_smoother(outputs, inputs["labels"])
-                        next_token_prediction_loss = outputs["token_loss"].mean().detach()
+                        next_token_prediction_loss = next_token_prediction_loss.mean().detach()
 
                 else:
                     next_token_prediction_loss = (outputs["loss"] if isinstance(outputs, dict) else outputs[0]).mean().detach()
@@ -1314,12 +1312,10 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
             if model_name in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES.values():
                 loss = self.label_smoother(outputs, labels, shift_labels=True)
             else:
-                if self.label_smoother.number_token_loss is not None:
-                    outputs["token_loss"], outputs["number_loss"] = self.label_smoother(outputs, labels)
-                    loss = outputs["token_loss"] + self.model.number_token_loss.weight * outputs["number_loss"]
-                else:
-                    loss = self.label_smoother(outputs, labels)
-                    outputs["token_loss"] = loss
+                loss = self.label_smoother(outputs, labels)
+                outputs["token_loss"] = loss
+                if "number_loss" in outputs:
+                    loss = loss + self.model.number_token_loss.weight * outputs["number_loss"]
         else:
             if isinstance(outputs, dict) and "loss" not in outputs:
                 raise ValueError(
