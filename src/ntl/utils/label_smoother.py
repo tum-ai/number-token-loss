@@ -112,7 +112,7 @@ class GaussianLabelSmoother:
                 number_one_hot = number_one_hot * number_mask.unsqueeze(-1)  # Zero out non-number tokens
 
                 # Compute the loss for number tokens
-                loss_numbers = -(number_one_hot * log_probs[..., tokens_encoding_numbers]).sum(dim=-1)
+                loss_numbers = -(number_one_hot * log_probs[..., :tokens_encoding_numbers]).sum(dim=-1)
                 
             else:      
                 # Gaussian smoothing for number tokens
@@ -143,9 +143,9 @@ class GaussianLabelSmoother:
         # Compute loss for non-number tokens
         if non_number_mask.any():
             # One-hot encoding for non-number tokens
-            non_number_labels = labels.clone()
-            non_number_labels = labels.clone() * non_number_mask.to(labels.dtype)
-            one_hot_non_num = F.one_hot(non_number_labels, num_classes=logits.size(-1)).float()
+            non_number_labels_filled = labels.clone()
+            non_number_labels_filled = labels.clone() * non_number_mask.to(labels.dtype)
+            one_hot_non_num = F.one_hot(non_number_labels_filled, num_classes=logits.size(-1)).float()
             one_hot_non_num = one_hot_non_num * non_number_mask.unsqueeze(-1).expand(
                 -1, -1, one_hot_non_num.size(-1)
             )  # non_number_mask.unsqueeze(-1)  # Zero out non-number tokens
