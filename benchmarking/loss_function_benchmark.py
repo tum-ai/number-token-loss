@@ -768,6 +768,22 @@ def run_profiling(
 ):
     device, _, tokenizer_dict, model_dict, _ = initialize_benchmarking_environment()
 
+    warmup_config = copy.deepcopy(config)
+    warmup_config['profiling']['steps'] = 1
+
+    # Warmup runs
+    logger.info("Performing warmup runs for model profiling...")
+    profilings = {
+        name: run_model_profiling(
+            config=warmup_config['profiling'],
+            model=model_dict[name],
+            loss_name=name,
+            tokenizer=tokenizer_dict[name],
+            device=device,
+        )
+        for name in config['profiling']['models']
+    }
+
     # Run model profiling
     logger.info("Running forward pass profiling...")
     profilings = {
