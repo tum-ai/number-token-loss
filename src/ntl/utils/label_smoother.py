@@ -67,17 +67,14 @@ class GaussianLabelSmoother:
             number_logits, vocab_numbers_mask = self.selector.select_number_tokens(logits) # (batch_size, seq_len, num_classes_numbers)
             
             # Get the number of classes and the mask for number tokens
-            tokens_encoding_numbers = torch.tensor(self.selector.number_token_indices)
+            tokens_encoding_numbers = self.selector.nvocab[vocab_numbers_mask]  
             num_classes_numbers = tokens_encoding_numbers.shape[0]
-
-            labels_number_mask = torch.isin(labels, tokens_encoding_numbers)  # (batch_size, seq_len)
-
-            # Get the decoded labels
-            labels_dec = self.selector.nvocab[labels]
+            labels_number_mask = torch.isin(labels, tokens_encoding_numbers) # (batch_size, seq_len)
 
         else:
-            # If no selector is given, throw an error
-            raise ValueError("A NumberTokenSelector instance must be provided to select number tokens for smoothing.")
+            # If no selector is given, assume all are number tokens
+            labels_number_mask = torch.ones_like(labels, dtype=torch.bool)
+            num_classes_numbers = logits.size(-1)  # Dynamic determination of num_classes_numbers 
 
         # All labels that are not self.ignore_index
         valid_mask = (labels != self.ignore_index) # (batch_size, seq_len)
@@ -91,28 +88,24 @@ class GaussianLabelSmoother:
         non_number_mask = valid_mask * ~labels_number_mask # (batch_size, seq_len)
         
         # Validation to ensure that labels are within the valid range [0, num_classes_numbers - 1]
-        if not torch.all((labels_dec[number_mask] >= 0) & (labels_dec[number_mask] < num_classes_numbers)):
-            print("min", labels_dec[number_mask].min(), "max", labels_dec[number_mask].max())
+        if not torch.all((labels[number_mask] >= 0) & (labels[number_mask] < num_classes_numbers)):
+            print("min", labels[number_mask].min(), "max", labels[number_mask].max())
             raise RuntimeError("Some labels are out of the valid range [0, num_classes_numbers - 1].")
         
         # Compute log probabilities once for efficiency
         log_probs = F.log_softmax(logits, dim=-1)  # [B, S, C]
         
         # Initialize loss tensors
-        loss_numbers = torch.zeros_like(labels_dec, dtype=logits.dtype, device=logits.device)  # (batch_size, seq_len)
-        loss_non_numbers = torch.zeros_like(
-            labels_dec, dtype=logits.dtype, device=logits.device
-        )  # (batch_size, seq_len)
-
+        loss_numbers = torch.zeros_like(labels, dtype=logits.dtype, device=logits.device) # (batch_size, seq_len)
+        loss_non_numbers = torch.zeros_like(labels, dtype=logits.dtype, device=logits.device) # (batch_size, seq_len)       
+        
         # Compute loss for number tokens
         if number_mask.any():
             if self.sigma == 0.0:
                 # When sigma is zero, use one-hot labels directly without smoothing. 
                 # To avoid F.one_hot error, all labels outside of valid_mask are set to 0
-                number_labels_filled = labels_dec.clone()
-                number_labels_filled = labels_dec.masked_fill(
-                    ~number_mask, 0
-                )  # All non-number tokens are filled with zero
+                number_labels_filled = labels.clone()
+                number_labels_filled = labels.masked_fill(~number_mask, 0)  # All non-number tokens are filled with zero
                 number_one_hot = F.one_hot(number_labels_filled, num_classes=num_classes_numbers).float()
                 number_one_hot = number_one_hot * number_mask.unsqueeze(-1)  # Zero out non-number tokens
                                 
@@ -121,19 +114,15 @@ class GaussianLabelSmoother:
                 
             else:      
                 # Gaussian smoothing for number tokens
-                # Create a tensor of number values
-                number_values = self.selector.number_token_values.unsqueeze(0).unsqueeze(
-                    0
-                )  # (1, 1, num_classes_numbers)
-
+                # Create a tensor of class indices
+                class_indices = torch.arange(num_classes_numbers, device=labels.device).view(1, 1, num_classes_numbers) # (1, 1, num_classes_numbers)
+                
                 # Expand labels to shape (batch_size, seq_length, 1).  Cast to float32 if necessary
-                labels_dec_expanded = labels_dec.unsqueeze(-1).float()  # (batch_size, seq_length, 1)
-
+                labels_expanded = labels.unsqueeze(-1).float()  # (batch_size, seq_length, 1)      
+                
                 # Compute Gaussian distribution around each label index
-                gaussian = torch.exp(
-                    -0.5 * ((number_values - labels_dec_expanded) / self.sigma) ** 2
-                )  # (batch_size, seq_len//number_outputs, num_classes_numbers)
-
+                gaussian = torch.exp(-0.5 * ((class_indices - labels_expanded) / self.sigma) ** 2)  # (batch_size, seq_len//number_outputs, num_classes_numbers)
+                
                 # Normalize to ensure each (batch, output) sums to 1. Prevent division by zero
                 gaussian_probs = gaussian / (gaussian.sum(dim=2, keepdim=True) + self.eps) 
 
@@ -163,7 +152,7 @@ class GaussianLabelSmoother:
 
         # Compute additional number token loss if available
         if self.number_token_loss is not None:
-            number_token_loss = self.number_token_loss.forward(logits, labels, gaussian_probs)
+            number_token_loss = self.number_token_loss.forward(logits, labels)
             return (loss, number_token_loss)
         else:
             return loss
