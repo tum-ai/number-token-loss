@@ -118,6 +118,6 @@ class CEWithNTL:
             Loss tensor.
 
         """
-        ce_loss = F.cross_entropy(logits.permute(0, 2, 1), labels, reduction=reduction)
+        ce_loss = F.cross_entropy(logits.permute(0, 2, 1), labels, reduction=reduction, ignore_index=-100)
         ntl_loss = self.ntl(logits, labels, reduction=reduction)
         return ce_loss + self.ntl_weight * ntl_loss
