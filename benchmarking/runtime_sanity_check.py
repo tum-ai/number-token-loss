@@ -15,7 +15,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def benchmark(loss, time_steps, vocab_size, batch_size, device, permute = False, number_token_ids = None):
+def benchmark(loss_fn, time_steps, vocab_size, batch_size, device, permute = False, number_token_ids = None):
 
     # Clear cache
     torch.cuda.empty_cache()
@@ -24,27 +24,29 @@ def benchmark(loss, time_steps, vocab_size, batch_size, device, permute = False,
     logits = torch.randn(batch_size, time_steps, vocab_size).to(device)
 
     # Generate random labels
-    if number_token_ids:
+    if number_token_ids is not None:
         # Fill labels with ids only of number tokens to ensure ntl has something to compute
         indices = torch.randint(0, len(number_token_ids), (batch_size, time_steps))
-        labels = torch.tensor(number_token_ids)[indices].to(device)
+        labels = number_token_ids[indices].to(device)
     else:
         labels = torch.randint(vocab_size, (batch_size, time_steps)).to(device)
 
     # Permute shape for ce loss
-    if permute:
-        logits = logits.permute(0, 2, 1)
+    if permute: logits = logits.permute(0, 2, 1)
 
     # Sync and start timer
-    # torch.cuda.synchronize()
+    if device == "cuda": torch.cuda.synchronize()
     start = time.perf_counter()
 
     # Compute Loss
-    print(loss(logits, labels))
+    loss = loss_fn(logits, labels)
 
     # Sync and stop timer
-    # torch.cuda.synchronize()
+    if device == "cuda": torch.cuda.synchronize()
     end = time.perf_counter()
+
+    # Ensure loss is not NaN
+    assert not torch.isnan(loss).any(), "Loss is NaN!"
 
     return end - start
 
@@ -61,8 +63,9 @@ def runtime_measurement(time_steps, batch_size, num_batches):
     ntl = NumberTokenLoss(tokenizer)
     ce_with_ntl = CEWithNTL(tokenizer)
 
-    number_tokens = map(str, ntl.nt_vals_dense.tolist())
-    number_token_ids = tokenizer.convert_tokens_to_ids(number_tokens)
+    # Get number token ids
+    ntl_number_token_ids = (~torch.isnan(ntl.nt_vals)).nonzero().squeeze()
+    ce_with_ntl_number_token_ids = (~torch.isnan(ce_with_ntl.ntl.nt_vals)).nonzero().squeeze()
 
     ce_times = []
     ntl_times = []
@@ -71,8 +74,8 @@ def runtime_measurement(time_steps, batch_size, num_batches):
     for _ in range(num_batches):
 
         ce_time = benchmark(ce_loss, time_steps, vocab_size, batch_size, device, permute=True)
-        ntl_time = benchmark(ntl, time_steps, vocab_size, batch_size, device, number_token_ids=number_token_ids)
-        ce_with_ntl_time = benchmark(ce_with_ntl, time_steps, vocab_size, batch_size, device, number_token_ids=number_token_ids)
+        ntl_time = benchmark(ntl, time_steps, vocab_size, batch_size, device, number_token_ids=ntl_number_token_ids)
+        ce_with_ntl_time = benchmark(ce_with_ntl, time_steps, vocab_size, batch_size, device, number_token_ids=ce_with_ntl_number_token_ids)
 
         ce_times.append(ce_time)
         ntl_times.append(ntl_time)
@@ -93,4 +96,4 @@ def runtime_measurement(time_steps, batch_size, num_batches):
 
 
 if __name__ == "__main__":
-    runtime_measurement(time_steps = 2, batch_size = 1, num_batches = 1)
+    runtime_measurement(time_steps = 10, batch_size = 32, num_batches = 100)
