@@ -59,7 +59,7 @@ def runtime_measurement(time_steps, batch_size, num_batches):
     tokenizer = T5Custom_Tokenizer.from_pretrained("t5-small")
     vocab_size = len(tokenizer)
     
-    ce_loss = CrossEntropyLoss(ignore_index=-100)
+    ce_loss = CrossEntropyLoss(ignore_index=-100).to(device)
     ntl = NumberTokenLoss(tokenizer, device)
     ce_with_ntl = CEWithNTL(tokenizer, device)
 
