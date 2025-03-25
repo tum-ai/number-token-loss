@@ -60,8 +60,8 @@ def runtime_measurement(time_steps, batch_size, num_batches):
     vocab_size = len(tokenizer)
     
     ce_loss = CrossEntropyLoss(ignore_index=-100)
-    ntl = NumberTokenLoss(tokenizer)
-    ce_with_ntl = CEWithNTL(tokenizer)
+    ntl = NumberTokenLoss(tokenizer, device)
+    ce_with_ntl = CEWithNTL(tokenizer, device)
 
     # Get number token ids
     ntl_number_token_ids = (~torch.isnan(ntl.nt_vals)).nonzero().squeeze()
