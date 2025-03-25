@@ -15,21 +15,23 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def benchmark(loss_fn, time_steps, vocab_size, batch_size, device, permute = False, number_token_ids = None):
+def everythink_as_number_token(ntl_loss: NumberTokenLoss, device: str) -> NumberTokenLoss:
+
+    ntl_loss.nt_vals = torch.full((len(ntl_loss.tokenizer.get_vocab()),), float(1)).to(device)
+    ntl_loss.is_number_token = ~torch.isnan(ntl_loss.nt_vals)
+    ntl_loss.nt_vals_dense = ntl_loss.nt_vals[ntl_loss.is_number_token].to(device)
+
+    return ntl_loss
+
+
+def benchmark(loss_fn, time_steps, vocab_size, batch_size, device, permute = False):
 
     # Clear cache
     torch.cuda.empty_cache()
 
     # Generate random input
     logits = torch.randn(batch_size, time_steps, vocab_size).to(device)
-
-    # Generate random labels
-    if number_token_ids is not None:
-        # Fill labels with ids only of number tokens to ensure ntl has something to compute
-        indices = torch.randint(0, len(number_token_ids), (batch_size, time_steps))
-        labels = number_token_ids[indices].to(device)
-    else:
-        labels = torch.randint(vocab_size, (batch_size, time_steps)).to(device)
+    labels = torch.randint(vocab_size, (batch_size, time_steps)).to(device)
 
     # Permute shape for ce loss
     if permute: logits = logits.permute(0, 2, 1)
@@ -63,9 +65,12 @@ def runtime_measurement(time_steps, batch_size, num_batches):
     ntl = NumberTokenLoss(tokenizer, device)
     ce_with_ntl = CEWithNTL(tokenizer, device)
 
+    ntl = everythink_as_number_token(ntl, device)
+    ce_with_ntl.ntl = everythink_as_number_token(ce_with_ntl.ntl, device)
+
     # Get number token ids
-    ntl_number_token_ids = (~torch.isnan(ntl.nt_vals)).nonzero().squeeze()
-    ce_with_ntl_number_token_ids = (~torch.isnan(ce_with_ntl.ntl.nt_vals)).nonzero().squeeze()
+    # ntl_number_token_ids = (~torch.isnan(ntl.nt_vals)).nonzero().squeeze()
+    # ce_with_ntl_number_token_ids = (~torch.isnan(ce_with_ntl.ntl.nt_vals)).nonzero().squeeze()
 
     ce_times = []
     ntl_times = []
@@ -74,8 +79,8 @@ def runtime_measurement(time_steps, batch_size, num_batches):
     for _ in range(num_batches):
 
         ce_time = benchmark(ce_loss, time_steps, vocab_size, batch_size, device, permute=True)
-        ntl_time = benchmark(ntl, time_steps, vocab_size, batch_size, device, number_token_ids=ntl_number_token_ids)
-        ce_with_ntl_time = benchmark(ce_with_ntl, time_steps, vocab_size, batch_size, device, number_token_ids=ce_with_ntl_number_token_ids)
+        ntl_time = benchmark(ntl, time_steps, vocab_size, batch_size, device)
+        ce_with_ntl_time = benchmark(ce_with_ntl, time_steps, vocab_size, batch_size, device)
 
         ce_times.append(ce_time)
         ntl_times.append(ntl_time)
@@ -96,4 +101,9 @@ def runtime_measurement(time_steps, batch_size, num_batches):
 
 
 if __name__ == "__main__":
-    runtime_measurement(time_steps = 10, batch_size = 32, num_batches = 100)
+    runtime_measurement(time_steps = 10, batch_size = 32, num_batches = 10)
+
+# Output:
+# [03/25/2025 22:43:40] - [INFO] - CrossEntropyLoss: (33.40 ± 0.13)ms
+# [03/25/2025 22:43:40] - [INFO] - NumberTokenLoss: (0.45 ± 0.02)ms
+# [03/25/2025 22:43:40] - [INFO] - CEWithNTL: (33.73 ± 0.23)ms
