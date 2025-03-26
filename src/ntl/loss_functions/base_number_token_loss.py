@@ -9,7 +9,7 @@ from transformers import PreTrainedTokenizer
 class NumberTokenLoss:
     """Class for NTL."""
 
-    def __init__(self, tokenizer: PreTrainedTokenizer):
+    def __init__(self, tokenizer: PreTrainedTokenizer, device):
         """
         NTL Constructor. Setting up attributes needed by NT loss
 
@@ -20,7 +20,7 @@ class NumberTokenLoss:
 
         # Add digits to vocab if not there yet.
         self.tokenizer.add_tokens(list(map(str, range(10))))
-        self.nt_vals = torch.full((len(self.tokenizer.get_vocab()),), float("nan"))
+        self.nt_vals = torch.full((len(self.tokenizer.get_vocab()),), float("nan")).to(device)
 
         # Try to convert each token to a float after stripping the space prefix and filter out super- and subscript tokens
         for token, id in self.tokenizer.get_vocab().items():
@@ -31,7 +31,7 @@ class NumberTokenLoss:
                     self.nt_vals[id] = float(token)
 
         self.is_number_token = ~torch.isnan(self.nt_vals)
-        self.nt_vals_dense = self.nt_vals[self.is_number_token]
+        self.nt_vals_dense = self.nt_vals[self.is_number_token].to(device)
         print(f"Found {len(self.nt_vals_dense)} number tokens in vocab: {self.nt_vals_dense.tolist()}")
 
     def __call__(self, *args, **kwargs):
@@ -84,7 +84,7 @@ class NumberTokenLoss:
 class CEWithNTL:
     """Class for CEWithNTL."""
 
-    def __init__(self, tokenizer: PreTrainedTokenizer, ntl_weight: float = 0.5):
+    def __init__(self, tokenizer: PreTrainedTokenizer, device, ntl_weight: float = 0.3):
         """
         CEWithNTL Constructor. Setting up attributes needed by CEWithNTL loss
 
@@ -93,7 +93,7 @@ class CEWithNTL:
             ntl_weight: Weighting factor for CE and NTL.
         """
         self.tokenizer = tokenizer
-        self.ntl = NumberTokenLoss(tokenizer)
+        self.ntl = NumberTokenLoss(tokenizer, device)
         self.ntl_weight = ntl_weight
 
     def __call__(self, *args, **kwargs):
