@@ -7,7 +7,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from .xval_mask_question_collator import XvalMaskedQuestionAnswerCollator
+from ntl.xval.xval_mask_question_collator import XvalMaskedQuestionAnswerCollator
 from ntl.data.data import load_txt_dataset
 from ntl.evaluation import CustomMetrics
 from ntl.tokenizer.xval_tokenizer import XvalTokenizer
@@ -31,8 +31,12 @@ tokenizer = XvalTokenizer.from_pretrained("t5-small")
 ### Define model
 # The vocab_size is the number of different tokens in the tokenizer.
 # context length is the maximum sequence size.
-model = numformer.Numformer(vocab_size=len(tokenizer), nhead=3, num_layers=3, d_model=384, dim_feedforward=1536,
-                            context_length=955).cuda()
+model = numformer.Numformer(vocab_size=len(tokenizer), nhead=12, num_layers=12, d_model=768, dim_feedforward=3072,
+                            context_length=512).cuda()
+
+# print number of parameters
+print(f"Number of parameters: {sum(p.numel() for p in model.parameters())}")
+
 lr = 1e-4
 weight_decay = 0.01
 optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
