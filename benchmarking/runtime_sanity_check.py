@@ -1,5 +1,6 @@
 import time
 import logging
+from typing import List
 import torch
 import numpy as np
 from ntl.loss_functions.base_number_token_loss import NumberTokenLoss, CEWithNTL
@@ -16,6 +17,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def everythink_as_number_token(ntl_loss: NumberTokenLoss, device: str) -> NumberTokenLoss:
+    """Set all tokens as number tokens to avoid computing with NaNs."""
 
     ntl_loss.nt_vals = torch.full((len(ntl_loss.tokenizer.get_vocab()),), float(1)).to(device)
     ntl_loss.is_number_token = ~torch.isnan(ntl_loss.nt_vals)
@@ -23,15 +25,33 @@ def everythink_as_number_token(ntl_loss: NumberTokenLoss, device: str) -> Number
 
     return ntl_loss
 
-
-def benchmark(loss_fn, time_steps, vocab_size, batch_size, device, permute = False):
+def benchmark(loss_fn, time_steps: int, vocab_size: int, batch_size: int, device: str, permute: bool = False, number_token_ids: List[int] = None) -> float:
+    """Benchmark the runtime of a loss function.
+    Args:   
+        loss_fn: Loss function to benchmark.  
+        time_steps: Number of time steps.  
+        vocab_size: Vocabulary size.  
+        batch_size: Batch size.  
+        device: Device to run the benchmark on.  
+        permute: Whether to permute the logits (for CE loss).  
+        number_token_ids: List of tokens used to compute the loss.
+    Returns:
+        Runtime in seconds.
+    """
 
     # Clear cache
     torch.cuda.empty_cache()
 
     # Generate random input
     logits = torch.randn(batch_size, time_steps, vocab_size).to(device)
-    labels = torch.randint(vocab_size, (batch_size, time_steps)).to(device)
+
+    # Generate random labels
+    if number_token_ids is not None:
+        # Fill labels with ids only of number tokens to ensure ntl has something to compute
+        indices = torch.randint(0, len(number_token_ids), (batch_size, time_steps))
+        labels = number_token_ids[indices].to(device)
+    else:
+        labels = torch.randint(vocab_size, (batch_size, time_steps)).to(device)
 
     # Permute shape for ce loss
     if permute: logits = logits.permute(0, 2, 1)
@@ -52,7 +72,14 @@ def benchmark(loss_fn, time_steps, vocab_size, batch_size, device, permute = Fal
 
     return end - start
 
-def runtime_measurement(time_steps, batch_size, num_batches):
+def runtime_measurement(time_steps: int, batch_size: int, num_batches: int, ntl_token_mode: str = "tokenizer_modified") -> None:
+    """ Measure the runtime of the loss functions.          
+    Args:  
+        time_steps: Number of time steps.  
+        batch_size: Batch size.  
+        num_batches: Number of batches.  
+        ntl_token_mode: Mode for selection of ntl calculation, to avoiod computing with NaNs.
+    """
     
     # Setup  
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -65,12 +92,19 @@ def runtime_measurement(time_steps, batch_size, num_batches):
     ntl = NumberTokenLoss(tokenizer, device)
     ce_with_ntl = CEWithNTL(tokenizer, device)
 
-    ntl = everythink_as_number_token(ntl, device)
-    ce_with_ntl.ntl = everythink_as_number_token(ce_with_ntl.ntl, device)
+    ntl_number_token_ids = None
+    ce_with_ntl_number_token_ids = None
 
-    # Get number token ids
-    # ntl_number_token_ids = (~torch.isnan(ntl.nt_vals)).nonzero().squeeze()
-    # ce_with_ntl_number_token_ids = (~torch.isnan(ce_with_ntl.ntl.nt_vals)).nonzero().squeeze()
+    if(ntl_token_mode == "tokenizer_modified"):
+        logger.info("Tokenzer modified (All tokens encoded as number tokens for ntl loss)")
+        ntl = everythink_as_number_token(ntl, device)
+        ce_with_ntl.ntl = everythink_as_number_token(ce_with_ntl.ntl, device)
+    elif(ntl_token_mode == "numbers_only"):
+        logger.info("Numbers only (Only number tokens are used to compute ntl loss)")
+        ntl_number_token_ids = (~torch.isnan(ntl.nt_vals)).nonzero().squeeze()
+        ce_with_ntl_number_token_ids = (~torch.isnan(ce_with_ntl.ntl.nt_vals)).nonzero().squeeze()
+    else:
+        raise ValueError(f"Invalid token_mode: {ntl_token_mode}. Expected one of 'tokenizer_modified', 'numbers'")
 
     ce_times = []
     ntl_times = []
@@ -79,8 +113,8 @@ def runtime_measurement(time_steps, batch_size, num_batches):
     for _ in range(num_batches):
 
         ce_time = benchmark(ce_loss, time_steps, vocab_size, batch_size, device, permute=True)
-        ntl_time = benchmark(ntl, time_steps, vocab_size, batch_size, device)
-        ce_with_ntl_time = benchmark(ce_with_ntl, time_steps, vocab_size, batch_size, device)
+        ntl_time = benchmark(ntl, time_steps, vocab_size, batch_size, device, number_token_ids=ntl_number_token_ids)
+        ce_with_ntl_time = benchmark(ce_with_ntl, time_steps, vocab_size, batch_size, device, number_token_ids=ce_with_ntl_number_token_ids)
 
         ce_times.append(ce_time)
         ntl_times.append(ntl_time)
@@ -101,9 +135,5 @@ def runtime_measurement(time_steps, batch_size, num_batches):
 
 
 if __name__ == "__main__":
-    runtime_measurement(time_steps = 10, batch_size = 32, num_batches = 10)
-
-# Output:
-# [03/25/2025 22:43:40] - [INFO] - CrossEntropyLoss: (33.40 ± 0.13)ms
-# [03/25/2025 22:43:40] - [INFO] - NumberTokenLoss: (0.45 ± 0.02)ms
-# [03/25/2025 22:43:40] - [INFO] - CEWithNTL: (33.73 ± 0.23)ms
+    runtime_measurement(time_steps = 100, batch_size = 32, num_batches = 1000, ntl_token_mode = "tokenizer_modified")
+    runtime_measurement(time_steps = 100, batch_size = 32, num_batches = 1000, ntl_token_mode = "numbers_only")
