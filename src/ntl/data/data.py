@@ -1,6 +1,7 @@
 import json
 
 from datasets import Dataset
+from ntl.data.dataset_exchange import Dataset_Custom
 
 
 # Define a function to read the text file and yield examples
@@ -43,3 +44,17 @@ def read_json(file_path):
 
 def load_json_dataset(file_path):
     return Dataset.from_generator(read_json, gen_kwargs={'file_path': file_path})
+
+
+def load_exchange_dataset(file_path, flag):
+    dataset = Dataset_Custom(
+        flag=flag,
+        size=(96, 96),
+        features="S",
+        data_path=file_path,
+        target="OT",
+        scale=False,
+        timeenc=0,
+        freq="h",
+    )
+    return dataset

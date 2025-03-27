@@ -31,7 +31,7 @@ from omegaconf import DictConfig, OmegaConf
 from ntl.trainer import CustomSeq2SeqTrainer
 from ntl.evaluation import CustomMetrics
 from ntl.args import ModelArguments, TrainingArguments, DatasetArguments
-from ntl.data.data import load_txt_dataset, load_json_dataset
+from ntl.data.data import load_txt_dataset, load_json_dataset, load_exchange_dataset
 from ntl.collators.question_answer_clm.xval_question_answer_collator import XvalQuestionAnswerCLMCollator
 from ntl.collators.question_answer_clm.vanilla_question_answer_collator import VanillaQuestionAnswerCLMCollator
 from ntl.collators.question_answer_mlm.regression_head_question_answer_collator import RegressionHeadQuestionAnswerCollator
@@ -376,6 +376,12 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         train_dataset = load_txt_dataset(train_data_path)
         eval_dataset = load_txt_dataset(eval_data_path)
         test_dataset = load_txt_dataset(test_data_path)
+    elif dataset_args.dataset_name == "exchange":
+        csv_path = "data/exchange_rate/exchange_rate.csv"
+        # TODO implement if multivariate or singlevariate
+        train_dataset = load_exchange_dataset(csv_path, "train")
+        eval_dataset = load_exchange_dataset(csv_path, "val")
+        test_dataset = load_exchange_dataset(csv_path, "test")
     else:
         raise ValueError(f"Unknown dataset: {dataset_args.dataset_name}. Allowed: gsm8k, mathematics_dataset, multiplication")
 
