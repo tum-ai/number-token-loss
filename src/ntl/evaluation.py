@@ -83,26 +83,27 @@ class CustomMetrics:
     def parse_all_number_result_per_sample(self, prediction: str, label: str) -> Tuple[float, float]:
         # Only valid for the exchange dataset
 
-        prediction_numbers = re.findall(r":\s?(\d+(\.\d+)?)", prediction)
+        # prediction_numbers = re.findall(r":\s?(\d+(\.\d+)?)", prediction)
+        prediction_numbers = prediction.split(" ")
+        prediction_numbers = [float(num) if num.replace(".", "", 1).isdigit() else 0 for num in prediction_numbers]
 
-        prediction_numbers = [match[0] for match in prediction_numbers]
+        # prediction_numbers = [match[0] for match in prediction_numbers]
         if len(prediction_numbers) == 0:
             return np.nan, np.nan
 
         # Convert the strings to floats
-        prediction_numbers = [float(num.replace(" ", "")) for num in prediction_numbers]
+        # prediction_numbers = [float(num.replace(" ", "")) for num in prediction_numbers]
 
         # clip the predicted number to not produce an overflow
         prediction_numbers = [max(min(num, 1e10), -1e10) for num in prediction_numbers]
 
-        label_numbers = re.findall(r":\s?(\d+(\.\d+)?)", label)
-        label_numbers = [float(match[0]) for match in label_numbers]
+        # label_numbers = re.findall(r":\s?(\d+(\.\d+)?)", label)
+        # label_numbers = [float(match[0]) for match in label_numbers]
+        label_numbers = label.split(" ")
+        label_numbers = [float(num) if num.replace(".", "", 1).isdigit() else 0 for num in label_numbers]
 
         # create touples of labels and predictions
-        if len(prediction_numbers) != len(label_numbers):
-            output = [(0, 0)]
-        else:
-            output = list(zip(prediction_numbers, label_numbers))
+        output = list(zip(prediction_numbers, label_numbers))
         return output
 
     def parse_number_result_per_sample(self, prediction: str, label: str) -> Tuple[float, float]:

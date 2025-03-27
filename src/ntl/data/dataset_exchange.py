@@ -105,13 +105,15 @@ class Dataset_Custom(Dataset):
         # pad numbers to same length
         seq_x_str = [f"{float(num):.4f}" for num in seq_x_str]
         seq_x_mark_str = ["".join(map(str, row)) for row in seq_x_mark]
-        question = ", ".join([f"{mark}: {seq}" for mark, seq in zip(seq_x_mark_str, seq_x_str)])
+        # question = ", ".join([f"{mark}: {seq}" for mark, seq in zip(seq_x_mark_str, seq_x_str)])
+        question = " ".join([f"{seq}" for seq in seq_x_str])
 
         seq_y_str = [" ".join(map(str, row)) for row in seq_y]
         # pad numbers to same length
         seq_y_str = [f"{float(num):.4f}" for num in seq_y_str]
         seq_y_mark_str = ["".join(map(str, row)) for row in seq_y_mark]
-        answer = ", ".join([f"{mark}: {seq}" for mark, seq in zip(seq_y_mark_str, seq_y_str)])
+        # answer = ", ".join([f"{mark}: {seq}" for mark, seq in zip(seq_y_mark_str, seq_y_str)])
+        answer = " ".join([f"{seq}" for seq in seq_y_str])
 
         return {
             "question": question,
