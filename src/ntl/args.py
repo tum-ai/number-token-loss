@@ -172,3 +172,8 @@ class DatasetArguments:
             "help": "Compute number metrics."
         },
     )
+
+    compute_all_number_metrics: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Compute all number metrics."},
+    )

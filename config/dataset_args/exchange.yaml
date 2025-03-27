@@ -1,1 +1,3 @@
 dataset_name: exchange
+compute_all_number_metrics: True
+compute_number_metrics: False

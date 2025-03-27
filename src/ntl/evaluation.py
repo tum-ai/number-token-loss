@@ -30,13 +30,14 @@ class CustomMetrics:
     """
 
     def __init__(
-            self,
-            tokenizer: NumberEncodingTokenizer,
-            number_encoding: str,
-            output_dir: str,
-            save_all_output: bool = False,
-            log_scale: bool = False,
-            compute_number_metrics: bool = True,
+        self,
+        tokenizer: NumberEncodingTokenizer,
+        number_encoding: str,
+        output_dir: str,
+        save_all_output: bool = False,
+        log_scale: bool = False,
+        compute_number_metrics: bool = True,
+        compute_all_number_metrics: bool = False,
     ):
         self.tokenizer = tokenizer
         self.index_to_token = {v: k for k, v in tokenizer.get_vocab().items()}
@@ -45,6 +46,7 @@ class CustomMetrics:
         self.save_all_output = save_all_output
         self.log_scale = log_scale
         self.compute_number_metrics = compute_number_metrics
+        self.compute_all_number_metrics = compute_all_number_metrics
         experiment_id = output_dir.replace(os.sep, "_")
         self.rouge_metric = evaluate.load(os.path.join(os.path.dirname(__file__), "metrics", "rouge.py"), experiment_id=experiment_id)
         self.bleu_metric = evaluate.load(os.path.join(os.path.dirname(__file__), "metrics", "sacrebleu.py"), experiment_id=experiment_id)
@@ -67,6 +69,41 @@ class CustomMetrics:
         number_results = [self.parse_number_result_per_sample(prediction[i], label[i]) for i in range(len(prediction))]
 
         return number_results
+
+    def parse_all_number_result(self, prediction: List[str], label: List[str]) -> List[Tuple[float, float]]:
+        number_results = [
+            self.parse_all_number_result_per_sample(prediction[i], label[i]) for i in range(len(prediction))
+        ]
+        out_list = []
+        for result in number_results:
+            out_list.extend(result)
+
+        return out_list
+
+    def parse_all_number_result_per_sample(self, prediction: str, label: str) -> Tuple[float, float]:
+        # Only valid for the exchange dataset
+
+        prediction_numbers = re.findall(r":\s?(\d+(\.\d+)?)", prediction)
+
+        prediction_numbers = [match[0] for match in prediction_numbers]
+        if len(prediction_numbers) == 0:
+            return np.nan, np.nan
+
+        # Convert the strings to floats
+        prediction_numbers = [float(num.replace(" ", "")) for num in prediction_numbers]
+
+        # clip the predicted number to not produce an overflow
+        prediction_numbers = [max(min(num, 1e10), -1e10) for num in prediction_numbers]
+
+        label_numbers = re.findall(r":\s?(\d+(\.\d+)?)", label)
+        label_numbers = [float(match[0]) for match in label_numbers]
+
+        # create touples of labels and predictions
+        if len(prediction_numbers) != len(label_numbers):
+            output = [(0, 0)]
+        else:
+            output = list(zip(prediction_numbers, label_numbers))
+        return output
 
     def parse_number_result_per_sample(self, prediction: str, label: str) -> Tuple[float, float]:
         # Extract the last number of both strings and compare them
@@ -263,6 +300,9 @@ class CustomMetrics:
             number_results = self.parse_number_result(decoded_preds, decoded_labels)
         else:
             number_results = None
+
+        if self.compute_all_number_metrics:
+            number_results = self.parse_all_number_result(decoded_preds, decoded_labels)
 
         self.batch_stats.append({
             'token_accuracy_whole': accuracy_w,
