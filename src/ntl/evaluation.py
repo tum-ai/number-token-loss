@@ -340,8 +340,7 @@ class CustomMetrics:
                 "rougeL": np.mean([stat['rougeL'] for stat in self.batch_stats]),
             }
 
-
-            if self.compute_number_metrics:
+            if self.compute_number_metrics or self.compute_all_number_metrics:
                 number_results = np.concatenate([stat['number_results'] for stat in self.batch_stats])
                 (
                     mae,
