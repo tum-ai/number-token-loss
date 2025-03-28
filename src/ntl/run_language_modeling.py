@@ -383,7 +383,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         eval_dataset = load_exchange_dataset(csv_path, "val")
         test_dataset = load_exchange_dataset(csv_path, "test")
     elif dataset_args.dataset_name == "ettm1":
-        csv_path = "data/ett1m/ETTm1.csv"
+        csv_path = "data/ettm1/ETTm1.csv"
         # TODO implement if multivariate or singlevariate
         train_dataset = load_exchange_dataset(csv_path, "train")
         eval_dataset = load_exchange_dataset(csv_path, "val")
