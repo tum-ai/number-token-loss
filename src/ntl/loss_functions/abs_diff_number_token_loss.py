@@ -35,7 +35,7 @@ class AbsDiffNumberTokenLoss:
         if labels.numel() == 0:
             raise ValueError("Labels passed to the NumberTokenLoss are empty!")
 
-        labels = labels.masked_fill(labels == -100, 0)
+        labels = labels.masked_fill(labels == -100, self.tokenizer.pad_token_id)
 
         # Create a mask to filter out non-digit tokens
         y = self.nvocab[labels]

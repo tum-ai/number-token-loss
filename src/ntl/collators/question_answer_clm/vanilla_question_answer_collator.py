@@ -17,19 +17,28 @@ class VanillaQuestionAnswerCLMCollator(DataCollatorForLanguageModeling):
         text = [f"{example['question']} {example['answer']}|||||||" for example in examples]
         encodings = self.tokenizer(text, padding=True, truncation=True, return_tensors="pt")
 
+        # Create masks for questions in a batch-wise manner
+        questions = [example['question'] + " " for example in examples]
+        question_encodings = self.tokenizer(questions, padding=False, truncation=True, return_tensors=None)
+        question_lengths = torch.tensor([len(enc) - 1 for enc in question_encodings['input_ids']])  # -1 to not count end token
+        
+        attention_mask = encodings["attention_mask"]
+        # Rest of the processing
+        input_ids = encodings["input_ids"]
+        labels = input_ids.clone()
+
+        # Create position indices tensor
+        batch_size, seq_len = labels.size()
+        position_indices = torch.arange(seq_len).unsqueeze(0).expand(batch_size, -1)
+        # Zero out attention mask for all positions less than question length for each batch
+        labels[position_indices < question_lengths.unsqueeze(1)] = -100
+
+        labels[labels == self.tokenizer.pad_token_id] = -100
+
         generation_inputs = [example['question'] for example in examples]
         generation_labels = [f"{example['answer']}|" for example in examples]
         generation_input = self.tokenizer(generation_inputs, padding=True, truncation=True, return_tensors="pt", padding_side='left')
         generation_labels = self.tokenizer(generation_labels, padding=True, truncation=True, return_tensors="pt")
-
-        # input_ids = torch.cat([generation_input["input_ids"], generation_labels["input_ids"]], dim=1)
-        # attention_mask = torch.cat([generation_input["attention_mask"], generation_labels["attention_mask"]], dim=1)
-        input_ids = encodings["input_ids"]
-        attention_mask = encodings["attention_mask"]
-
-        # Masking the answers
-        labels = input_ids.clone()
-        labels[labels == self.tokenizer.pad_token_id] = -100
 
         generation_input_ids = generation_input["input_ids"]
         generation_attention_mask = generation_input["attention_mask"]
