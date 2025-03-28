@@ -151,7 +151,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         model_params = config.__dict__
         logger.warning("You are instantiating a new config instance from scratch.")
 
-    if training_args.language_modelling == "clm":
+    if training_args.language_modelling == "clm" or training_args.language_modelling == "s2s":
         # Set generation arguments
         training_args.predict_with_generate = True
         logger.info("Setting predict_with_generate to True")
@@ -166,16 +166,15 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         model_class = T5RegressionModelXval
         tokenizer_class = XvalTokenizer
     elif model_args.number_encoding.lower() == "none":
+        if getattr(config, "is_encoder_decoder", False):
+            model_class = AutoModelForSeq2SeqLM
+            # Check if model is decoder-only (causal) architecture
+        else:
+            config.is_decoder = True
+            model_class = AutoModelForCausalLM
+
         if model_args.number_token_loss or model_args.gaussian_label_smoother:
             # Use appropriate model class based on model type
-            
-            if getattr(config, "is_encoder_decoder", False):
-                model_class = AutoModelForSeq2SeqLM
-            # Check if model is decoder-only (causal) architecture
-            else:
-                config.is_decoder = True
-                model_class = AutoModelForCausalLM
-            
             if model_args.tokenizer_type is None or model_args.tokenizer_type == "custom":
                 tokenizer_class = T5Custom_Tokenizer
             elif model_args.tokenizer_type == "auto":
@@ -183,7 +182,6 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
             else:
                 raise ValueError(f"Unknown tokenizer type: {model_args.tokenizer_type}")
         else:
-            model_class = T5ForConditionalGeneration
             if model_args.tokenizer_type is None or model_args.tokenizer_type == "auto":
                 tokenizer_class = transformers.AutoTokenizer
             elif model_args.tokenizer_type == "custom":
@@ -219,6 +217,16 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     
     if model_args.tokenizer_type == "auto":        
         tokenizer = NumberTokenizerWrapper(tokenizer)
+
+    if model_args.number_encoding != "none":
+        n_new_tokens = len(tokenizer) - len(transformers.AutoTokenizer.from_pretrained("t5-small"))
+        logger.info(f"Number of new tokens: {n_new_tokens}")
+        logger.info(f"Old vocab size: {config.vocab_size}")
+        pad_to_multiple_of = 64 if torch.cuda.is_available() else 1
+        config.vocab_size = len(tokenizer) + pad_to_multiple_of - (len(tokenizer) % pad_to_multiple_of)
+        config.added_vocab = tokenizer.get_added_vocab()
+        logger.info("Size of new tokenizer: %s", len(tokenizer))
+        logger.info(f"New vocab size: {config.vocab_size}")
 
     if model_args.number_encoding == "xval":
         model_init_kwargs = {"tokenizer": tokenizer, "bigger_language_head": model_args.xval_bigger_language_head}
@@ -310,6 +318,13 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         model = model_class(config=config, **model_init_kwargs)
 
     logger.info(f"PyTorch version: {torch.__version__}")
+
+    # Add padding token for GPT-2 and other models that don't have it
+    if tokenizer.pad_token is None:
+        # Set pad_token to eos_token
+        tokenizer.pad_token = tokenizer.eos_token
+        model.config.pad_token_id = tokenizer.eos_token_id
+        print(f"Added pad token: {tokenizer.pad_token}")
 
     # Get datasets
 
@@ -518,7 +533,7 @@ def get_data_collator(model_args: ModelArguments, tokenizer, training_args: Trai
             )
         elif model_args.number_encoding.lower() == "none":
             # Rt collator can be used for default T5 as well
-            data_collator = XvalQuestionAnswerS2SCollator(
+            data_collator = VanillaQuestionAnswerS2SCollator(
                 tokenizer=tokenizer
             )
         elif model_args.number_encoding.lower() == "none_regression_head":

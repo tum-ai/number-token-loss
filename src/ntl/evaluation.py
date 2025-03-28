@@ -189,12 +189,13 @@ class CustomMetrics:
 
         # Extract predictions and labels from pred tuple
         model_output, labels = pred
+        generation_labels, next_token_prediction_labels = labels
         logits, predictions = model_output
 
         if self.number_encoding == "xval":
-            token_labels, number_labels = labels
+            token_labels, number_labels = generation_labels
         else:
-            token_labels = labels
+            token_labels = generation_labels
             number_labels = None
 
         if self.number_encoding != "none_regression_head":
@@ -217,16 +218,16 @@ class CustomMetrics:
                 print(sanity_no_number_prediction)
         else:
             if self.log_scale:
-                labels = inverse_signed_log(labels)
+                generation_labels = inverse_signed_log(generation_labels)
                 logits = inverse_signed_log(logits)
-            decoded_labels = [str("{0:.12f}".format(label).rstrip('0').rstrip('.')) for label in labels.squeeze(-1).tolist()]
+            decoded_labels = [str("{0:.12f}".format(label).rstrip('0').rstrip('.')) for label in generation_labels.squeeze(-1).tolist()]
             decoded_preds = [str("{0:.12f}".format(logit).rstrip('0').rstrip('.')) for logit in logits.squeeze(-1).tolist()]
             count_invalid_number_prediction = 0
             count_no_number_prediction = 0
 
         if compute_result or self.save_all_output:
             # save decoded predictions and labels for debugging
-            with open(f"{self.output_dir}/decoded_preds_{self.eval_count}.txt", "a") as f:
+            with open(f"{self.output_dir}/decoded_preds_{self.eval_count}.txt", "a", encoding="utf-8") as f:
                 for idx in range(len(decoded_preds)):
                     f.write(f"Prediction {idx}: {decoded_preds[idx]}\n")
                     f.write(f"Label {idx}: {decoded_labels[idx]}\n")
@@ -235,7 +236,7 @@ class CustomMetrics:
 
         if self.number_encoding != "none_regression_head":
             # compute perplexity
-            perplexity_value = self.perplexity(logits, token_labels[:, :logits.size(1)])
+            perplexity_value = self.perplexity(logits, next_token_prediction_labels)
 
             # Mask to ignore panumeric_tokening tokens (-100)
             mask = token_labels != PADDING_TOKEN

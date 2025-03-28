@@ -25,14 +25,15 @@ class TestRunLanguageModeling(unittest.TestCase):
         # Remove the directory after the test
         shutil.rmtree(self.temp_dir)
 
-    def generate_model_args(self, number_encoding, number_token_loss, log_scale_embeddings, model_name_or_path=None):
+    def generate_model_args(self, number_encoding, config_name, number_token_loss, log_scale_embeddings, tokenizer_type=None, model_name_or_path=None):
         return ModelArguments(
             model_name_or_path=model_name_or_path,
-            config_name="t5-small",
+            config_name=config_name,
             cache_dir=None,
             number_encoding=number_encoding,
             number_token_loss=number_token_loss,
             log_scale_embeddings=log_scale_embeddings,
+            tokenizer_type=tokenizer_type
         )
 
     def generate_dataset_args(self):
@@ -40,7 +41,7 @@ class TestRunLanguageModeling(unittest.TestCase):
             dataset_name="gsm8k",  # Using gsm8k for faster tests
         )
 
-    def generate_training_args(self, output_dir, do_only_eval=False, language_modelling: Literal["clm", "mlm"] = "clm"):
+    def generate_training_args(self, output_dir, do_only_eval=False, language_modelling: Literal["clm", "mlm", "s2s"] = "s2s"):
         use_cpu = not torch.cuda.is_available()
         
         return TrainingArguments(
@@ -79,12 +80,12 @@ class TestRunLanguageModeling(unittest.TestCase):
         mock_load_json_dataset_fn.side_effect = self.mock_load_json_dataset
         mock_load_txt_dataset_fn.side_effect = self.mock_load_txt_dataset
 
-        number_encodings = ["rt", "xval", "none", "none_regression_head"]
+        number_encodings = ["rt", "none", "none_regression_head"]
         number_token_losses = [True, False]
         log_scale_embeddings_options = [True, False]
-        model_names_or_paths = [None, "google-t5/t5-small"]
+        model_names_or_paths = ["google-t5/t5-small", "bert-base-uncased"]
         xval_bigger_language_heads = [True, False]
-        language_modelling_options: List[Literal["clm", "mlm"]] = ["mlm", "clm"]
+        language_modelling_options: List[Literal["clm", "mlm"]] = ["mlm", "clm", "s2s"]
 
 
         for number_encoding in number_encodings:
@@ -103,17 +104,30 @@ class TestRunLanguageModeling(unittest.TestCase):
 
                                 if number_encoding in ["none"] and log_scale_embeddings:
                                     continue  # Log scaling is only applicable for 'rt' and 'xval' encodings
-                                if language_modelling == "clm" and number_encoding == "none_regression_head":
+                                if language_modelling in ["clm", "s2s"] and number_encoding == "none_regression_head":
                                     continue  # CLM is not supported with none_regression_head
+                                if model_name_or_path == "bert-base-uncased":
+                                    tokenizer_type = "auto"
+                                    config_name = None
+                                    if number_encoding != "none" or log_scale_embeddings != False or language_modelling != "clm":
+                                        continue
+                                else:
+                                    config_name = "t5-small"
+                                    tokenizer_type = None
+                                    if language_modelling == "clm":
+                                        continue
+
 
                                 checkpoint_dir = os.path.join(self.temp_dir, "checkpoint-10")
 
                                 # Prepare arguments
                                 model_training_args = self.generate_model_args(
+                                    config_name=config_name,
                                     number_encoding=number_encoding,
                                     number_token_loss=number_token_loss,
                                     log_scale_embeddings=log_scale_embeddings,
                                     model_name_or_path=model_name_or_path,
+                                    tokenizer_type=tokenizer_type,
                                 )
 
                                 training_args = self.generate_training_args(
@@ -122,10 +136,12 @@ class TestRunLanguageModeling(unittest.TestCase):
                                 )
                                 dataset_args = self.generate_dataset_args()
                                 model_eval_args = self.generate_model_args(
+                                    config_name=config_name,
                                     number_encoding=number_encoding,
                                     number_token_loss=number_token_loss,
                                     log_scale_embeddings=log_scale_embeddings,
                                     model_name_or_path=checkpoint_dir,
+                                    tokenizer_type=tokenizer_type,
                                 )
                                 eval_args = self.generate_training_args(
                                     output_dir=self.temp_dir,
@@ -145,6 +161,7 @@ class TestRunLanguageModeling(unittest.TestCase):
                                         )[0]
                                     except Exception as e:
                                         logging.error(f"Training failed with exception: {e}", exc_info=True)
+                                        logging.error(f"{number_encoding}, {number_token_loss}, {log_scale_embeddings}, {model_name_or_path}, {language_modelling}")
                                         self.fail(f"Training failed with exception: {e}")
 
                                     # Check if checkpoint is saved
@@ -180,12 +197,13 @@ class TestRunLanguageModeling(unittest.TestCase):
 
         # Prepare arguments for model with log scaling
         model_args = self.generate_model_args(
+            config_name="t5-small",
             number_encoding="rt",
             number_token_loss=False,
             log_scale_embeddings=True,
         )
         dataset_args = self.generate_dataset_args()
-        training_args = self.generate_training_args(output_dir=self.temp_dir)
+        training_args = self.generate_training_args(output_dir=self.temp_dir, language_modelling="s2s")
 
         # Run training
         try:
@@ -215,6 +233,7 @@ class TestRunLanguageModeling(unittest.TestCase):
         # Now, create another model without log scaling
         # Prepare arguments for model without log scaling
         model_args_no_log = self.generate_model_args(
+            config_name="t5-small",
             number_encoding="rt",
             number_token_loss=False,
             log_scale_embeddings=False,

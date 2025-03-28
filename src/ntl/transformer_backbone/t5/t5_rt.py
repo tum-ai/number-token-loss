@@ -55,6 +55,7 @@ class T5RegressionModelRT(T5ForConditionalGeneration):
             output_attentions: Optional[bool] = None,
             output_hidden_states: Optional[bool] = None,
             return_dict: Optional[bool] = None,
+            cache_position: Optional[torch.LongTensor] = None,
     ) -> Union[Tuple[torch.FloatTensor], Seq2SeqLMOutput]:
         # Call the parent's forward method
         outputs = super().forward(
@@ -74,6 +75,7 @@ class T5RegressionModelRT(T5ForConditionalGeneration):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
+            cache_position=cache_position,
         )
 
         # If labels are provided, calculate the NumberTokenLoss

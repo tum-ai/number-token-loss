@@ -1,7 +1,7 @@
 from typing import Dict, List, Union
 
 import torch
-from transformers import DataCollatorForLanguageModeling, DataCollatorForPermutationLanguageModeling
+from transformers import DataCollatorForLanguageModeling
 
 from ntl.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 
@@ -14,17 +14,18 @@ class VanillaQuestionAnswerCLMCollator(DataCollatorForLanguageModeling):
 
     def __call__(self, examples: List[Dict[str, Union[str, List[int]]]]) -> Dict[str, torch.Tensor]:
         # Tokenize questions and answers as a single sequence
-        inputs = [f"{example['question']} {example['answer']}" for example in examples]
-
-        encodings = self.tokenizer(inputs, padding=True, truncation=True, return_tensors="pt")
+        text = [f"{example['question']} {example['answer']}|||||||" for example in examples]
+        encodings = self.tokenizer(text, padding=True, truncation=True, return_tensors="pt")
 
         generation_inputs = [example['question'] for example in examples]
-        generation_labels = [example['answer'] for example in examples]
-        generation_input = self.tokenizer(generation_inputs, padding=True, truncation=True, return_tensors="pt", padding_side="left")
+        generation_labels = [f"{example['answer']}|" for example in examples]
+        generation_input = self.tokenizer(generation_inputs, padding=True, truncation=True, return_tensors="pt", padding_side='left')
         generation_labels = self.tokenizer(generation_labels, padding=True, truncation=True, return_tensors="pt")
 
-        input_ids = encodings['input_ids']
-        attention_mask = encodings['attention_mask']
+        # input_ids = torch.cat([generation_input["input_ids"], generation_labels["input_ids"]], dim=1)
+        # attention_mask = torch.cat([generation_input["attention_mask"], generation_labels["attention_mask"]], dim=1)
+        input_ids = encodings["input_ids"]
+        attention_mask = encodings["attention_mask"]
 
         # Masking the answers
         labels = input_ids.clone()

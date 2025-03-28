@@ -1,5 +1,6 @@
-name: bert_ntl
-model_name_or_path: bert-base-uncased
+name: gpt2_ntl
+model_name_or_path: gpt2
+config_name: gpt2
 tokenizer_type: auto
 number_encoding: none
 number_token_loss: true

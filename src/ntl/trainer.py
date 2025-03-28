@@ -179,10 +179,10 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
         # Customized code start
         ########################
         if is_decoder_only:
-            self.model.generation_config.max_length = inputs["labels"].shape[-1] if "labels" in inputs else self.model.generation_config.max_length
+            self.model.generation_config.max_new_tokens = generation_inputs["labels"].shape[-1] if "labels" in generation_inputs else self.model.generation_config.max_length
         else:
             # set the max_length to the length of the labels + 10 to ensure that the model can generate the full sequence
-            self.model.generation_config.max_length = inputs["labels"].shape[-1] + 10 if "labels" in inputs else self.model.generation_config.max_length
+            self.model.generation_config.max_length = generation_inputs["labels"].shape[-1] + 10 if "labels" in generation_inputs else self.model.generation_config.max_length
         ########################
         # Customized code end
         ########################
@@ -223,9 +223,9 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
         # Retrieves GenerationConfig from model.generation_config
         gen_config = self.model.generation_config
         # in case the batch is shorter than max length, the output should be padded
-        if generated_tokens.shape[-1] < gen_config.max_length:
+        if generated_tokens.shape[-1] < gen_config.max_length and not is_decoder_only:
             generated_tokens = self._pad_tensors_to_max_len(generated_tokens, gen_config.max_length)
-        elif gen_config.max_new_tokens is not None and generated_tokens.shape[-1] < gen_config.max_new_tokens + 1:
+        elif gen_config.max_new_tokens is not None and generated_tokens.shape[-1] < gen_config.max_new_tokens + (1 if not is_decoder_only else 0):
             generated_tokens = self._pad_tensors_to_max_len(generated_tokens, gen_config.max_new_tokens + 1)
 
         # if xval number predictions, we have to handle them exactly like the generated tokens
@@ -271,9 +271,9 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
 
         if has_labels:
             labels = generation_labels if is_decoder_only else inputs["labels"]
-            if labels.shape[-1] < gen_config.max_length:
+            if labels.shape[-1] < gen_config.max_length and not is_decoder_only:
                 labels = self._pad_tensors_to_max_len(labels, gen_config.max_length)
-            elif gen_config.max_new_tokens is not None and labels.shape[-1] < gen_config.max_new_tokens + 1:
+            elif gen_config.max_new_tokens is not None and labels.shape[-1] < gen_config.max_new_tokens + (1 if not is_decoder_only else 0):
                 labels = self._pad_tensors_to_max_len(labels, gen_config.max_new_tokens + 1)
             # if number labels, add them to the label output
             if "number_labels" in inputs:
@@ -286,8 +286,7 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
         else:
             labels = None
 
-
-        return next_token_prediction_loss, (next_token_prediction_logits, generated_tokens), labels
+        return next_token_prediction_loss, (next_token_prediction_logits, generated_tokens), (labels, inputs["labels"])
 
     def _pad_numbers_to_max_len(self, number_tensor, max_length):
         """

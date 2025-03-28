@@ -91,6 +91,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
             stride: int = 0,
             is_split_into_words: bool = False,
             pad_to_multiple_of: Optional[int] = None,
+            padding_side: Optional[bool] = None,
             return_tensors: Optional[Union[str, TensorType]] = None,
             return_token_type_ids: Optional[bool] = None,
             return_attention_mask: Optional[bool] = None,
@@ -167,6 +168,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
             max_length=max_length,
             stride=stride,
             pad_to_multiple_of=pad_to_multiple_of,
+            padding_side=padding_side,
             return_tensors=return_tensors,
             prepend_batch_axis=True,
             return_attention_mask=return_attention_mask,
@@ -194,6 +196,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
             stride: int = 0,
             is_split_into_words: bool = False,
             pad_to_multiple_of: Optional[int] = None,
+            padding_side: Optional[bool] = None,
             return_tensors: Optional[Union[str, TensorType]] = None,
             return_token_type_ids: Optional[bool] = None,
             return_attention_mask: Optional[bool] = None,
@@ -271,6 +274,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
             max_length=max_length,
             stride=stride,
             pad_to_multiple_of=pad_to_multiple_of,
+            padding_side=padding_side,
             return_attention_mask=return_attention_mask,
             return_token_type_ids=return_token_type_ids,
             return_overflowing_tokens=return_overflowing_tokens,
@@ -292,6 +296,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
             max_length: Optional[int] = None,
             stride: int = 0,
             pad_to_multiple_of: Optional[int] = None,
+            padding_side: Optional[bool] = None,
             return_tensors: Optional[str] = None,
             return_token_type_ids: Optional[bool] = None,
             return_attention_mask: Optional[bool] = None,
@@ -342,6 +347,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
             padding=padding_strategy.value,
             max_length=max_length,
             pad_to_multiple_of=pad_to_multiple_of,
+            padding_side=padding_side,
             return_attention_mask=return_attention_mask,
         )
 
@@ -510,6 +516,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
             max_length: Optional[int] = None,
             padding_strategy: PaddingStrategy = PaddingStrategy.DO_NOT_PAD,
             pad_to_multiple_of: Optional[int] = None,
+            padding_side: Optional[bool] = None,
             return_attention_mask: Optional[bool] = None,
     ) -> dict:
         # Load from model defaults
@@ -532,8 +539,9 @@ class XvalTokenizer(NumberEncodingTokenizer):
 
         if needs_to_be_padded:
             difference = max_length - len(required_input)
+            padding_side = padding_side if padding_side is not None else self.padding_side
 
-            if self.padding_side == "right":
+            if padding_side == "right":
                 if return_attention_mask:
                     encoded_inputs["attention_mask"] = encoded_inputs["attention_mask"] + [0] * difference
                 if "token_type_ids" in encoded_inputs:
@@ -550,7 +558,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
                 ############################
                 # Custom Code End
                 ############################
-            elif self.padding_side == "left":
+            elif padding_side == "left":
                 if return_attention_mask:
                     encoded_inputs["attention_mask"] = [0] * difference + encoded_inputs["attention_mask"]
                 if "token_type_ids" in encoded_inputs:
@@ -568,7 +576,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
                 # Custom Code End
                 ############################
             else:
-                raise ValueError("Invalid padding strategy:" + str(self.padding_side))
+                raise ValueError("Invalid padding strategy:" + str(padding_side))
 
         return encoded_inputs
 

@@ -1,6 +1,7 @@
-from typing import List, Union, Optional
-from transformers import PreTrainedTokenizer
 import re
+from typing import List, Any
+
+from transformers import PreTrainedTokenizer
 
 
 class NumberTokenizerWrapper:
@@ -72,9 +73,17 @@ class NumberTokenizerWrapper:
     def __getattr__(self, name: str):
         """Fallback to wrapped tokenizer attributes for anything not in wrapper"""
         try:
-            return super().__getattr__(name)
+            return self.tokenizer.__getattr__(name)
         except AttributeError:
             return getattr(self.tokenizer, name) 
+        
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Fallback to wrapped tokenizer attributes for anything not in wrapper"""
+        if name in ['tokenizer', 'num_tokens', 'num_token_ids']:
+            super().__setattr__(name, value)
+        else:
+            setattr(self.tokenizer, name, value)
+        
         
     def __len__(self):
         return len(self.tokenizer)
