@@ -102,6 +102,9 @@ class CustomMetrics:
         label_numbers = label.split(" ")
         label_numbers = [float(num) if num.replace(".", "", 1).isdigit() else 0 for num in label_numbers]
 
+        if len(label_numbers) > len(prediction_numbers):
+            print("Label has more numbers than prediction. Prediction not complete yet.")
+
         # create touples of labels and predictions
         output = list(zip(prediction_numbers, label_numbers))
         return output
