@@ -20,6 +20,8 @@ eval_data_path = 'data/mathematics_dataset-v1.0/val.txt'
 test_interpolate_data_path = 'data/mathematics_dataset-v1.0/test_interpolate.txt'
 test_extrapolate_data_path = 'data/mathematics_dataset-v1.0/test_extrapolate.txt'
 
+LOG_SCALE = True
+
 
 train_dataset = load_txt_dataset(train_data_path)
 eval_dataset = load_txt_dataset(eval_data_path)
@@ -69,6 +71,7 @@ metrik = CustomMetrics(
     number_encoding="xval",
     output_dir=OUTPUT_DIR,
     save_all_output=True,
+    log_scale=LOG_SCALE,
 )
 
 if not os.path.exists(OUTPUT_DIR):
