@@ -14,7 +14,7 @@ class VanillaQuestionAnswerCLMCollator(DataCollatorForLanguageModeling):
 
     def __call__(self, examples: List[Dict[str, Union[str, List[int]]]]) -> Dict[str, torch.Tensor]:
         # Tokenize questions and answers as a single sequence
-        text = [f"{example['question']} {example['answer']}|||||||" for example in examples]
+        text = [f"{example['question']} {example['answer']}{self.tokenizer.eos_token}" for example in examples]
         encodings = self.tokenizer(text, padding=True, truncation=True, return_tensors="pt")
 
         # Create masks for questions in a batch-wise manner
@@ -36,7 +36,7 @@ class VanillaQuestionAnswerCLMCollator(DataCollatorForLanguageModeling):
         labels[labels == self.tokenizer.pad_token_id] = -100
 
         generation_inputs = [example['question'] for example in examples]
-        generation_labels = [f"{example['answer']}|" for example in examples]
+        generation_labels = [f"{example['answer']}{self.tokenizer.eos_token}" for example in examples]
         generation_input = self.tokenizer(generation_inputs, padding=True, truncation=True, return_tensors="pt", padding_side='left')
         generation_labels = self.tokenizer(generation_labels, padding=True, truncation=True, return_tensors="pt")
 

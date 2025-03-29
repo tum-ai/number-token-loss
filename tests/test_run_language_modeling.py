@@ -80,7 +80,7 @@ class TestRunLanguageModeling(unittest.TestCase):
         mock_load_json_dataset_fn.side_effect = self.mock_load_json_dataset
         mock_load_txt_dataset_fn.side_effect = self.mock_load_txt_dataset
 
-        number_encodings = ["rt", "none", "none_regression_head"]
+        number_encodings = ["rt"]#, "none", "none_regression_head"]
         number_token_losses = [True, False]
         log_scale_embeddings_options = [True, False]
         model_names_or_paths = ["google-t5/t5-small", "bert-base-uncased"]

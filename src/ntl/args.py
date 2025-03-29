@@ -80,6 +80,13 @@ class ModelArguments:
             "help": "If custom or auto tokenizer",
         },
     )
+    tokenize_on_digit_level: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "Whether to tokenize on digit level"
+        },
+    )
+
 
     cache_dir: Optional[str] = field(
         default=None,

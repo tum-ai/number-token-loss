@@ -178,12 +178,18 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
             if model_args.tokenizer_type is None or model_args.tokenizer_type == "custom":
                 tokenizer_class = T5Custom_Tokenizer
             elif model_args.tokenizer_type == "auto":
-                tokenizer_class = transformers.AutoTokenizer
+                if model_args.config_name == "gpt2":
+                    tokenizer_class = transformers.GPT2Tokenizer
+                else:
+                    tokenizer_class = transformers.AutoTokenizer
             else:
                 raise ValueError(f"Unknown tokenizer type: {model_args.tokenizer_type}")
         else:
             if model_args.tokenizer_type is None or model_args.tokenizer_type == "auto":
-                tokenizer_class = transformers.AutoTokenizer
+                if model_args.config_name == "gpt2":
+                    tokenizer_class = transformers.GPT2Tokenizer
+                else:
+                    tokenizer_class = transformers.AutoTokenizer
             elif model_args.tokenizer_type == "custom":
                 tokenizer_class = T5Custom_Tokenizer
             else:
@@ -216,7 +222,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         )
     
     if model_args.tokenizer_type == "auto":        
-        tokenizer = NumberTokenizerWrapper(tokenizer)
+        tokenizer = NumberTokenizerWrapper(tokenizer, tokenize_on_digit_level=model_args.tokenize_on_digit_level)
 
     if model_args.number_encoding != "none":
         n_new_tokens = len(tokenizer) - len(transformers.AutoTokenizer.from_pretrained("t5-small"))
@@ -227,6 +233,23 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         config.added_vocab = tokenizer.get_added_vocab()
         logger.info("Size of new tokenizer: %s", len(tokenizer))
         logger.info(f"New vocab size: {config.vocab_size}")
+
+    # Add padding token for GPT-2 and other models that don't have it
+    added_pad_token = False
+    if tokenizer.pad_token is None:
+        # Set pad_token to eos_token
+        tokenizer.pad_token = "[PAD]"
+        tokenizer.add_special_tokens({"pad_token": tokenizer.pad_token})
+        added_pad_token = True
+
+        logger.info("Number of new tokens: 1")
+        logger.info(f"Old vocab size: {config.vocab_size}")
+        pad_to_multiple_of = 64 if torch.cuda.is_available() else 1
+        config.vocab_size = len(tokenizer) + pad_to_multiple_of - (len(tokenizer) % pad_to_multiple_of)
+        config.added_vocab = tokenizer.get_added_vocab()
+        logger.info("Size of new tokenizer: %s", len(tokenizer))
+        logger.info(f"New vocab size: {config.vocab_size}")
+
 
     if model_args.number_encoding == "xval":
         model_init_kwargs = {"tokenizer": tokenizer, "bigger_language_head": model_args.xval_bigger_language_head}
@@ -320,14 +343,15 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     logger.info(f"PyTorch version: {torch.__version__}")
 
     # Add padding token for GPT-2 and other models that don't have it
-    if tokenizer.pad_token is None:
-        # Set pad_token to eos_token
-        tokenizer.pad_token = tokenizer.eos_token
-        model.config.pad_token_id = tokenizer.eos_token_id
+    if added_pad_token:
+        model.config.pad_token_id = tokenizer.pad_token_id
+        model.generation_config.pad_token_id = tokenizer.pad_token_id
+        model.generation_config.eos_token_id = tokenizer.eos_token_id
+        model.resize_token_embeddings(len(tokenizer), pad_to_multiple_of=pad_to_multiple_of)
         print(f"Added pad token: {tokenizer.pad_token}")
-
+        
+    
     # Get datasets
-
     if dataset_args.dataset_name == "gsm8k":
         if dataset_args.train_with_augmented_data:
             train_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/train_t_clean_with_augmented.jsonl'

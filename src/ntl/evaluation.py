@@ -189,7 +189,12 @@ class CustomMetrics:
 
         # Extract predictions and labels from pred tuple
         model_output, labels = pred
-        generation_labels, next_token_prediction_labels = labels
+        if self.number_encoding not in ["none_regression_head", "rt"]:
+            generation_labels, next_token_prediction_labels = labels
+        else:
+            generation_labels = labels
+            next_token_prediction_labels = labels
+
         logits, predictions = model_output
 
         if self.number_encoding == "xval":
@@ -218,9 +223,9 @@ class CustomMetrics:
                 print(sanity_no_number_prediction)
         else:
             if self.log_scale:
-                generation_labels = inverse_signed_log(generation_labels)
+                labels = inverse_signed_log(labels)
                 logits = inverse_signed_log(logits)
-            decoded_labels = [str("{0:.12f}".format(label).rstrip('0').rstrip('.')) for label in generation_labels.squeeze(-1).tolist()]
+            decoded_labels = [str("{0:.12f}".format(label).rstrip('0').rstrip('.')) for label in labels.squeeze(-1).tolist()]
             decoded_preds = [str("{0:.12f}".format(logit).rstrip('0').rstrip('.')) for logit in logits.squeeze(-1).tolist()]
             count_invalid_number_prediction = 0
             count_no_number_prediction = 0

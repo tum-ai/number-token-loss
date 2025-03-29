@@ -6,3 +6,4 @@ number_encoding: none
 number_token_loss: true
 number_token_loss_weight: 0.3
 number_token_loss_with_wasserstein: true
+tokenize_on_digit_level: true

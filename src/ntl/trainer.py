@@ -226,7 +226,7 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
         if generated_tokens.shape[-1] < gen_config.max_length and not is_decoder_only:
             generated_tokens = self._pad_tensors_to_max_len(generated_tokens, gen_config.max_length)
         elif gen_config.max_new_tokens is not None and generated_tokens.shape[-1] < gen_config.max_new_tokens + (1 if not is_decoder_only else 0):
-            generated_tokens = self._pad_tensors_to_max_len(generated_tokens, gen_config.max_new_tokens + 1)
+            generated_tokens = self._pad_tensors_to_max_len(generated_tokens, gen_config.max_new_tokens + (1 if not is_decoder_only else 0))
 
         # if xval number predictions, we have to handle them exactly like the generated tokens
         if generated_numbers is not None:

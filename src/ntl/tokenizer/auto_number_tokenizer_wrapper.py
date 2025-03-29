@@ -10,8 +10,14 @@ class NumberTokenizerWrapper:
     Only tokens that represent actual numbers (integers or decimals) are considered number tokens.
     Special values like 'Inf', 'NaN' etc. are excluded.
     """
-    def __init__(self, tokenizer: PreTrainedTokenizer):
+    def __init__(self, tokenizer: PreTrainedTokenizer, tokenize_on_digit_level: bool = False):
         self.tokenizer = tokenizer
+        
+        # Add a flag to control digit-level tokenization
+        self.tokenize_on_digit_level = tokenize_on_digit_level
+
+        # Store the original methods we'll need to override
+        self.original_tokenize = self.tokenizer.tokenize
         
         # Get the vocabulary
         vocab = self.tokenizer.get_vocab()
@@ -88,9 +94,72 @@ class NumberTokenizerWrapper:
     def __len__(self):
         return len(self.tokenizer)
     
+    def tokenize(self, text: str, **kwargs) -> List[str]:
+        """Tokenize text, splitting digit-containing tokens into individual characters."""
+        # Use the original tokenize method first
+        out = self.original_tokenize(text, **kwargs)
+        
+        # If digit-level tokenization is disabled, return the original output
+        if not self.tokenize_on_digit_level:
+            return out
+        
+        # Process tokens to split digit-containing ones
+        out_list = []
+        for token in out:
+            if bool(re.search(r'\d', token)) and token not in self.additional_special_tokens:
+                out_list = out_list + list(token)
+            else:
+                out_list.append(token)
+            
+        return out_list
+
     def __call__(self, *args, **kwargs):
-        return self.tokenizer(*args, **kwargs)
-    
+        """Override the __call__ method to intercept tokenization at the highest level."""
+        # Save original methods
+        original_tokenize_method = self.tokenizer.tokenize 
+        
+        # Replace with our methods temporarily
+        self.tokenizer.tokenize = self.tokenize
+        
+        try:
+            # Process with our custom methods
+            result = self.tokenizer(*args, **kwargs)
+            return result
+        finally:
+            # Restore original methods
+            self.tokenizer.tokenize = original_tokenize_method
+
+    def encode(self, *args, **kwargs):
+        """Override encode to ensure our tokenization is used."""
+        # Same pattern as __call__
+        original_tokenize_method = self.tokenizer.tokenize
+        self.tokenizer.tokenize = self.tokenize
+        
+        try:
+            return self.tokenizer.encode(*args, **kwargs)
+        finally:
+            self.tokenizer.tokenize = original_tokenize_method
+
+    def encode_plus(self, *args, **kwargs):
+        """Override encode_plus to ensure our tokenization is used."""
+        original_tokenize_method = self.tokenizer.tokenize
+        self.tokenizer.tokenize = self.tokenize
+        
+        try:
+            return self.tokenizer.encode_plus(*args, **kwargs)
+        finally:
+            self.tokenizer.tokenize = original_tokenize_method
+
+    def batch_encode_plus(self, *args, **kwargs):
+        """Override batch_encode_plus to ensure our tokenization is used."""
+        original_tokenize_method = self.tokenizer.tokenize
+        self.tokenizer.tokenize = self.tokenize
+        
+        try:
+            return self.tokenizer.batch_encode_plus(*args, **kwargs)
+        finally:
+            self.tokenizer.tokenize = original_tokenize_method
+
     def __getitem__(self, item):
         return self.tokenizer[item]
     
