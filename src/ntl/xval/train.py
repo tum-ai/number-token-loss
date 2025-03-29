@@ -7,7 +7,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.ntl.xval.xval_mask_question_collator import XvalMaskedQuestionAnswerCollator
+from ntl.xval.xval_mask_question_collator import XvalMaskedQuestionAnswerCollator
 from ntl.data.data import load_txt_dataset
 from ntl.evaluation import CustomMetrics
 from ntl.tokenizer.xval_tokenizer import XvalTokenizer
@@ -64,16 +64,18 @@ val_loader = DataLoader(
     collate_fn=collator,
 )
 
+OUTPUT_DIR = "./outptus/mathematics_dataset/xval/model_small"
+
 metrik = CustomMetrics(
     tokenizer=tokenizer,
     number_encoding="xval",
-    output_dir="./train_1",
+    output_dir=OUTPUT_DIR,
     save_all_output=True,
     log_scale=LOG_SCALE,
 )
 
-if not os.path.exists("./train_1"):
-    os.makedirs("./train_1")
+if not os.path.exists(OUTPUT_DIR):
+    os.makedirs(OUTPUT_DIR)
 
 ### Run training loop
 
@@ -96,7 +98,7 @@ config = {
     # Add other hyperparameters as needed
 }
 
-wandb.init(project='huggingface', config=config, name='easy_math/test/xval_mlm')
+wandb.init(project='xval', config=config, name='model_smal')
 
 
 loss_hist = []
