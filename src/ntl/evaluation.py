@@ -189,7 +189,7 @@ class CustomMetrics:
 
         # Extract predictions and labels from pred tuple
         model_output, labels = pred
-        if self.number_encoding not in ["none_regression_head", "rt"]:
+        if self.number_encoding not in ["none_regression_head", "rt", "xval"]:
             generation_labels, next_token_prediction_labels = labels
         else:
             generation_labels = labels
@@ -199,6 +199,7 @@ class CustomMetrics:
 
         if self.number_encoding == "xval":
             token_labels, number_labels = generation_labels
+            next_token_prediction_labels = token_labels
         else:
             token_labels = generation_labels
             number_labels = None

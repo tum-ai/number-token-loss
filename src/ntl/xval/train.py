@@ -33,6 +33,8 @@ tokenizer = XvalTokenizer.from_pretrained("t5-small")
 # context length is the maximum sequence size.
 model = numformer.Numformer(vocab_size=len(tokenizer), nhead=3, num_layers=3, d_model=384, dim_feedforward=1536,
                             context_length=955).cuda()
+print(f"Number of parameters: {sum(p.numel() for p in model.parameters())}")
+
 lr = 1e-4
 weight_decay = 0.01
 optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
