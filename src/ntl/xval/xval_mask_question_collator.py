@@ -7,9 +7,10 @@ from ntl.utils.numerical_operations import signed_log
 
 
 class XvalMaskedQuestionAnswerCollator(DataCollatorForLanguageModeling):
-    def __init__(self, tokenizer):
+    def __init__(self, tokenizer, log_scale):
         super().__init__(tokenizer, mlm=False)
         self.tokenizer = tokenizer
+        self.log_scale = log_scale
         self.pad_token_id = tokenizer.pad_token_id
 
     def __call__(self, examples: List[Dict[str, Union[str, List[int]]]]) -> Dict[str, torch.Tensor]:
@@ -31,7 +32,8 @@ class XvalMaskedQuestionAnswerCollator(DataCollatorForLanguageModeling):
         # mask, which is only true for the last number token
         number_token_mask = x == number_token_id
 
-        x_num[number_token_mask] = signed_log(x_num[number_token_mask])
+        if self.log_scale:
+            x_num[number_token_mask] = signed_log(x_num[number_token_mask])
 
         batch_size, seq_len = x.size()
         indices = torch.arange(seq_len).unsqueeze(0).expand(batch_size, seq_len)
