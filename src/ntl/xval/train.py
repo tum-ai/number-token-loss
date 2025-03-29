@@ -31,8 +31,8 @@ tokenizer = XvalTokenizer.from_pretrained("t5-small")
 ### Define model
 # The vocab_size is the number of different tokens in the tokenizer.
 # context length is the maximum sequence size.
-model = numformer.Numformer(vocab_size=len(tokenizer), nhead=3, num_layers=3, d_model=384, dim_feedforward=1536,
-                            context_length=955).cuda()
+model = numformer.Numformer(vocab_size=len(tokenizer), nhead=12, num_layers=12, d_model=768, dim_feedforward=3072,
+                            context_length=512).cuda()
 print(f"Number of parameters: {sum(p.numel() for p in model.parameters())}")
 
 lr = 1e-4
@@ -62,7 +62,7 @@ val_loader = DataLoader(
     collate_fn=collator,
 )
 
-OUTPUT_DIR = "./outptus/mathematics_dataset/xval/model_small"
+OUTPUT_DIR = "./outptus/mathematics_dataset/xval/model_base"
 
 metrik = CustomMetrics(
     tokenizer=tokenizer,
@@ -95,7 +95,7 @@ config = {
     # Add other hyperparameters as needed
 }
 
-wandb.init(project='xval', config=config, name='model_smal')
+wandb.init(project='xval', config=config, name='model_base')
 
 
 loss_hist = []
