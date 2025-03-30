@@ -47,9 +47,10 @@ class T5Custom_Tokenizer(NumberEncodingTokenizer):
 
     def decode_into_human_readable(
             self,
-            ids: Union[List[int], List[List[int]], "np.ndarray", "torch.Tensor"]
+            ids: Union[List[int], List[List[int]], "np.ndarray", "torch.Tensor"],
+            skip_special_tokens: bool = True
     ) -> Tuple[List[str], int, int]:
-        decoded = self.batch_decode(ids, skip_special_tokens=True)
+        decoded = self.batch_decode(ids, skip_special_tokens=skip_special_tokens)
         total_invalid_numbers, count_no_number_prediction_at_all = check_number_predictions(decoded)
         return decoded, total_invalid_numbers, count_no_number_prediction_at_all
 
