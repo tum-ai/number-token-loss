@@ -1,4 +1,5 @@
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import torch
 import torch.nn.functional as F
@@ -20,7 +21,7 @@ eval_data_path = 'data/mathematics_dataset-v1.0/val.txt'
 test_interpolate_data_path = 'data/mathematics_dataset-v1.0/test_interpolate.txt'
 test_extrapolate_data_path = 'data/mathematics_dataset-v1.0/test_extrapolate.txt'
 
-LOG_SCALE = True
+LOG_SCALE = False
 
 
 train_dataset = load_txt_dataset(train_data_path)
@@ -48,7 +49,7 @@ mask_token_id = tokenizer.additional_special_tokens_ids[0]
 epochs = 10000
 
 # Define the masked xVal collator which takes samples of unequal length and masks out both the token_ids and the numbers.
-collator = XvalMaskedQuestionAnswerCollator(tokenizer)
+collator = XvalMaskedQuestionAnswerCollator(tokenizer, log_scale=LOG_SCALE)
 
 train_loader = DataLoader(
     train_dataset,
@@ -64,7 +65,7 @@ val_loader = DataLoader(
     collate_fn=collator,
 )
 
-OUTPUT_DIR = "./outptus/mathematics_dataset/xval/model_base"
+OUTPUT_DIR = "./outptus/mathematics_dataset/xval/model_base_no_scaling"
 
 metrik = CustomMetrics(
     tokenizer=tokenizer,
@@ -98,7 +99,7 @@ config = {
     # Add other hyperparameters as needed
 }
 
-wandb.init(project='xval', config=config, name='model_base')
+wandb.init(project='xval', config=config, name='model_base_no_scaling')
 
 
 loss_hist = []
@@ -193,11 +194,14 @@ try:
 
                             mask = val_batch["mask"]
 
-                            predictions = (logit_preds.argmax(-1)[mask].reshape(-1, 1), inverse_signed_log(num_preds[mask]))
+                            raw_predictions = inverse_signed_log(num_preds[mask]) if LOG_SCALE else num_preds[mask]
+                            raw_labels = inverse_signed_log(val_batch["y_num"][mask].reshape(-1, 1).cuda()) if LOG_SCALE else val_batch["y_num"][mask].reshape(-1, 1).cuda()
+
+                            predictions = (logit_preds.argmax(-1)[mask].reshape(-1, 1), raw_predictions)
                             model_output = (
                             logit_preds[mask].reshape(logit_preds.shape[0], 1, logit_preds.shape[-1]), predictions)
                             labels = (
-                            val_batch["y"][mask].reshape(-1, 1).cuda(), inverse_signed_log(val_batch["y_num"][mask].reshape(-1, 1).cuda()))
+                            val_batch["y"][mask].reshape(-1, 1).cuda(), raw_labels)
                             pred = (model_output, labels)
 
                             computed_result = metrik(pred, compute_result=is_last_batch)
@@ -230,12 +234,12 @@ try:
                             "loss_mlm_hist": loss_mlm_hist,
                             "loss_num_hist": loss_num_hist,
                         }
-                        torch.save(checkpoint, "./ckpt_latest.pt")
+                        torch.save(checkpoint, f"{OUTPUT_DIR}/ckpt_latest.pt")
                         print("Latest checkpoint saved")
 
                         if avg_eval_loss < best_validation_loss:
                             best_validation_loss = avg_eval_loss
-                            torch.save(checkpoint, "./ckpt_best.pt")
+                            torch.save(checkpoint, f"{OUTPUT_DIR}/ckpt_best.pt")
                             print("Best checkpoint saved")
                             wandb.run.summary["best_validation_loss"] = best_validation_loss  # Update wandb summary
 

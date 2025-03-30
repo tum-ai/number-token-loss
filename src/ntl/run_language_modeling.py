@@ -8,7 +8,7 @@ The file is an adaptation of https://github.com/huggingface/transformers/blob/v3
 import sys
 import os
 sys.path.append(".")
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 import time
 import json
@@ -236,7 +236,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
 
     # Add padding token for GPT-2 and other models that don't have it
     added_pad_token = False
-    if tokenizer.pad_token is None:
+    if tokenizer.pad_token is None or config.vocab_size < len(tokenizer):
         # Set pad_token to eos_token
         tokenizer.pad_token = "[PAD]"
         tokenizer.add_special_tokens({"pad_token": tokenizer.pad_token})
