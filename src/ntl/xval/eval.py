@@ -1,38 +1,39 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from ntl.xval.xval_mask_question_collator import XvalMaskedQuestionAnswerCollator
-from ntl.data.data import load_txt_dataset
+from ntl.collators.era5_mlm.xval_era5_mlm_collator import XvalEra5MLMCollator
+from ntl.data.data import load_txt_dataset, load_json_dataset
 from ntl.evaluation import CustomMetrics
 from ntl.tokenizer.xval_tokenizer import XvalTokenizer
 from ntl.utils.numerical_operations import inverse_signed_log
 # Where the model and collator is defined
 from ntl.xval import numformer
 
-train_data_path = 'data/mathematics_dataset-v1.0/train.txt'
-eval_data_path = 'data/mathematics_dataset-v1.0/val.txt'
-test_interpolate_data_path = 'data/mathematics_dataset-v1.0/test_interpolate.txt'
-test_extrapolate_data_path = 'data/mathematics_dataset-v1.0/test_extrapolate.txt'
+train_data_path = 'data/era5/train_samples.jsonl'
+eval_data_path = 'data/era5/val_samples.jsonl'
+test_data_path = 'data/era5/test_samples.jsonl'
 
-train_dataset = load_txt_dataset(train_data_path)
-eval_dataset = load_txt_dataset(eval_data_path)
-test_interpolate_dataset = load_txt_dataset(test_interpolate_data_path)
-test_extrapolate_dataset = load_txt_dataset(test_extrapolate_data_path)
+train_dataset = load_json_dataset(train_data_path)
+eval_dataset = load_json_dataset(eval_data_path)
+test_dataset = load_json_dataset(eval_data_path)
 
 tokenizer = XvalTokenizer.from_pretrained("t5-small")
 
-LOG_SCALE = True
+LOG_SCALE = False
+MODEL_NAME = "era5_xval"
+OUTPUT_DIR = f"./outputs/era5/xval/{MODEL_NAME}"
 
 ### Define model
 # The vocab_size is the number of different tokens in the tokenizer.
 # context length is the maximum sequence size.
-model = numformer.Numformer(vocab_size=len(tokenizer), nhead=12, num_layers=12, d_model=768, dim_feedforward=3072,
-                            context_length=512).cuda()
+model = numformer.Numformer(vocab_size=len(tokenizer), nhead=3, num_layers=3, d_model=384, dim_feedforward=1536,
+                            context_length=955).cuda()
+
 print(f"Number of parameters: {sum(p.numel() for p in model.parameters())}")
 
 ### Load the tokenizer
@@ -42,7 +43,7 @@ mask_token_id = tokenizer.additional_special_tokens_ids[0]
 epochs = 10000
 
 # Define the masked xVal collator which takes samples of unequal length and masks out both the token_ids and the numbers.
-collator = XvalMaskedQuestionAnswerCollator(tokenizer, log_scale=LOG_SCALE)
+collator = XvalEra5MLMCollator(tokenizer, log_scale=LOG_SCALE)
 
 val_loader = DataLoader(
     eval_dataset,
@@ -51,32 +52,26 @@ val_loader = DataLoader(
     collate_fn=collator,
 )
 
-test_interpolate_loader = DataLoader(
-    test_interpolate_dataset,
+test_loader = DataLoader(
+    test_dataset,
     batch_size=128,
     shuffle=False,
     collate_fn=collator,
 )
 
-test_extrapolate_loader = DataLoader(
-    test_extrapolate_dataset,
-    batch_size=128,
-    shuffle=False,
-    collate_fn=collator,
-)
 
 metrik = CustomMetrics(
     tokenizer=tokenizer,
     number_encoding="xval",
-    output_dir="./train_1",
+    output_dir=OUTPUT_DIR,
     save_all_output=True,
     log_scale=LOG_SCALE,
 )
 
-if not os.path.exists("./train_1"):
-    os.makedirs("./train_1")
+if not os.path.exists(OUTPUT_DIR):
+    os.makedirs(OUTPUT_DIR)
 
-checkpoint_path = "./ckpt_latest.pt"
+checkpoint_path = f"{OUTPUT_DIR}/ckpt_latest.pt"
 checkpoint = torch.load(checkpoint_path)
 # Load model state
 model.load_state_dict(checkpoint["model"])
@@ -88,7 +83,7 @@ try:
     model.eval()
     with torch.autocast(device_type="cuda"):
         with torch.no_grad():
-            for data_loader, dataset_name in zip([val_loader, test_interpolate_loader, test_extrapolate_loader], ["val", "test_interpolate", "test_extrapolate"]):
+            for data_loader, dataset_name in zip([val_loader, test_loader], ["val", "test"]):
                 eval_loss = []
                 eval_loss_mlm = []
                 eval_loss_num = []
@@ -117,10 +112,11 @@ try:
                     mask = val_batch["mask"]
 
                      # Get the predicted and label numbers
-                    pred_nums_raw = inverse_signed_log(num_preds[mask])
-                    label_nums = inverse_signed_log(val_batch["y_num"][mask].reshape(-1, 1).cuda())
+                    raw_predictions = inverse_signed_log(num_preds[mask]) if LOG_SCALE else num_preds[mask]
+                    raw_labels = inverse_signed_log(val_batch["y_num"][mask].reshape(-1, 1).cuda()) if LOG_SCALE else val_batch["y_num"][mask].reshape(-1, 1).cuda()
 
-                    # Function to round predictions to match label precision
+
+                # Function to round predictions to match label precision
                     def round_to_precision(predictions, labels):
                         rounded_preds = predictions.clone()
                         for i in range(len(predictions)):
@@ -151,7 +147,7 @@ try:
                         return rounded_preds
 
                     # Round predictions to match label precision
-                    rounded_pred_nums = round_to_precision(pred_nums_raw, label_nums)
+                    rounded_pred_nums = round_to_precision(raw_predictions, raw_labels)
 
 
                     predictions = (
@@ -160,7 +156,7 @@ try:
                         logit_preds[mask].reshape(logit_preds.shape[0], 1, logit_preds.shape[-1]), predictions)
                     labels = (
                         val_batch["y"][mask].reshape(-1, 1).cuda(),
-                        label_nums)
+                        raw_labels)
                     pred = (model_output, labels)
 
                     computed_result = metrik(pred, compute_result=is_last_batch)

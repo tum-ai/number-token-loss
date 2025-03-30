@@ -35,7 +35,7 @@ class Era5MLMCollator(DataCollatorForLanguageModeling):
                 label_data.append(f"{self.tokenizer.additional_special_tokens[idx]} {last_value}")
             
             # Convert numerical data to strings for tokenization
-            masked_text = str(example).replace("{'description': {", "").replace("}", "")
+            masked_text = str(example).replace("{'description': {", "").replace("}", "").replace("'", "")
             masked_inputs.append(masked_text)
             
             # Create label text with the masked values

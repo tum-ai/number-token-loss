@@ -8,34 +8,34 @@ from torch import optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from ntl.xval.xval_mask_question_collator import XvalMaskedQuestionAnswerCollator
-from ntl.data.data import load_txt_dataset
+from ntl.collators.era5_mlm.xval_era5_mlm_collator import XvalEra5MLMCollator
+from ntl.data.data import load_txt_dataset, load_json_dataset
 from ntl.evaluation import CustomMetrics
 from ntl.tokenizer.xval_tokenizer import XvalTokenizer
 from ntl.utils.numerical_operations import inverse_signed_log
 # Where the model and collator is defined
 from ntl.xval import numformer
 
-train_data_path = 'data/mathematics_dataset-v1.0/train.txt'
-eval_data_path = 'data/mathematics_dataset-v1.0/val.txt'
-test_interpolate_data_path = 'data/mathematics_dataset-v1.0/test_interpolate.txt'
-test_extrapolate_data_path = 'data/mathematics_dataset-v1.0/test_extrapolate.txt'
+train_data_path = 'data/era5/train_samples.jsonl'
+eval_data_path = 'data/era5/val_samples.jsonl'
+test_data_path = 'data/era5/test_samples.jsonl'
+
+train_dataset = load_json_dataset(train_data_path)
+eval_dataset = load_json_dataset(eval_data_path)
+test_dataset = load_json_dataset(eval_data_path)
 
 LOG_SCALE = False
 
-
-train_dataset = load_txt_dataset(train_data_path)
-eval_dataset = load_txt_dataset(eval_data_path)
-test_interpolate_dataset = load_txt_dataset(test_interpolate_data_path)
-test_extrapolate_dataset = load_txt_dataset(test_extrapolate_data_path)
+MODEL_NAME = "era5_xval"
+OUTPUT_DIR = f"./outputs/era5/xval/{MODEL_NAME}"
 
 tokenizer = XvalTokenizer.from_pretrained("t5-small")
 
 ### Define model
 # The vocab_size is the number of different tokens in the tokenizer.
 # context length is the maximum sequence size.
-model = numformer.Numformer(vocab_size=len(tokenizer), nhead=12, num_layers=12, d_model=768, dim_feedforward=3072,
-                            context_length=512).cuda()
+model = numformer.Numformer(vocab_size=len(tokenizer), nhead=3, num_layers=3, d_model=384, dim_feedforward=1536,
+                            context_length=955).cuda()
 print(f"Number of parameters: {sum(p.numel() for p in model.parameters())}")
 
 lr = 1e-4
@@ -49,7 +49,7 @@ mask_token_id = tokenizer.additional_special_tokens_ids[0]
 epochs = 10000
 
 # Define the masked xVal collator which takes samples of unequal length and masks out both the token_ids and the numbers.
-collator = XvalMaskedQuestionAnswerCollator(tokenizer, log_scale=LOG_SCALE)
+collator = XvalEra5MLMCollator(tokenizer, log_scale=LOG_SCALE)
 
 train_loader = DataLoader(
     train_dataset,
@@ -64,8 +64,6 @@ val_loader = DataLoader(
     shuffle=False,
     collate_fn=collator,
 )
-
-OUTPUT_DIR = "./outptus/mathematics_dataset/xval/model_base_no_scaling"
 
 metrik = CustomMetrics(
     tokenizer=tokenizer,
@@ -99,14 +97,14 @@ config = {
     # Add other hyperparameters as needed
 }
 
-wandb.init(project='xval', config=config, name='model_base_no_scaling')
+# wandb.init(project='xval', config=config, name=MODEL_NAME)
 
 
 loss_hist = []
 loss_mlm_hist = []
 loss_num_hist = []
 
-max_steps = 1_050_000
+max_steps = 500_000
 eval_steps = 10_000
 log_steps = 1000
 
@@ -199,9 +197,9 @@ try:
 
                             predictions = (logit_preds.argmax(-1)[mask].reshape(-1, 1), raw_predictions)
                             model_output = (
-                            logit_preds[mask].reshape(logit_preds.shape[0], 1, logit_preds.shape[-1]), predictions)
+                                logit_preds[mask].reshape(-1, 1, logit_preds.shape[-1]), predictions)
                             labels = (
-                            val_batch["y"][mask].reshape(-1, 1).cuda(), raw_labels)
+                                val_batch["y"][mask].reshape(-1, 1).cuda(), raw_labels)
                             pred = (model_output, labels)
 
                             computed_result = metrik(pred, compute_result=is_last_batch)

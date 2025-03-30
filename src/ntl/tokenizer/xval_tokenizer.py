@@ -594,7 +594,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
             def replace(match):
                 numbers.append(match.group())
                 return "¬"
-            return re.sub(NUMBER_REGEX, replace, part)
+            return re.sub(r"(-)?(\d+)(\.\d+)?", replace, part)
 
         # Split the text into tokens, keeping the special tokens
         tokens = special_tokens_regex.split(text)
@@ -613,7 +613,7 @@ class XvalTokenizer(NumberEncodingTokenizer):
 
         # Join the result to get the final text
         nonum_text = ''.join(result)
-        return self.compress_matrix(nonum_text).replace("¬", num_token), numbers
+        return nonum_text.replace("¬", num_token), numbers
 
 
     def compress_matrix(self, text):

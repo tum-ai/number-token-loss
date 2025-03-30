@@ -14,20 +14,22 @@ class TestEvaluationMethods(unittest.TestCase):
 
     def test_encoding_decoding(self):
         texts = [
-            "(3/2)x=54\n3x=108",
-            "Oranges = 12 * 150 = 1800\nNectarines = 16 * 30 = 480\n1800 + 480 = 2280\nThere are 2280 pieces of fruit in total.\n#### 2280",
-            "include 3 10-minute snack breaks each day",
-            "divide the minutes by 60. 1920 / 60 = 32 hours\n#### 32",
-            "which is 40/100*$400 = $160\nThe total price",
-            "Negativ number: -15.67",
+           "(3/2)x=54\n3x=108",
+           "Oranges = 12 * 150 = 1800\nNectarines = 16 * 30 = 480\n1800 + 480 = 2280\nThere are 2280 pieces of fruit in total.\n#### 2280",
+           "include 3 10-minute snack breaks each day",
+           "divide the minutes by 60. 1920 / 60 = 32 hours\n#### 32",
+           "which is 40/100*$400 = $160\nThe total price",
+           "Negativ number: -15.67",
+            "[1, 2, 3, -4, 5], [1, 2]"
         ]
         expected_result = [
-            '( [NUM] / [NUM] )x= [NUM] [NUM] x= [NUM]',
-            'Oranges = [NUM] * [NUM] = [NUM] Nectarines = [NUM] * [NUM] = [NUM] [NUM] + [NUM] = [NUM] There are [NUM] pieces of fruit in total. #### [NUM]',
-            'include [NUM] [NUM] -minute snack breaks each day',
-            'divide the minutes by [NUM]. [NUM] / [NUM] = [NUM] hours #### [NUM]',
-            'which is [NUM] / [NUM] *$ [NUM] = $ [NUM] The total price',
-            'Negativ number: - [NUM]'
+           '( [NUM] / [NUM] )x= [NUM] [NUM] x= [NUM]',
+           'Oranges = [NUM] * [NUM] = [NUM] Nectarines = [NUM] * [NUM] = [NUM] [NUM] + [NUM] = [NUM] There are [NUM] pieces of fruit in total. #### [NUM]',
+           'include [NUM] [NUM] -minute snack breaks each day',
+           'divide the minutes by [NUM]. [NUM] / [NUM] = [NUM] hours #### [NUM]',
+           'which is [NUM] / [NUM] *$ [NUM] = $ [NUM] The total price',
+           'Negativ number: [NUM]',
+            "[ [NUM], [NUM], [NUM], [NUM], [NUM] ], [ [NUM], [NUM] ]"
         ]
         expected_number_embeddings = torch.tensor([[1.0000e+00, 3.0000e+00, 1.0000e+00, 1.0000e+00, 2.0000e+00, 1.0000e+00,
                                               1.0000e+00, 1.0000e+00, 1.0000e+00, 5.4000e+01, 3.0000e+00, 1.0000e+00,
@@ -64,13 +66,16 @@ class TestEvaluationMethods(unittest.TestCase):
                                               1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00,
                                               1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00,
                                               1.0000e+00],
-                                             [1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00,
-                                              1.5670e+01, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00,
+                                             [1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00,
+                                              -1.5670e+01, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00,
                                               1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00,
                                               1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00,
                                               1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00,
                                               1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00, 1.0000e+00,
-                                              1.0000e+00]])
+                                              1.0000e+00, 1.0000e+00, 1.0000e+00],
+                                            [1., 1., 1., 1., 2., 1., 1., 3., 1., 1., -4., 1., 1., 5., 1., 1.,
+                                             1., 1., 1., 1., 2., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.]
+                                            ])
 
         result = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
         decoded = self.tokenizer.batch_decode(result["input_ids"], skip_special_tokens=True)
@@ -93,7 +98,7 @@ class TestEvaluationMethods(unittest.TestCase):
             'include 3.0 10.0 -minute snack breaks each day',
             'divide the minutes by 60.0 . 1920.0 / 60.0 = 32.0 hours #### 32.0',
             'which is 40.0 / 100.0 *$ 400.0 = $ 160.0 The total price',
-            'Negativ number: - 15.67'
+            'Negativ number: -15.67'
         ]
 
         result = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
@@ -141,10 +146,10 @@ class TestEvaluationMethods(unittest.TestCase):
             "No number",
         ]
         expected_result = [
-            'First test 23.0 and - 4.0',
+            'First test 23.0 and -4.0',
             'Is 29.0 - 478.2 = 34.452 correct?',
-            'Test text - 34.0 * 65.0 = 78.0',
-            'Test 12.0 - 12.0 = 0.0 wrong?',
+            'Test text -34.0 * 65.0 = 78.0',
+            'Test 12.0 -12.0 = 0.0 wrong?',
             'Calculation: 12.0 + 12.0 = 24.0',
             "No number",
         ]
