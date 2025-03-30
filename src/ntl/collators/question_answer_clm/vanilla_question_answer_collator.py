@@ -15,7 +15,7 @@ class VanillaQuestionAnswerCLMCollator(DataCollatorForLanguageModeling):
     def __call__(self, examples: List[Dict[str, Union[str, List[int]]]]) -> Dict[str, torch.Tensor]:
         # Tokenize questions and answers as a single sequence
         text = [f"{example['question']} {example['answer']}{self.tokenizer.eos_token}" for example in examples]
-        encodings = self.tokenizer(text, padding=True, truncation=True, return_tensors="pt")
+        encodings = self.tokenizer(text, padding=True, truncation=True, return_tensors="pt", max_length=1024)
 
         # Create masks for questions in a batch-wise manner
         questions = [example['question'] + " " for example in examples]
@@ -37,8 +37,8 @@ class VanillaQuestionAnswerCLMCollator(DataCollatorForLanguageModeling):
 
         generation_inputs = [example['question'] for example in examples]
         generation_labels = [f"{example['answer']}{self.tokenizer.eos_token}" for example in examples]
-        generation_input = self.tokenizer(generation_inputs, padding=True, truncation=True, return_tensors="pt", padding_side='left')
-        generation_labels = self.tokenizer(generation_labels, padding=True, truncation=True, return_tensors="pt")
+        generation_input = self.tokenizer(generation_inputs, padding=True, truncation=True, return_tensors="pt", padding_side='left', max_length=1000)
+        generation_labels = self.tokenizer(generation_labels, padding=True, truncation=True, return_tensors="pt", max_length=1024)
 
         generation_input_ids = generation_input["input_ids"]
         generation_attention_mask = generation_input["attention_mask"]

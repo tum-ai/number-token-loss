@@ -49,7 +49,7 @@ from ntl.tokenizer.auto_number_tokenizer_wrapper import NumberTokenizerWrapper
 from ntl.loss_functions.number_token_loss import NumberTokenSelector
 from ntl.utils.label_smoother import GaussianLabelSmoother
 from ntl.model_wrapper.number_token_loss_wrapper import NumberTokenLossWrapper
-
+from ntl.collators.era5_mlm.era_5_mlm_collator import Era5MLMCollator
 
 transformers.logging.set_verbosity_info()
 logger = logging.getLogger(__name__)
@@ -236,7 +236,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
 
     # Add padding token for GPT-2 and other models that don't have it
     added_pad_token = False
-    if tokenizer.pad_token is None:
+    if tokenizer.pad_token is None or config.vocab_size < len(tokenizer):
         # Set pad_token to eos_token
         tokenizer.pad_token = "[PAD]"
         tokenizer.add_special_tokens({"pad_token": tokenizer.pad_token})
@@ -411,13 +411,20 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         train_dataset = load_txt_dataset(train_data_path)
         eval_dataset = load_txt_dataset(eval_data_path)
         test_dataset = load_txt_dataset(test_data_path)
+    elif dataset_args.dataset_name == "era5":
+        train_data_path = 'data/era5/train_samples.jsonl'
+        eval_data_path = 'data/era5/val_samples.jsonl'
+        test_data_path = 'data/era5/test_samples.jsonl'
+        train_dataset = load_json_dataset(train_data_path)
+        eval_dataset = load_json_dataset(eval_data_path)
+        test_dataset = load_json_dataset(test_data_path)
     else:
         raise ValueError(f"Unknown dataset: {dataset_args.dataset_name}. Allowed: gsm8k, mathematics_dataset, multiplication")
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"Number of parameters {num_params} of type {type(model)}")
 
-    data_collator = get_data_collator(model_args, tokenizer, training_args)
+    data_collator = get_data_collator(model_args, tokenizer, training_args, dataset_args)
 
     # Custom Metric
     custom_metrics = CustomMetrics(
@@ -427,6 +434,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         save_all_output=True,
         log_scale=model_args.log_scale_embeddings,
         compute_number_metrics=dataset_args.compute_number_metrics,
+        is_mlm=dataset_args.dataset_name == "era5"
     )
 
     # Early stopping
@@ -543,7 +551,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         return int_results, ext_results
 
 
-def get_data_collator(model_args: ModelArguments, tokenizer, training_args: TrainingArguments) -> transformers.DataCollator:
+def get_data_collator(model_args: ModelArguments, tokenizer, training_args: TrainingArguments, dataset_args: DatasetArguments) -> transformers.DataCollator:
     # Sequence to Sequence Language Modeling
     if training_args.language_modelling == "s2s":
         logger.info("Using S2S collator")
@@ -576,23 +584,29 @@ def get_data_collator(model_args: ModelArguments, tokenizer, training_args: Trai
     # Masked Language Modeling
     else:
         logger.info("Using MLM collator")
-        if model_args.number_encoding == "rt":
-            data_collator = VanillaMaskedQuestionAnswerCollator(
+        if dataset_args.dataset_name == "era5":
+            data_collator = Era5MLMCollator(
                 tokenizer=tokenizer
             )
-        elif model_args.number_encoding == "xval":
-            data_collator = XvalMaskedQuestionAnswerCollator(
-                tokenizer=tokenizer
-            )
-        elif model_args.number_encoding.lower() == "none":
-            # Rt collator can be used for default T5 as well
-            data_collator = VanillaMaskedQuestionAnswerCollator(
-                tokenizer=tokenizer
-            )
-        elif model_args.number_encoding.lower() == "none_regression_head":
-            data_collator = RegressionHeadQuestionAnswerCollator(
-                tokenizer=tokenizer, log_scale=model_args.log_scale_embeddings
-            )
+            logger.info("Using Era5 MLM collator")
+        else:            
+            if model_args.number_encoding == "rt":
+                data_collator = VanillaMaskedQuestionAnswerCollator(
+                    tokenizer=tokenizer
+                )
+            elif model_args.number_encoding == "xval":
+                data_collator = XvalMaskedQuestionAnswerCollator(
+                    tokenizer=tokenizer
+                )
+            elif model_args.number_encoding.lower() == "none":
+                # Rt collator can be used for default T5 as well
+                data_collator = VanillaMaskedQuestionAnswerCollator(
+                    tokenizer=tokenizer
+                )
+            elif model_args.number_encoding.lower() == "none_regression_head":
+                data_collator = RegressionHeadQuestionAnswerCollator(
+                    tokenizer=tokenizer, log_scale=model_args.log_scale_embeddings
+                )
     return data_collator
 
 

@@ -37,6 +37,7 @@ class CustomMetrics:
             save_all_output: bool = False,
             log_scale: bool = False,
             compute_number_metrics: bool = True,
+            is_mlm: bool = False
     ):
         self.tokenizer = tokenizer
         self.index_to_token = {v: k for k, v in tokenizer.get_vocab().items()}
@@ -45,6 +46,7 @@ class CustomMetrics:
         self.save_all_output = save_all_output
         self.log_scale = log_scale
         self.compute_number_metrics = compute_number_metrics
+        self.is_mlm = is_mlm
         experiment_id = output_dir.replace(os.sep, "_")
         self.rouge_metric = evaluate.load(os.path.join(os.path.dirname(__file__), "metrics", "rouge.py"), experiment_id=experiment_id)
         self.bleu_metric = evaluate.load(os.path.join(os.path.dirname(__file__), "metrics", "sacrebleu.py"), experiment_id=experiment_id)
@@ -88,6 +90,42 @@ class CustomMetrics:
         label_number = float(label_number.replace(" ", ""))
 
         return prediction_number, label_number
+    
+    def parse_number_result_mlm(self, prediction: List[str], label: List[str]) -> List[Tuple[float, float]]:
+        number_results = []
+        
+        for pred, lab in zip(prediction, label):
+            # Extract numbers after each special token
+            pred_numbers = []
+            lab_numbers = []
+            
+            # Parse prediction numbers
+            for i, special_token in enumerate(self.tokenizer.additional_special_tokens[:3]):
+                pred_matches = re.findall(f"{special_token}\s*([+-]?\s*\d+\.?\d*)", pred)
+                if pred_matches:
+                    try:
+                        pred_num = float(pred_matches[0].replace(" ", ""))
+                        pred_num = max(min(pred_num, 1e10), -1e10)  # Clip value
+                        pred_numbers.append(pred_num)
+                    except ValueError:
+                        pred_numbers.append(np.nan)
+                else:
+                    pred_numbers.append(np.nan)
+                    
+            # Parse label numbers
+            for i, special_token in enumerate(self.tokenizer.additional_special_tokens[:3]):
+                lab_matches = re.findall(f"{special_token}\s*([+-]?\s*\d+\.?\d*)", lab)
+                if lab_matches:
+                    lab_num = float(lab_matches[0].replace(" ", ""))
+                    lab_numbers.append(lab_num)
+                else:
+                    lab_numbers.append(np.nan)
+                    
+            # Add tuples of (pred, label) for each number
+            for p, l in zip(pred_numbers, lab_numbers):
+                number_results.append((p, l))
+                
+        return number_results
 
 
     def calculate_metrics(self, number_results, total_count):
@@ -189,7 +227,7 @@ class CustomMetrics:
 
         # Extract predictions and labels from pred tuple
         model_output, labels = pred
-        if self.number_encoding not in ["none_regression_head", "rt", "xval"]:
+        if self.number_encoding not in ["none_regression_head", "rt", "xval"] and not self.is_mlm:
             generation_labels, next_token_prediction_labels = labels
         else:
             generation_labels = labels
@@ -267,7 +305,10 @@ class CustomMetrics:
         rouge = self.compute_rouge(decoded_preds, decoded_labels)
 
         if self.compute_number_metrics:
-            number_results = self.parse_number_result(decoded_preds, decoded_labels)
+            if self.is_mlm:
+                number_results = self.parse_number_result_mlm(decoded_preds, decoded_labels)
+            else:
+                number_results = self.parse_number_result(decoded_preds, decoded_labels)
         else:
             number_results = None
 
@@ -350,14 +391,14 @@ class CustomMetrics:
         else:
             if hasattr(self.tokenizer, "decode_into_human_readable"):
                 decoded_preds, count_invalid_number_prediction, count_no_number_prediction \
-                    = self.tokenizer.decode_into_human_readable(predictions)
+                    = self.tokenizer.decode_into_human_readable(predictions, skip_special_tokens=not self.is_mlm)
                 decoded_labels, sanity_invalid_number_prediction, sanity_no_number_prediction \
-                    = self.tokenizer.decode_into_human_readable(token_labels_for_decoding)
+                    = self.tokenizer.decode_into_human_readable(token_labels_for_decoding, skip_special_tokens=not self.is_mlm)
             else:
-                decoded_preds = self.tokenizer.batch_decode(predictions, skip_special_tokens=True)
+                decoded_preds = self.tokenizer.batch_decode(predictions, skip_special_tokens=not self.is_mlm)
                 count_invalid_number_prediction, count_no_number_prediction = check_number_predictions(
                     decoded_preds)
-                decoded_labels = self.tokenizer.batch_decode(token_labels_for_decoding, skip_special_tokens=True)
+                decoded_labels = self.tokenizer.batch_decode(token_labels_for_decoding, skip_special_tokens=not self.is_mlm)
                 sanity_invalid_number_prediction, sanity_no_number_prediction = check_number_predictions(
                     decoded_labels)
         return (

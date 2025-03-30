@@ -29,7 +29,8 @@ class NumberEncodingTokenizer(T5Tokenizer, ABC):
     def decode_into_human_readable(
             self,
             ids: Union[List[int],
-            List[List[int]], "np.ndarray", "torch.Tensor"]
+            List[List[int]], "np.ndarray", "torch.Tensor"],
+            skip_special_tokens: bool = True
     ) -> Tuple[List[str], int, int]:
         pass
 
