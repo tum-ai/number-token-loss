@@ -49,6 +49,9 @@ class NumberTokenizerWrapper:
         Check if a token represents a valid number (integer or decimal).
         Excludes special values like Inf, NaN, etc.
         """
+        if self.tokenize_on_digit_level:
+            return token in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+
         # Strip any space prefix
         clean_token = token.lstrip('▁')
         
