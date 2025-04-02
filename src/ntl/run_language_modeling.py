@@ -159,6 +159,8 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         training_args.predict_with_generate = False
         logger.info("Setting predict_with_generate to False")
 
+    model_is_decoder = False
+    
     if model_args.number_encoding == "rt":
         model_class = T5RegressionModelRT
         tokenizer_class = RtTokenizer
@@ -172,6 +174,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         else:
             config.is_decoder = True
             model_class = AutoModelForCausalLM
+            model_is_decoder = True
 
         if model_args.number_token_loss or model_args.gaussian_label_smoother:
             # Use appropriate model class based on model type
@@ -457,7 +460,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         label_smoother=label_smoother,
         # callbacks=[early_stopping_callback],
         compute_metrics=custom_metrics,
-        compute_loss_func=NumberTokenLossWrapper(ntl) if model_args.number_token_loss else None
+        compute_loss_func=NumberTokenLossWrapper(ntl, model_is_decoder) if model_args.number_token_loss else None
     )
 
     # Training
