@@ -242,6 +242,11 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
                 with self.compute_loss_context_manager():
                     outputs = model(**inputs)
                     next_token_prediction_logits = outputs.logits
+                    next_token_prediction_loss = (outputs["loss"] if isinstance(outputs, dict) else outputs[0]).mean().detach()
+
+                if self.compute_loss_func is not None:
+                    next_token_prediction_loss = self.compute_loss_func(outputs, inputs["labels"], num_items_in_batch=None)
+
                 if self.label_smoother is not None:
                     next_token_prediction_loss = self.label_smoother(outputs, inputs["labels"])
                     if "number_loss" in outputs:
@@ -256,7 +261,6 @@ class CustomSeq2SeqTrainer(Seq2SeqTrainer):
                         next_token_prediction_loss = next_token_prediction_loss.mean().detach()
 
                 else:
-                    next_token_prediction_loss = (outputs["loss"] if isinstance(outputs, dict) else outputs[0]).mean().detach()
                     if "number_loss" in outputs and "token_loss" in outputs:
                         next_token_prediction_loss = (
                             next_token_prediction_loss,

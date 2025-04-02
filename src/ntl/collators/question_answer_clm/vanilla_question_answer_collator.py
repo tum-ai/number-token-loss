@@ -36,7 +36,7 @@ class VanillaQuestionAnswerCLMCollator(DataCollatorForLanguageModeling):
         labels[labels == self.tokenizer.pad_token_id] = -100
 
         generation_inputs = [example['question'] for example in examples]
-        generation_labels = [f"{example['answer']}{self.tokenizer.eos_token}" for example in examples]
+        generation_labels = [f" {example['answer']}{self.tokenizer.eos_token}" for example in examples]
         generation_input = self.tokenizer(generation_inputs, padding=True, truncation=True, return_tensors="pt", padding_side='left', max_length=1000)
         generation_labels = self.tokenizer(generation_labels, padding=True, truncation=True, return_tensors="pt", max_length=1024)
 

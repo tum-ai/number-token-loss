@@ -15,8 +15,10 @@ class NumberTokenLossWrapper(nn.Module):
     def forward(
         self, outputs, labels, num_items_in_batch
     ) -> torch.FloatTensor:
-        number_token_loss = self.number_token_loss.forward(outputs.logits, labels)
-        
+        # TODO double check this
+        shift_logits = outputs.logits[..., :-1, :].contiguous()
+        shift_labels = labels[..., 1:].contiguous()
+        number_token_loss = self.number_token_loss.forward(shift_logits, shift_labels)
         outputs["number_loss"] = number_token_loss
         outputs["token_loss"] = outputs.loss
         outputs.loss = outputs.loss + self.number_token_loss.weight * number_token_loss

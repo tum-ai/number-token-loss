@@ -124,6 +124,12 @@ class ModelArguments:
             "help": "Loss function for number token loss. Allowed: mse, huber, mae."
         },
     )
+    number_token_loss_weight_by_probability_mass: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "Weight the number token loss by the probability mass of the number tokens"
+        },
+    )
     gaussian_label_smoother: Optional[bool] = field(
         default=False,
         metadata={

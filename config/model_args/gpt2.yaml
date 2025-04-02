@@ -3,4 +3,4 @@ model_name_or_path: gpt2
 config_name: gpt2
 tokenizer_type: auto
 number_encoding: none
-tokenize_on_digit_level: true
+tokenize_on_digit_level: false

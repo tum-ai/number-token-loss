@@ -280,7 +280,8 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
                 vocab_size=config.vocab_size,
                 device=training_args.device,
                 loss_function=loss_function,
-                weight=model_args.number_token_loss_weight
+                weight=model_args.number_token_loss_weight,
+                weight_by_probablility_mass=model_args.number_token_loss_weight_by_probability_mass
             )
         else:
             logger.info("Using normal number token loss")
