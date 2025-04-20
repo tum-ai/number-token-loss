@@ -75,23 +75,23 @@ Find our paper [here](https://arxiv.org/abs/2411.02083) and the poster of the Ne
 4. Execute the run_language_modeling.py script with the following arguments:
 - Standard T5: 
   ```
-  python src/ntl/run_language_modeling.py run_specific_config@_global_=mathematics_dataset_run model_args=vanilla_t5 dataset_args=mathematcis_dataset
+  python src/ntl/run_language_modeling.py run_specific_config@_global_=mathematics_dataset_run model_args=vanilla_t5 dataset_args=mathematics_dataset
   ```
 - Standard T5 + **NTL-MSE**:
   ```
-  python src/ntl/run_language_modeling.py run_specific_config@_global_=mathematics_dataset_run model_args=vanilla_t5_ntl dataset_args=mathematcis_dataset
+  python src/ntl/run_language_modeling.py run_specific_config@_global_=mathematics_dataset_run model_args=vanilla_t5_ntl dataset_args=mathematics_dataset
   ```
 - Standard T5 + **NTL-WAS**: 
   ```
-  python src/ntl/run_language_modeling.py run_specific_config@_global_=mathematics_dataset_run model_args=vanilla_t5_ntl  model_args.number_token_loss_with_wasserstein=true dataset_args=mathematcis_dataset
+  python src/ntl/run_language_modeling.py run_specific_config@_global_=mathematics_dataset_run model_args=vanilla_t5_ntl  model_args.number_token_loss_with_wasserstein=true dataset_args=mathematics_dataset
   ```
 - RT: 
   ```
-  python src/ntl/run_language_modeling.py run_specific_config@_global_=mathematics_dataset_run model_args=rt dataset_args=mathematcis_dataset
+  python src/ntl/run_language_modeling.py run_specific_config@_global_=mathematics_dataset_run model_args=rt dataset_args=mathematics_dataset
   ```
 - RT + **NTL-MSE**: 
   ```
-  python src/ntl/run_language_modeling.py run_specific_config@_global_=mathematics_dataset_run model_args=rt_ntl dataset_args=mathematcis_dataset
+  python src/ntl/run_language_modeling.py run_specific_config@_global_=mathematics_dataset_run model_args=rt_ntl dataset_args=mathematics_dataset
   ```
 - xVal: 
   ```
