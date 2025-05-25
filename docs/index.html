@@ -9,6 +9,7 @@
     <!-- Fonts & CSS -->
     <link rel="preconnect" href="https://fonts.gstatic.com">
     <link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
     <link rel="stylesheet" href="assets/css/styles.css">
 
@@ -46,8 +47,10 @@
 <header class="text-center py-4 bg-light">
     <div class="container">
         <h1 class="display-4 font-weight-bold">Regress, Don’t Guess<br><small class="h2">A Regression-like Loss on <span class="text-primary">N</span>umber <span class="text-primary">T</span>okens for <span class="text-primary">L</span>anguage Models</small></h1>
-        <h3 class="mt-3">ICML 2025</h3>
-
+        <h3 class="mt-3">
+          <img src="assets/ICML-logo.svg" alt="ICML logo" style="height: 2.5em; vertical-align: middle; margin-right: 0.3em;">
+        <span style="font-size: 1.5em;">2025</span>
+        </h3>
         <!-- Author grid -->
         <div class="row justify-content-center mt-4">
             <!-- Repeat “col-md-2” blocks as needed; five per row works nicely -->
@@ -128,25 +131,37 @@
 
         <!-- Action buttons -->
         <p class="lead mt-3">
-            <a href="assets/paper.pdf" class="btn btn-outline-dark mx-1"><i class="fas fa-file-alt"></i> Paper</a>
-            <a href="https://github.com/tum-ai/number-token-loss" class="btn btn-outline-dark mx-1"><i class="fab fa-github"></i> Code</a>
-            <!-- <a href="#" class="btn btn-outline-dark mx-1"><i class="fas fa-video"></i> Video&nbsp;(coming soon)</a> -->
+            <a href="https://arxiv.org/pdf/2411.02083" class="btn btn-outline-dark mx-1" style="font-size: 1.1em;">
+              <img src="assets/ICML-head.svg" alt="ICML logo" style="height: 2em; vertical-align: middle; margin-right: 0.3em;">
+              Paper
+            </a>
+            <a href="https://github.com/tum-ai/number-token-loss" class="btn btn-outline-dark mx-1" style="font-size: 1.1em;"><i class="fab fa-github" style="font-size: 2em; vertical-align: middle; margin-right: 0.3em;"></i> Code</a>
+            <a href="#" class="btn btn-outline-dark mx-1" style="font-size: 1.1em;"><i class="fas fa-video" style="font-size: 2em; vertical-align: middle; margin-right: 0.3em;"></i> Video&nbsp;(TBA)</a>
+            <a href="https://huggingface.co/spaces/jannisborn/NumberTokenLoss" class="btn btn-outline-dark mx-1" style="font-size: 1.1em;">
+            <img src="assets/streamlit.png" alt="Streamlit logo" style="height: 2em; vertical-align: middle; margin-right: 0.3em;">Demo</a>
+            <!-- <a href="https://huggingface.co" class="btn btn-outline-dark mx-1" style="font-size: 1.1em;"><img src="https://huggingface.co/front/assets/huggingface_logo-noborder.svg" alt="Hugging Face" style="height: 2em; vertical-align: middle; margin-right: 0.3em;">Use it!</a> -->
         </p>
     </div>
 </header>
 
-<section class="py-5" id="figure">
+<section class="py-2" id="figure">
     <div class="container">
-        <h5>The Number Token Loss (NTL) augments cross-entropy to encode numeric proximity at token level, improving language model performance in numerical tasks without harming general text capabilities or requiring additional compute.</h5>
+        <h5 class="text-center">The <span class="text-primary">N</span>umber <span class="text-primary">T</span>oken <span class="text-primary">L</span>oss (<span class="text-primary">NTL</span>) augments cross-entropy to improve Language Models in numerical tasks.</h5>
     </div>
-    <figure class="text-center my-4">
-        <img src="assets/ntl_v4.svg" alt="Number Token Loss schematic" class="img-fluid" style="max-width:800px">
-        <figcaption class="mt-2 small text-muted">The two flavors of the proposed Number Token Loss (NTL).</figcaption>
+    <figure class="text-center my-2">
+      <img
+        src="assets/ntl_v5.svg"
+        alt="Number Token Loss schematic"
+        class="img-fluid mx-auto d-block"
+        style="width: 100%; max-width: 400px; height: auto;"
+      >
+      <figcaption class="mt-1 small text-muted" style="font-size: 1.05em;">
+        Number Token Loss (NTL) is the Wasserstein-1 distance between the predicted and real distribution over the number tokens.
+      </figcaption>
     </figure>
 </section>
-
 <!-- ▸▸▸ Abstract ────────────────────────────────────────────────────── -->
-<section class="py-5 bg-light" id="abstract">
+<section class="py-2 bg-light" id="abstract">
     <div class="container">
         <h2>Abstract</h2>
         <p class="text-justify">
@@ -155,7 +170,7 @@
             One fundamental limitation is the nature of the Cross Entropy loss, which assumes a nominal scale and thus
             cannot convey proximity between generated number tokens.
             In response, we here present a regression-like loss that operates purely on token level.
-            Our proposed <em>Number Token Loss (NTL)</em> comes in two flavors and minimizes either the <em>L<sub>p</sub></em> norm or the Wasserstein distance between the
+            Our proposed <span class="text-primary">N</span>umber <span class="text-primary">T</span>oken <span class="text-primary">L</span>oss (NTL) comes in two flavors and minimizes either the <em>L<sub>p</sub></em> norm or the Wasserstein distance between the
             <em>numerical values</em> of the real and predicted number tokens.
             NTL can easily be added to any language model and extend the Cross Entropy objective during training without runtime overhead.
             We evaluate the proposed scheme on various mathematical datasets and find that it consistently improves performance in math-related tasks.
@@ -167,43 +182,47 @@
 </section>
 
 <!-- ▸▸▸ Method / Figure 1 ------------------------------------------- -->
-<section class="py-5 ">
+<section class="py-3">
     <div class="container">
-        <h2>Method – Number Token Loss</h2>
+        <h2>Why do we need the Number Token Loss (NTL)?</h2>
         <p class="text-justify">
-            The NTL allows computing a regression-like loss directly on a language modeling head.
-            We propose two schemes:
-            <br>
-            <strong>NTL-MSE</strong> – dot-product expectation of numeric value with squared error, and<br>
-            <strong>NTL-WAS</strong> – Wasserstein-1 distance between predicted and one-hot number distributions.
+          Cross Entropy is <strong>nominal-scale</strong> and thus assigns equal loss to all incorrect predictions. This makes sense for normal tokens but not for number tokens:
         </p>
-        <!--
-       <figure class="text-center my-4">
-           <img src="assets/ntl_v4.svg" alt="Number Token Loss schematic" class="img-fluid" style="max-width:800px">
-           <figcaption class="mt-2 small text-muted">The two flavors of the proposed Number Token Loss (NTL).</figcaption>
-       </figure>
-       -->
-        CE is ordinal-scale and thus assigns equal loss to all incorrect predic-tions whereas NTL increases with distance from ground truth like
-        a regression loss.
-       <figure class="text-center my-4">
+
+        <div class="text-center my-3">
+          <strong>
+            With a ground truth token <code>4</code>, predicting <code>3</code> or <code>9</code> should not give equal loss 🤔😱<br>NTL fixes this! 🚀💪
+          </strong>
+        </div>
+
+        <p class="text-justify">
+          For all number tokens, NTL increases with distance from ground truth just like a regression loss.
+          But it doesnt need an extra head, it allows computing a regression-like loss directly on a token head.
+          We propose two schemes:
+          <br>
+          <strong>NTL-WAS</strong> – Wasserstein-1 distance between predicted and one-hot number distributions (see plot above).<br>
+          <strong>NTL-MSE</strong> – Dot-product expectation of numeric value with squared error (most intuitive but has some undesired local minima)
+        </p>
+       <figure class="text-center my-1">
            <img src="assets/loss_comparison_v4.svg" alt="Number Token Loss VS. Cross Entropy" class="img-fluid" style="max-width:500px">
-           <figcaption class="mt-2 small text-muted">Comparison of NTL to CE.</figcaption>
+           <!-- <figcaption class="mt-2 small text-muted">Comparison of NTL to CE.</figcaption> -->
        </figure>
    </div>
 </section>
-
 <!-- ▸▸▸ Results summary (optional quick bullets) -------------------- -->
-<section class="py-5 bg-light">
+<section class="py-3 bg-light">
     <div class="container">
         <h2>Key Contributions & Results</h2>
         <ul>
-            <li><strong>Model-agnostic:</strong> NTL can be applied to any language model (e.g., Transformer, Mamba) in any architecture (encoder-decoder, decoder-only).</li>
+            <li><strong>Model-agnostic:</strong> NTL is just a loss &rightarrow; applicable to any LM (e.g., Transformer, Mamba) in any architecture (encoder-decoder, decoder-only).</li>
             <li><strong>Plug-and-play:</strong> NTL requires only a mapping from tokens to numeric values and works with digit-level and multi-digit tokenizations.</li>
-            <li><strong>No computational overhead:</strong> The most advanced version (NTL-WAS) adds only ~1% compute to loss calculation, negligible over the full training step.</li>
-            <li><strong>Consistently improves math performance:</strong> NTL outperforms CE across multiple architectures and mathematical benchmarks.</li>
-            <li><strong>Matches regression-head performance:</strong> On regression tasks like rJokes, NTL matches dedicated regression heads despite operating on token level.</li>
-            <li><strong>Does not harm textual understanding:</strong> On text-only tasks like MultiRC, NTL achieves equal performance to CE.</li>
-            <li><strong>Scales to large models:</strong> T5-3B trained with NTL outperforms CE (GSM8k: 17.7% vs. 13.5%).</li>
+            <li><strong>No computational overhead:</strong> NTL adds only ~1% compute time to <emph>loss calculation</emph> which is negligible over a full training step.</li>
+            <li><strong>Consistently improves performance:</strong> NTL outperforms plain cross entropy across multiple architectures and math benchmarks.</li>
+            <li><strong>Performs true regression:</strong> On regression tasks a LM head with NTL matches a dedicated regression head.</li>
+            <li><strong>Does not harm text tasks:</strong> On pure text tasks, NTL has zero effect, thus it behaves like good old cross entropy.</li>
+            <li><strong>Scales to large models:</strong> Even <a href="https://huggingface.co/ibm-granite/granite-3.2-2b-instruct">Granite 3.2 2B</a> and <a href="https://huggingface.co/google-t5/t5-3b">T5-3B</a> benefit heavily from NTL on math tasks like GSM8K.</li>
+
+
         </ul>
     </div>
 </section>
@@ -267,10 +286,9 @@
 
 <!-- ▸▸▸ Citation ----------------------------------------------------- -->
 
-<section class="py-5 bg-light" id="citation">
+<section class="py-2 bg-light" id="citation">
     <div class="container">
         <h2>Citation</h2>
-        <!--
         <pre class="bg-white p-3 rounded">
 @inproceedings{zausinger2025regress,
   title   = {Regress, Don't Guess – A Regression-like Loss on Number Tokens for Language Models},
@@ -283,7 +301,7 @@
   year    = {2025},
   url     = {https://github.com/tum-ai/number-token-loss}
 }
-</pre>-->
+</pre>
     </div>
 
 </section>
