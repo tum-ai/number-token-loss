@@ -2,20 +2,19 @@ import logging
 import math
 import os
 import re
-from typing import List, Dict, Tuple
+from typing import Dict, List, Tuple
 
 import evaluate
 import nltk
 import numpy as np
 import torch
 import torch.nn.functional as F
+from scipy import stats
 from transformers import EvalPrediction
 
-from ntl.tokenizer.abstract_tokenizer import NumberEncodingTokenizer, NUMBER_REGEX
+from ntl.tokenizer.abstract_tokenizer import NUMBER_REGEX, NumberEncodingTokenizer
 from ntl.tokenizer.t5custom_tokenizer import check_number_predictions
 from ntl.utils.numerical_operations import inverse_signed_log
-
-from scipy import stats
 
 PADDING_TOKEN = -100
 MASKED_OUT = -1
@@ -48,8 +47,16 @@ class CustomMetrics:
         experiment_id = output_dir.replace(os.sep, "_")
         self.rouge_metric = evaluate.load(os.path.join(os.path.dirname(__file__), "metrics", "rouge.py"), experiment_id=experiment_id)
         self.bleu_metric = evaluate.load(os.path.join(os.path.dirname(__file__), "metrics", "sacrebleu.py"), experiment_id=experiment_id)
-        nltk.download('punkt_tab')
-        nltk.download("punkt")
+
+        if torch.distributed.is_initialized():
+            if torch.distributed.get_rank() == 0:
+                nltk.download('punkt_tab')
+                nltk.download("punkt")
+            torch.distributed.barrier()  # Wait for rank 0 to finish downloading.
+        else:
+            nltk.download('punkt_tab')
+            nltk.download("punkt")
+
 
         if self.number_encoding == "none":
             # ▁ is necessary as T5 Tokenizes white spaces like this and it has tokens for 1 and ▁1

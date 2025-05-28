@@ -1,8 +1,10 @@
 import torch
 import torch.nn.functional as F
-from torch._tensor import Tensor
-
 from ntl.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
+from torch._tensor import Tensor
+from transformers.utils import logging
+
+logger = logging.get_logger(__name__)
 
 
 class AbsDiffNumberTokenLoss:
@@ -12,7 +14,12 @@ class AbsDiffNumberTokenLoss:
     """
 
     def __init__(
-            self, tokenizer: NumberEncodingTokenizer, vocab_size: int, device, loss_function=F.mse_loss, weight=0.5
+        self,
+        tokenizer: NumberEncodingTokenizer,
+        vocab_size: int,
+        device,
+        loss_function=F.mse_loss,
+        weight=0.5,
     ):
         self.tokenizer = tokenizer
         self.loss_function = loss_function
@@ -24,7 +31,9 @@ class AbsDiffNumberTokenLoss:
 
         for token, id in self.tokenizer.get_vocab().items():
             if token in hashed_num_tokens:
-                self.nvocab[id] = self.tokenizer.decode_number_token(token, ignore_order=True)
+                self.nvocab[id] = self.tokenizer.decode_number_token(
+                    token, ignore_order=True
+                )
 
         self.number_tokens = ~torch.isnan(self.nvocab)
         self.number_values = self.nvocab[self.number_tokens]
