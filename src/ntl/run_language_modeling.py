@@ -5,54 +5,103 @@ Language modeling adapted from Huggingface transformers.
 The file is an adaptation of https://github.com/huggingface/transformers/blob/v3.1.0/examples/language-modeling/run_language_modeling.py
 
 """
-import sys
-import os
-sys.path.append(".")
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-import time
+import os
+import sys
+
+sys.path.append(".")
+
 import json
 import logging
+import time
+
+import hydra
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
 import transformers
+from omegaconf import DictConfig, OmegaConf
 from transformers import (
     CONFIG_MAPPING,
     MODEL_WITH_LM_HEAD_MAPPING,
     AutoConfig,
+    EarlyStoppingCallback,
+    T5ForConditionalGeneration,
+    T5ForSequenceClassification,
     set_seed,
-    EarlyStoppingCallback, T5ForConditionalGeneration, T5ForSequenceClassification
 )
-import hydra
-from omegaconf import DictConfig, OmegaConf
 
-from ntl.trainer import CustomSeq2SeqTrainer
+from ntl.args import DatasetArguments, ModelArguments, TrainingArguments
+from ntl.collators.question_answer_clm.vanilla_question_answer_collator import (
+    VanillaQuestionAnswerCLMCollator,
+)
+from ntl.collators.question_answer_clm.xval_question_answer_collator import (
+    XvalQuestionAnswerCLMCollator,
+)
+from ntl.collators.question_answer_mlm.regression_head_question_answer_collator import (
+    RegressionHeadQuestionAnswerCollator,
+)
+from ntl.collators.question_answer_mlm.vanilla_mlm_question_answer_collator import (
+    VanillaMaskedQuestionAnswerCollator,
+)
+from ntl.collators.question_answer_mlm.xval_mask_question_collator import (
+    XvalMaskedQuestionAnswerCollator,
+)
+from ntl.data.data import load_json_dataset, load_txt_dataset
 from ntl.evaluation import CustomMetrics
-from ntl.args import ModelArguments, TrainingArguments, DatasetArguments
-from ntl.data.data import load_txt_dataset, load_json_dataset
-from ntl.collators.question_answer_clm.xval_question_answer_collator import XvalQuestionAnswerCLMCollator
-from ntl.collators.question_answer_clm.vanilla_question_answer_collator import VanillaQuestionAnswerCLMCollator
-from ntl.collators.question_answer_mlm.regression_head_question_answer_collator import RegressionHeadQuestionAnswerCollator
-from ntl.collators.question_answer_mlm.xval_mask_question_collator import XvalMaskedQuestionAnswerCollator
-from ntl.collators.question_answer_mlm.vanilla_mlm_question_answer_collator import VanillaMaskedQuestionAnswerCollator
-from ntl.transformer_backbone.t5.t5_vanilla_for_number_token_loss import T5VanillaForNumberTokenLoss
-from ntl.transformer_backbone.t5.t5_rt import T5RegressionModelRT
-from ntl.transformer_backbone.t5.t5_xval import T5RegressionModelXval
-from ntl.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
-from ntl.tokenizer.rt_tokenizer import RtTokenizer
-from ntl.tokenizer.xval_tokenizer import XvalTokenizer
-from ntl.loss_functions.number_token_loss import NumberTokenLoss
 from ntl.loss_functions.abs_diff_number_token_loss import AbsDiffNumberTokenLoss
+from ntl.loss_functions.number_token_loss import NumberTokenLoss, NumberTokenSelector
 from ntl.tokenizer.auto_number_tokenizer import AutoNumberTokenizer
-from ntl.loss_functions.number_token_loss import NumberTokenSelector
+from ntl.tokenizer.rt_tokenizer import RtTokenizer
+from ntl.tokenizer.t5custom_tokenizer import T5Custom_Tokenizer
+from ntl.tokenizer.xval_tokenizer import XvalTokenizer
+from ntl.trainer import CustomSeq2SeqTrainer
+from ntl.transformer_backbone.t5.t5_rt import T5RegressionModelRT
+from ntl.transformer_backbone.t5.t5_vanilla_for_number_token_loss import (
+    T5VanillaForNumberTokenLoss,
+)
+from ntl.transformer_backbone.t5.t5_xval import T5RegressionModelXval
 from ntl.utils.label_smoother import GaussianLabelSmoother
 
+LOCALRANK = int(os.environ.get("LOCAL_RANK", "-1"))
 
-transformers.logging.set_verbosity_info()
-logger = logging.getLogger(__name__)
-# logger.setLevel(level=logging.DEBUG)
+
+class GPUFilter(logging.Filter):
+    def filter(self, record):
+        return LOCALRANK in (-1, 0)
+
+
+def setup_logger():
+    transformers.logging.set_verbosity_info()
+    logger = logging.getLogger(__name__)
+    logger.setLevel(level=logging.INFO)
+
+    gpufilter = GPUFilter()
+    # Create a file handler (and optionally a stream handler)
+    file_handler = logging.FileHandler("training.log", mode="w")
+    formatter = logging.Formatter(
+        fmt="%(asctime)s - %(levelname)s - GPU %(gpu)s - %(name)s - %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+    )
+    file_handler.setFormatter(formatter)
+    file_handler.addFilter(gpufilter)
+
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    stream_handler.addFilter(gpufilter)
+
+    # Remove any default handlers and add ours
+    root_logger = logging.getLogger()
+    root_logger.handlers = []  # Clear any pre-existing handlers.
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(stream_handler)
+    logging.getLogger("transformers").addFilter(gpufilter)
+    logging.getLogger("ntl").addFilter(gpufilter)
+    return logger
+
+
+logger = setup_logger()
 
 MODEL_CONFIG_CLASSES = list(MODEL_WITH_LM_HEAD_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
@@ -71,23 +120,21 @@ def main(cfg: DictConfig):
     run_language_modeling(model_args, training_args, dataset_args)
 
 
-def run_language_modeling(model_args: ModelArguments, training_args: TrainingArguments, dataset_args: DatasetArguments):
+def run_language_modeling(
+    model_args: ModelArguments,
+    training_args: TrainingArguments,
+    dataset_args: DatasetArguments,
+):
     if (
-            os.path.exists(training_args.output_dir)
-            and os.listdir(training_args.output_dir)
-            and training_args.do_train
-            and not training_args.overwrite_output_dir
+        os.path.exists(training_args.output_dir)
+        and os.listdir(training_args.output_dir)
+        and training_args.do_train
+        and not training_args.overwrite_output_dir
     ):
         raise ValueError(
             f"Output directory ({training_args.output_dir}) already exists and is not empty. Use --overwrite_output_dir to overcome."
         )
 
-    # Setup logging
-    logging.basicConfig(
-        format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
-        datefmt="%m/%d/%Y %H:%M:%S",
-        level=logging.INFO if training_args.local_rank in [-1, 0] else logging.WARN,
-    )
     logger.warning(
         "Process rank: %s, device: %s, n_gpu: %s, distributed training: %s",
         training_args.local_rank,
@@ -109,7 +156,9 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         if model_args.number_encoding in ["xval", "rt", "none_regression_head"]:
             logger.info("Log scaling embeddings")
         else:
-            raise ValueError("Log scaling only supported for xval, rt and none_regression_head")
+            raise ValueError(
+                "Log scaling only supported for xval, rt and none_regression_head"
+            )
     else:
         if model_args.number_encoding in ["xval", "rt", "none_regression_head"]:
             logger.info("Not log scaling embeddings")
@@ -122,7 +171,6 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
 
     # Set seed
     set_seed(training_args.seed)
-
 
     if model_args.config_name:
         # if file exists load it otherwise just use config name
@@ -173,7 +221,10 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     elif model_args.number_encoding.lower() == "none":
         if model_args.number_token_loss or model_args.gaussian_label_smoother:
             model_class = T5VanillaForNumberTokenLoss
-            if model_args.tokenizer_type is None or model_args.tokenizer_type == "custom":
+            if (
+                model_args.tokenizer_type is None
+                or model_args.tokenizer_type == "custom"
+            ):
                 tokenizer_class = T5Custom_Tokenizer
             elif model_args.tokenizer_type == "auto":
                 tokenizer_class = AutoNumberTokenizer
@@ -195,7 +246,7 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     else:
         raise ValueError(f"Unknown number encoding: {model_args.number_encoding}")
 
-    # load tokenizer    
+    # load tokenizer
     if model_args.tokenizer_name:
         tokenizer = tokenizer_class.from_pretrained(
             model_args.tokenizer_name, cache_dir=model_args.cache_dir
@@ -215,17 +266,24 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         )
 
     if model_args.number_encoding != "none" or model_args.number_token_loss:
-        n_new_tokens = len(tokenizer) - len(transformers.AutoTokenizer.from_pretrained("t5-small"))
+        n_new_tokens = len(tokenizer) - len(
+            transformers.AutoTokenizer.from_pretrained("t5-small")
+        )
         logger.info(f"Number of new tokens: {n_new_tokens}")
         logger.info(f"Old vocab size: {config.vocab_size}")
         pad_to_multiple_of = 64 if torch.cuda.is_available() else 1
-        config.vocab_size = len(tokenizer) + pad_to_multiple_of - (len(tokenizer) % pad_to_multiple_of)
+        config.vocab_size = (
+            len(tokenizer) + pad_to_multiple_of - (len(tokenizer) % pad_to_multiple_of)
+        )
         config.added_vocab = tokenizer.get_added_vocab()
         logger.info("Size of new tokenizer: %s", len(tokenizer))
         logger.info(f"New vocab size: {config.vocab_size}")
 
     if model_args.number_encoding == "xval":
-        model_init_kwargs = {"tokenizer": tokenizer, "bigger_language_head": model_args.xval_bigger_language_head}
+        model_init_kwargs = {
+            "tokenizer": tokenizer,
+            "bigger_language_head": model_args.xval_bigger_language_head,
+        }
     else:
         model_init_kwargs = {}
 
@@ -244,16 +302,19 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
             loss_function = F.l1_loss
         else:
             raise ValueError(
-                f"Unknown number_token_loss_function: {model_args.number_token_loss_function}. Allowed: mse, huber, mae.")
+                f"Unknown number_token_loss_function: {model_args.number_token_loss_function}. Allowed: mse, huber, mae."
+            )
 
         if model_args.number_token_loss_with_wasserstein:
-            logger.info("Using Wasserstein distance for number token loss")
+            logger.info(
+                f"Using Wasserstein NTL with loss={loss_function} and lambda={model_args.number_token_loss_weight}"
+            )
             model_init_kwargs["number_token_loss"] = AbsDiffNumberTokenLoss(
                 tokenizer,
                 vocab_size=config.vocab_size,
                 device=training_args.device,
                 loss_function=loss_function,
-                weight=model_args.number_token_loss_weight
+                weight=model_args.number_token_loss_weight,
             )
         else:
             logger.info("Using normal number token loss")
@@ -262,25 +323,27 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
                 vocab_size=config.vocab_size,
                 device=training_args.device,
                 loss_function=loss_function,
-                weight=model_args.number_token_loss_weight
+                weight=model_args.number_token_loss_weight,
             )
 
-    if model_args.gaussian_label_smoother: 
-        selector = NumberTokenSelector(tokenizer, vocab_size=config.vocab_size, device=training_args.device) 
-        label_smoother = GaussianLabelSmoother(
-            sigma=model_args.label_smoother_sigma,           
-            ignore_index=-100,   
-            selector=selector    
+    if model_args.gaussian_label_smoother:
+        selector = NumberTokenSelector(
+            tokenizer, vocab_size=config.vocab_size, device=training_args.device
         )
-    else: 
+        label_smoother = GaussianLabelSmoother(
+            sigma=model_args.label_smoother_sigma, ignore_index=-100, selector=selector
+        )
+    else:
         label_smoother = None
 
     if model_args.model_name_or_path:
-
         # delete generation config, as not deleting leads to model not being loadable
         if os.path.isdir(model_args.model_name_or_path) and os.path.exists(
-                os.path.join(model_args.model_name_or_path, "generation_config.json")):
-            os.remove(os.path.join(model_args.model_name_or_path, "generation_config.json"))
+            os.path.join(model_args.model_name_or_path, "generation_config.json")
+        ):
+            os.remove(
+                os.path.join(model_args.model_name_or_path, "generation_config.json")
+            )
 
         model = model_class.from_pretrained(
             model_args.model_name_or_path,
@@ -291,7 +354,10 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
             **model_init_kwargs,
         )
 
-        if model_args.number_encoding == "xval" and "checkpoint" not in model_args.model_name_or_path:
+        if (
+            model_args.number_encoding == "xval"
+            and "checkpoint" not in model_args.model_name_or_path
+        ):
             model.initialize_num_head_weights()
 
         logger.info("Model restored")
@@ -319,19 +385,26 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
 
     if dataset_args.dataset_name == "gsm8k":
         if dataset_args.train_with_augmented_data:
-            train_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/train_t_clean_with_augmented.jsonl'
+            train_data_path = "data/grade-school-math/grade_school_math/data/preprocessed/train_aug.jsonl"
         else:
-            train_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/train_t_clean.jsonl'
-        eval_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/val_t_clean.jsonl'
-        test_data_path = 'data/grade-school-math/grade_school_math/data/preprocessed/test_clean.jsonl'
+            train_data_path = "data/grade-school-math/grade_school_math/data/preprocessed/train_t_clean.jsonl"
+        eval_data_path = "data/grade-school-math/grade_school_math/data/preprocessed/val_t_clean.jsonl"
+        test_data_path = "data/grade-school-math/grade_school_math/data/preprocessed/test_clean.jsonl"
         train_dataset = load_json_dataset(train_data_path)
         eval_dataset = load_json_dataset(eval_data_path)
         test_dataset = load_json_dataset(test_data_path)
+        logger.info(
+            f"DATASET sizes train={len(train_dataset)}, eval={len(eval_dataset)}, test={len(test_dataset)}"
+        )
     elif dataset_args.dataset_name == "mathematics_dataset":
-        train_data_path = 'data/mathematics_dataset-v1.0/train.txt'
-        eval_data_path = 'data/mathematics_dataset-v1.0/val.txt'
-        test_interpolate_data_path = 'data/mathematics_dataset-v1.0/test_interpolate.txt'
-        test_extrapolate_data_path = 'data/mathematics_dataset-v1.0/test_extrapolate.txt'
+        train_data_path = "data/mathematics_dataset-v1.0/train.txt"
+        eval_data_path = "data/mathematics_dataset-v1.0/val.txt"
+        test_interpolate_data_path = (
+            "data/mathematics_dataset-v1.0/test_interpolate.txt"
+        )
+        test_extrapolate_data_path = (
+            "data/mathematics_dataset-v1.0/test_extrapolate.txt"
+        )
 
         train_dataset = load_txt_dataset(train_data_path)
         eval_dataset = load_txt_dataset(eval_data_path)
@@ -339,45 +412,51 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         test_extrapolate_dataset = load_txt_dataset(test_extrapolate_data_path)
     elif dataset_args.dataset_name == "arithmetic":
         logger.info("Training on arithmetic dataset")
-        train_data_path = 'data/mathematics_dataset-v1.0/arithmetic_train.txt'
-        eval_data_path = 'data/mathematics_dataset-v1.0/arithmetic_val.txt'
-        test_interpolate_data_path = 'data/mathematics_dataset-v1.0/arithmetic_test_interpolate.txt'
-        test_extrapolate_data_path = 'data/mathematics_dataset-v1.0/arithmetic_test_extrapolate.txt'
+        train_data_path = "data/mathematics_dataset-v1.0/arithmetic_train.txt"
+        eval_data_path = "data/mathematics_dataset-v1.0/arithmetic_val.txt"
+        test_interpolate_data_path = (
+            "data/mathematics_dataset-v1.0/arithmetic_test_interpolate.txt"
+        )
+        test_extrapolate_data_path = (
+            "data/mathematics_dataset-v1.0/arithmetic_test_extrapolate.txt"
+        )
 
         train_dataset = load_txt_dataset(train_data_path)
         eval_dataset = load_txt_dataset(eval_data_path)
         test_interpolate_dataset = load_txt_dataset(test_interpolate_data_path)
         test_extrapolate_dataset = load_txt_dataset(test_extrapolate_data_path)
     elif dataset_args.dataset_name == "multiplication":
-        train_data_path = 'data/digit-multiplication/data/train.jsonl'
-        eval_data_path = 'data/digit-multiplication/data/val.jsonl'
-        test_data_path = 'data/digit-multiplication/data/test.jsonl'
+        train_data_path = "data/digit-multiplication/data/train.jsonl"
+        eval_data_path = "data/digit-multiplication/data/val.jsonl"
+        test_data_path = "data/digit-multiplication/data/test.jsonl"
         train_dataset = load_json_dataset(train_data_path)
         eval_dataset = load_json_dataset(eval_data_path)
         test_dataset = load_json_dataset(test_data_path)
     elif dataset_args.dataset_name == "rjokes":
-        train_data_path = 'data/rjokes-dataset/data/train.jsonl'
-        eval_data_path = 'data/rjokes-dataset/data/dev.jsonl'
-        test_data_path = 'data/rjokes-dataset/data/test.jsonl'
+        train_data_path = "data/rjokes-dataset/data/train.jsonl"
+        eval_data_path = "data/rjokes-dataset/data/dev.jsonl"
+        test_data_path = "data/rjokes-dataset/data/test.jsonl"
         train_dataset = load_json_dataset(train_data_path)
         eval_dataset = load_json_dataset(eval_data_path)
         test_dataset = load_json_dataset(test_data_path)
     elif dataset_args.dataset_name == "multirc":
-        train_data_path = 'data/multirc/data/preprocessed/train_clean.jsonl'
-        eval_data_path = 'data/multirc/data/preprocessed/val_clean.jsonl'
-        test_data_path = 'data/multirc/data/preprocessed/test_clean.jsonl'
+        train_data_path = "data/multirc/data/preprocessed/train_clean.jsonl"
+        eval_data_path = "data/multirc/data/preprocessed/val_clean.jsonl"
+        test_data_path = "data/multirc/data/preprocessed/test_clean.jsonl"
         train_dataset = load_json_dataset(train_data_path)
         eval_dataset = load_json_dataset(eval_data_path)
         test_dataset = load_json_dataset(test_data_path)
     elif dataset_args.dataset_name == "debug":
-        train_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
-        eval_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
-        test_data_path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt'
+        train_data_path = "data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt"
+        eval_data_path = "data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt"
+        test_data_path = "data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/train-easy/algebra__linear_1d_small.txt"
         train_dataset = load_txt_dataset(train_data_path)
         eval_dataset = load_txt_dataset(eval_data_path)
         test_dataset = load_txt_dataset(test_data_path)
     else:
-        raise ValueError(f"Unknown dataset: {dataset_args.dataset_name}. Allowed: gsm8k, mathematics_dataset, multiplication")
+        raise ValueError(
+            f"Unknown dataset: {dataset_args.dataset_name}. Allowed: gsm8k, mathematics_dataset, multiplication"
+        )
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"Number of parameters {num_params} of type {type(model)}")
@@ -396,11 +475,10 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
 
     # Early stopping
     early_stopping_callback = EarlyStoppingCallback(
-        early_stopping_patience=5,
-        early_stopping_threshold=0.001)
+        early_stopping_patience=5, early_stopping_threshold=0.001
+    )
 
     # custom_trainer_params = get_trainer_dict(model_params)
-
 
     # Initialize our Trainer
     trainer = CustomSeq2SeqTrainer(
@@ -419,14 +497,14 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
     model_path = (
         model_args.model_name_or_path
         if model_args.model_name_or_path is not None
-           and os.path.isdir(model_args.model_name_or_path)
+        and os.path.isdir(model_args.model_name_or_path)
         else None
     )
 
     if not training_args.do_only_eval:
         start_time = time.time()
         trainer.train(model_path=model_path)
-        end_time=time.time()
+        end_time = time.time()
         logger.info("Elapsed time:")
         logger.info(end_time - start_time)
     else:
@@ -439,24 +517,38 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
 
         if dataset_args.dataset_name in ["arithmetic", "mathematics_dataset"]:
             logger.info("*** Evaluate on interpolation data for arithmetic ***")
-            eval_results_test_interpolate = trainer.evaluate(eval_dataset=test_interpolate_dataset)
-            logger.info(f"eval_results interpolate data: {eval_results_test_interpolate}")
+            eval_results_test_interpolate = trainer.evaluate(
+                eval_dataset=test_interpolate_dataset
+            )
+            logger.info(
+                f"eval_results interpolate data: {eval_results_test_interpolate}"
+            )
 
             logger.info("*** Evaluate on extrapolation data for arithmetic ***")
-            eval_results_test_extrapolate = trainer.evaluate(eval_dataset=test_extrapolate_dataset)
-            logger.info(f"eval_results extrapolate data: {eval_results_test_extrapolate}")
+            eval_results_test_extrapolate = trainer.evaluate(
+                eval_dataset=test_extrapolate_dataset
+            )
+            logger.info(
+                f"eval_results extrapolate data: {eval_results_test_extrapolate}"
+            )
 
-            return eval_results_val, eval_results_test_interpolate, eval_results_test_extrapolate, model
+            return (
+                eval_results_val,
+                eval_results_test_interpolate,
+                eval_results_test_extrapolate,
+                model,
+            )
         else:
             logger.info("*** Evaluate on test set ***")
             eval_results_test = trainer.evaluate(eval_dataset=test_dataset)
             logger.info(f"eval_results test data: {eval_results_test}")
             return eval_results_val, eval_results_test, model
 
-
     else:
         if dataset_args.dataset_name != "mathematics_dataset":
-            raise ValueError("dataset_args.mode=dataset_comparison only supported for mathematics_dataset")
+            raise ValueError(
+                "dataset_args.mode=dataset_comparison only supported for mathematics_dataset"
+            )
 
         logger.info("*** Comparing loss on individuals datasets ***")
 
@@ -478,26 +570,32 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         ]
         int_results = []
         for name in int_categories:
-            path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/interpolate/' + name
+            path = (
+                "data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/interpolate/"
+                + name
+            )
             test_dataset = load_txt_dataset(path)
             logger.info("*** Testing interpolation on " + name + " data ***")
             result = trainer.evaluate(eval_dataset=test_dataset)
             logger.info(f"Test results: {result}")
             int_results.append(result)
 
-        #extrapolation
+        # extrapolation
         ext_categories = [
-        "arithmetic__add_or_sub_big.txt",
-        "arithmetic__add_sub_multiple_longer.txt",
-        "arithmetic__mixed_longer.txt",
-        "arithmetic__mul_big.txt",
-        "arithmetic__mul_div_multiple_longer.txt",
-        "numbers__place_value_big.txt",
-        "numbers__round_number_big.txt",
+            "arithmetic__add_or_sub_big.txt",
+            "arithmetic__add_sub_multiple_longer.txt",
+            "arithmetic__mixed_longer.txt",
+            "arithmetic__mul_big.txt",
+            "arithmetic__mul_div_multiple_longer.txt",
+            "numbers__place_value_big.txt",
+            "numbers__round_number_big.txt",
         ]
         ext_results = []
         for name in ext_categories:
-            path = 'data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/extrapolate/' + name
+            path = (
+                "data/mathematics_dataset-v1.0/mathematics_dataset-v1.0/extrapolate/"
+                + name
+            )
             test_dataset = load_txt_dataset(path)
             logger.info("*** Testing extrapolation on " + name + " data ***")
             result = trainer.evaluate(eval_dataset=test_dataset)
@@ -507,23 +605,19 @@ def run_language_modeling(model_args: ModelArguments, training_args: TrainingArg
         return int_results, ext_results
 
 
-def get_data_collator(model_args: ModelArguments, tokenizer, training_args: TrainingArguments) -> transformers.DataCollator:
+def get_data_collator(
+    model_args: ModelArguments, tokenizer, training_args: TrainingArguments
+) -> transformers.DataCollator:
     # Conditional Generation Training
     if training_args.language_modelling == "clm":
         logger.info("Using CLM collator")
         if model_args.number_encoding == "rt":
-            data_collator = VanillaQuestionAnswerCLMCollator(
-                tokenizer=tokenizer
-            )
+            data_collator = VanillaQuestionAnswerCLMCollator(tokenizer=tokenizer)
         elif model_args.number_encoding == "xval":
-            data_collator = XvalQuestionAnswerCLMCollator(
-                tokenizer=tokenizer
-            )
+            data_collator = XvalQuestionAnswerCLMCollator(tokenizer=tokenizer)
         elif model_args.number_encoding.lower() == "none":
             # Rt collator can be used for default T5 as well
-            data_collator = VanillaQuestionAnswerCLMCollator(
-                tokenizer=tokenizer
-            )
+            data_collator = VanillaQuestionAnswerCLMCollator(tokenizer=tokenizer)
         elif model_args.number_encoding.lower() == "none_regression_head":
             raise ValueError("Regression head not supported for CLM")
 
@@ -531,18 +625,12 @@ def get_data_collator(model_args: ModelArguments, tokenizer, training_args: Trai
     else:
         logger.info("Using MLM collator")
         if model_args.number_encoding == "rt":
-            data_collator = VanillaMaskedQuestionAnswerCollator(
-                tokenizer=tokenizer
-            )
+            data_collator = VanillaMaskedQuestionAnswerCollator(tokenizer=tokenizer)
         elif model_args.number_encoding == "xval":
-            data_collator = XvalMaskedQuestionAnswerCollator(
-                tokenizer=tokenizer
-            )
+            data_collator = XvalMaskedQuestionAnswerCollator(tokenizer=tokenizer)
         elif model_args.number_encoding.lower() == "none":
             # Rt collator can be used for default T5 as well
-            data_collator = VanillaMaskedQuestionAnswerCollator(
-                tokenizer=tokenizer
-            )
+            data_collator = VanillaMaskedQuestionAnswerCollator(tokenizer=tokenizer)
         elif model_args.number_encoding.lower() == "none_regression_head":
             data_collator = RegressionHeadQuestionAnswerCollator(
                 tokenizer=tokenizer, log_scale=model_args.log_scale_embeddings
