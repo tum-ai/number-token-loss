@@ -1,9 +1,7 @@
 from dataclasses import dataclass, field
-from typing import Optional, Literal
+from typing import Literal, Optional
 
-from transformers import (
-    Seq2SeqTrainingArguments, MODEL_WITH_LM_HEAD_MAPPING
-)
+from transformers import MODEL_WITH_LM_HEAD_MAPPING, Seq2SeqTrainingArguments
 
 MODEL_CONFIG_CLASSES = list(MODEL_WITH_LM_HEAD_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
@@ -18,6 +16,12 @@ class TrainingArguments(Seq2SeqTrainingArguments):
         default=False,
         metadata={
             "help": "Only evaluate the model."
+        },
+    )
+    parallel_mode: str = field(
+        default="not_distributed",
+        metadata={
+            "help": "Whether training is distributed"
         },
     )
     trial: Optional[str] = field(
