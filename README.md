@@ -3,6 +3,9 @@
 
 Introducing "Number Token Loss" (NTL) for language models to improve numerical reasoning by using regression-based loss functions that account for the proximity of numbers, achieving better performance on math tasks without increasing computational overhead.
 
+## Resources
+Find our paper [here](https://arxiv.org/abs/2411.02083) and the poster of the NeurIPS 2024 MathAI workshop [here](https://github.com/tum-ai/number-token-loss/blob/main/resources/neurips_mathai_poster.pdf "Poster")
+
 ## Setup
 
 ### Via Python
@@ -203,3 +206,13 @@ python src/ntl/run_language_modeling.py model_args=vanilla_t5_ntl  model_args.nu
 ```
 ---
 The repository also includes a generic version of the NTL (`/src/ntl/loss_functions/base_number_token_loss.py`), which is compatible with a broader range of Hugging Face models and is based on the NTL-WAS.
+
+## Citation
+If you use this work, please cite:
+```bib
+@inproceedings{zausinger24regress,
+  title={Regress, Don't Guess--A Regression-like Loss on Number Tokens for Language Models},
+  author={Zausinger, Jonas and Pennig, Lars and Chlodny, Kacper and Limbach, Vincent and Ketteler, Anna and Prein, Thorben and Singh, Vishwa Mohan and Danziger, Michael and Born, Jannis},
+  booktitle={The 4th Workshop on Mathematical Reasoning and AI at NeurIPS'24},
+  year={2024}
+}
