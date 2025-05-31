@@ -14,6 +14,7 @@ The suite supports various loss functions including:
 
 
 import argparse
+import pickle
 import time
 import random
 import string
@@ -22,7 +23,9 @@ import csv
 import copy
 from typing import Dict, List, Tuple, Any
 
+import pandas as pd
 import torch
+import torch.autograd.profiler as profiler
 import numpy as np
 from torch.optim import AdamW
 import yaml
@@ -382,6 +385,94 @@ def run_model_benchmark(
 
     return times, stds
 
+
+def run_model_profiling(
+    config: Dict[str, Any],
+    model: T5VanillaForNumberTokenLoss,
+    loss_name: str,
+    tokenizer: T5Custom_Tokenizer,
+    device: str,
+) -> List[profiler.profile]:
+    """
+    
+    Args:
+        config: Benchmark configuration
+        model: Model to benchmark
+        loss_name: Name of the loss function
+        tokenizer: Tokenizer for input processing
+        device: Device to run on
+        update_gradients: Whether to perform gradient updates
+        
+    Returns:
+        List of profiler objects
+    """
+    #timer = BenchmarkTimer()
+    profilings = []
+    model.to(device)
+
+    for _ in range(config['steps']):
+        #timer.start()
+
+        # Generate input data
+        input_texts = generate_batch_texts(
+            tokenizer=tokenizer,
+            batch_size=config['batch_size'],
+            n_tokens=config['sequence_length'],
+            number_share=config['number_share']
+        )
+        output_texts = generate_batch_texts(
+            tokenizer=tokenizer,
+            batch_size=config['batch_size'],
+            n_tokens=config['sequence_length'],
+            number_share=config['number_share']
+        )
+        #timer.stop("data_generation", device)
+        
+        # Process inputs
+        input_encoding = tokenizer(
+            input_texts,
+            return_tensors="pt",
+            padding=True,
+            truncation=True
+        )
+        input_ids = input_encoding["input_ids"].to(device)
+        attention_mask = input_encoding["attention_mask"].to(device)
+
+        # Process targets
+        target_encoding = tokenizer(
+            output_texts,
+            return_tensors="pt",
+            padding=True,
+            truncation=True
+        )
+        labels = target_encoding["input_ids"].to(device)
+        labels[labels == tokenizer.pad_token_id] = PAD_TOKEN_IGNORE_INDEX
+        
+        #timer.stop("preprocessing", device)
+
+        # Forward pass and loss computation
+
+        with profiler.profile(use_cuda=True) as prof:
+            outputs = model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                labels=labels
+            )
+            loss = outputs.loss
+
+            #timer.stop("forward_pass", device)            
+
+            # Backward pass
+            loss.backward()
+            #timer.stop("backward_pass", device)
+        
+        profilings.append(prof)
+
+    logger.debug(f"{loss_name} loss value: {loss.item()}")
+
+    return profilings
+
+
 def save_benchmark_results(filename: str, results: Dict[str, Any]):
     """
     Save benchmark results to CSV file.
@@ -435,6 +526,7 @@ def initialize_benchmarking_environment():
     
     # Initialize components for other losses
     custom_tokenizer = T5Custom_Tokenizer.from_pretrained("t5-small", )
+    ce_tokenizer = transformers.AutoTokenizer.from_pretrained("t5-small")
     
     # Calculate vocabulary size for custom components
     vocab_size = len(custom_tokenizer) + PAD_TO_MULTIPLE_OF - (len(custom_tokenizer) % PAD_TO_MULTIPLE_OF)
@@ -463,14 +555,14 @@ def initialize_benchmarking_environment():
     }
 
     # Initialize models
-    ce_model = T5VanillaForNumberTokenLoss.from_pretrained("t5-small", number_token_loss = None)
+    ce_model = transformers.T5ForConditionalGeneration.from_pretrained("t5-small")
     mse_model = T5VanillaForNumberTokenLoss.from_pretrained("t5-small", number_token_loss = mse_ntl)
     wasserstein_model = T5VanillaForNumberTokenLoss.from_pretrained("t5-small", number_token_loss = wasserstein_ntl)
     abs_diff_model = T5VanillaForNumberTokenLoss.from_pretrained("t5-small", number_token_loss = abs_diff_ntl)
 
     # Create dictionaries to store models and tokenizers
     tokenizer_dict = {
-        "CE": custom_tokenizer,
+        "CE": ce_tokenizer,
         "CE+MSE": custom_tokenizer,
         "CE+Wasserstein": custom_tokenizer,
         "CE+AbsDiff": custom_tokenizer,
@@ -639,6 +731,68 @@ def run_number_share_analysis(
         with open(f'benchmarking/config_{timestamp}.stored_yaml', 'w') as file:
             yaml.dump(config, file)
 
+def save_profiles(profilings, timestamp):
+
+    df = pd.DataFrame(columns=[
+        "Model", "Step",
+        "Operation", "CPU Time Total", "CUDA Time Total", "Self CPU Time", 
+        "Self CUDA Time", "CPU Memory Usage", "CUDA Memory Usage", "Occurrences"
+    ])
+
+    for model, profs in profilings.items():
+        for i, prof in enumerate(profs):
+
+            events = prof.key_averages()
+            data = []
+
+            for evt in events:
+                data.append([model, i,
+                    evt.key, evt.cpu_time_total, evt.cuda_time_total, evt.self_cpu_time_total,
+                    evt.self_cuda_time_total, evt.cpu_memory_usage, evt.cuda_memory_usage, evt.count
+                ])
+
+            df = pd.concat([df, pd.DataFrame(data, columns=df.columns)], ignore_index=True)
+
+        
+    df.to_csv(f"benchmarking/profiling_results_{timestamp}.csv")
+
+def run_profiling(
+    config: Dict[str, Any]
+):
+    device, _, tokenizer_dict, model_dict, _ = initialize_benchmarking_environment()
+
+    warmup_config = copy.deepcopy(config)
+    warmup_config['profiling']['steps'] = 1
+
+    # Warmup runs
+    logger.info("Performing warmup runs for model profiling...")
+    profilings = {
+        name: run_model_profiling(
+            config=warmup_config['profiling'],
+            model=model_dict[name],
+            loss_name=name,
+            tokenizer=tokenizer_dict[name],
+            device=device,
+        )
+        for name in config['profiling']['models']
+    }
+
+    # Run model profiling
+    logger.info("Running forward pass profiling...")
+    profilings = {
+        name: run_model_profiling(
+            config=config['profiling'],
+            model=model_dict[name],
+            loss_name=name,
+            tokenizer=tokenizer_dict[name],
+            device=device,
+        )
+        for name in config['profiling']['models']
+    }
+
+    return profilings
+    
+
 def main():
     """Main entry point for the benchmarking suite."""
     parser = argparse.ArgumentParser(description='Neural network loss function benchmarking suite')
@@ -652,10 +806,22 @@ def main():
         action='store_true',
         help='Run analysis across different number share values'
     )
+    parser.add_argument(
+        '--model-profiling',
+        action='store_true',
+        help='Run detailed runtime analysis between the custom T5 model and the Vanilla T5 model'
+    )
     args = parser.parse_args()
 
     if args.number_share_analysis:
         run_number_share_analysis(args.config)
+    elif args.model_profiling:
+        config = load_config(args.config)
+        profilings = run_profiling(config)
+        timestamp = int(time.time() * 100)
+        with open(f'benchmarking/config_{timestamp}.stored_yaml', 'w') as file:
+            yaml.dump(config, file)
+        save_profiles(profilings, timestamp)
     else:
         config = load_config(args.config)
         results = run_benchmarks(config)
