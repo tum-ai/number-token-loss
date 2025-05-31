@@ -15,3 +15,10 @@ training step benchmark:
   batch_size: 2
   sequence_length: 128
   number_share: 0.1
+
+profiling:
+  steps: 1
+  batch_size: 2
+  sequence_length: 128
+  number_share: 0.1
+  models: ["CE", "CE+AbsDiff"]
