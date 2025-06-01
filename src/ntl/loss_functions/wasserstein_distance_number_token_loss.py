@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch._tensor import Tensor
 import logging
+from typing import Optional
 from ntl.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 
 
@@ -33,7 +34,7 @@ class WassersteinNumberTokenLoss:
             self.number_token_values = sorted_values
             self.number_token_indices = self.number_token_indices[sorted_indices]
 
-    def forward(self, logits: Tensor, labels: Tensor, smoothed_labels: Tensor):
+    def forward(self, logits: Tensor, labels: Tensor, smoothed_labels: Optional[Tensor] = None):
         if logits.numel() == 0:
             raise ValueError("Logits passed to the NumberTokenLoss are empty!")
         if labels.numel() == 0:
