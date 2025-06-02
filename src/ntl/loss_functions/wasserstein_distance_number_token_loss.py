@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch._tensor import Tensor
 import logging
+from typing import Optional
 from ntl.tokenizer.abstract_tokenizer import NumberEncodingTokenizer
 
 
@@ -29,10 +30,11 @@ class WassersteinNumberTokenLoss:
             # Sort the number tokens by their numerical values
             self.number_token_values = self.nvocab[self.number_token_indices]
             sorted_values, sorted_indices = torch.sort(self.number_token_values)
+            self.sorted_number_indices = sorted_indices
             self.number_token_values = sorted_values
             self.number_token_indices = self.number_token_indices[sorted_indices]
 
-    def forward(self, logits: Tensor, labels: Tensor):
+    def forward(self, logits: Tensor, labels: Tensor, smoothed_labels: Optional[Tensor] = None):
         if logits.numel() == 0:
             raise ValueError("Logits passed to the NumberTokenLoss are empty!")
         if labels.numel() == 0:
@@ -51,12 +53,14 @@ class WassersteinNumberTokenLoss:
 
         # if y is nan, produce one hot with just nans, else produce one hot
         valid_positions = ~torch.isnan(y)
-        target_distributions = F.one_hot(labels, num_classes=len(self.nvocab)).float()
+        if smoothed_labels is None:
+            target_distributions = F.one_hot(labels, num_classes=len(self.nvocab)).float()
+            target_distributions = target_distributions[:, :, self.number_token_indices]
+        else:
+            target_distributions = smoothed_labels[:, :, self.sorted_number_indices]
 
         nan_mask = ~valid_positions.unsqueeze(-1).expand_as(target_distributions)
         target_distributions = target_distributions.masked_fill(nan_mask, float('nan'))
-
-        target_distributions = target_distributions[:, :, self.number_token_indices]
 
         wasserstein_distance = self._calculate_1d_wasserstein_dist(softmaxed, target_distributions)
 
