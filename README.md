@@ -39,7 +39,7 @@ math tasks without increasing computational overhead.*
 
 <p class="text-justify">
   For all number tokens, NTL increases with distance from ground truth just like a regression loss.
-  But it doesnt need an extra head, it allows computing a regression-like loss directly on a token head.
+  But it doesn't need an extra head, it allows computing a regression-like loss directly on a token head.
   We propose two schemes:
   <br>
   <strong>NTL-WAS</strong> – Wasserstein-1 distance between predicted and one-hot number distributions (see plot above).<br>
