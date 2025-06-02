@@ -3,16 +3,15 @@
 
 # Regress, Don't Guess – A Regression-like Loss on Number Tokens for Language Models
 
-[![Paper](https://img.shields.io/badge/Paper-arXiv-red.svg)](https://arxiv.org/abs/2411.02083)
+[![Paper](https://img.shields.io/badge/Paper-ICML-darkgreen.svg)](https://arxiv.org/abs/2411.02083)
 [![GitHub Pages](https://img.shields.io/badge/GitHub-Pages-blue.svg)](https://tum-ai.github.io/number-token-loss/)
 [![Demo](https://img.shields.io/badge/🤗-Demo-yellow.svg)](https://huggingface.co/spaces/jannisborn/NumberTokenLoss)
 [![Integration](https://img.shields.io/badge/💻-Integration_Example-purple.svg)](scripts/loss_integration.ipynb)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 *Introducing "Number Token Loss" (NTL) for language models to improve 
-numerical reasoning by using regression-based loss functions on number tokens that 
-account for the proximity of numbers, achieving better performance on 
-math tasks without increasing computational overhead.*
+numerical reasoning by using regression-based loss functions on number tokens.
+Achieves better performance on math tasks without computational overhead 🚀*
 
 
 </div>
@@ -83,7 +82,7 @@ math tasks without increasing computational overhead.*
 
 2. **Create and activate environment**
    ```bash
-   conda create -n ntl python=3.9
+   conda create -n ntl python=3.10
    conda activate ntl
    ```
 
@@ -235,11 +234,16 @@ python src/ntl/run_language_modeling.py \
 If you find this work useful, please cite our paper:
 
 ```bibtex
-@inproceedings{zausinger24regress,
-  title={Regress, Don't Guess--A Regression-like Loss on Number Tokens for Language Models},
-  author={Zausinger, Jonas and Pennig, Lars and Chlodny, Kacper and Limbach, Vincent and Ketteler, Anna and Prein, Thorben and Singh, Vishwa Mohan and Danziger, Michael and Born, Jannis},
-  booktitle={The 4th Workshop on Mathematical Reasoning and AI at NeurIPS'24},
-  year={2024}
+@inproceedings{zausinger2025regress,
+  title   = {Regress, Don't Guess – A Regression-like Loss on Number Tokens for Language Models},
+  author  = {Jonas Zausinger and Lars Pennig and Anamarija Kozina and Sean Sdahl
+             and Julian Sikora and Adrian Dendorfer and Timofey Kuznetsov
+             and Mohamad Hagog and Nina Wiedemann and Kacper Chlodny
+             and Vincent Limbach and Anna Ketteler and Thorben Prein
+             and Vishwa Mohan Singh and Michael Danziger and Jannis Born},
+  booktitle = {Proc. of the 41st International Conference on Machine Learning (ICML)},
+  year    = {2025},
+  url     = {https://tum-ai.github.io/number-token-loss/}
 }
 ```
 
