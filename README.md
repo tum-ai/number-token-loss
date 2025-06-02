@@ -230,17 +230,6 @@ python src/ntl/run_language_modeling.py \
     model_args.model_name_or_path=<path_to_checkpoint>
 ```
 
-<!-- ## 📁 Project Structure
-
-├── src/ntl/ # Core NTL implementation   
-│ ├── loss_functions/ # NTL loss implementations     
-│ └── run_language_modeling.py # Main training script   
-├── config/ # Hydra configuration files   
-├── data/ # Dataset storage   
-├── benchmarking/ # Run time evaluation scripts   
-└── resources/ # Assets and documentation    -->
-
-
 ## 📝 Citation
 
 If you find this work useful, please cite our paper:
