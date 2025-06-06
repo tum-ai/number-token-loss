@@ -3,12 +3,6 @@
 
 # Regress, Don't Guess – A Regression-like Loss on Number Tokens for Language Models
 
-[![Paper](https://img.shields.io/badge/Paper-ICML-darkgreen.svg)](https://arxiv.org/abs/2411.02083)
-[![GitHub Pages](https://img.shields.io/badge/GitHub-Pages-blue.svg)](https://tum-ai.github.io/number-token-loss/)
-[![Demo](https://img.shields.io/badge/🤗-Demo-yellow.svg)](https://huggingface.co/spaces/jannisborn/NumberTokenLoss)
-[![Integration](https://img.shields.io/badge/💻-Integration_Example-purple.svg)](scripts/loss_integration.ipynb)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-
 *Introducing "Number Token Loss" (NTL) for language models to improve 
 numerical reasoning by using regression-based loss functions on number tokens.
 Achieves better performance on math tasks without computational overhead 🚀*
@@ -57,14 +51,6 @@ Achieves better performance on math tasks without computational overhead 🚀*
 - 🚀 **Scales to large models**: Even <a href="https://huggingface.co/ibm-granite/granite-3.2-2b-instruct">Granite 3.2 2B</a> and <a href="https://huggingface.co/google-t5/t5-3b">T5-3B</a> benefit heavily from NTL on math tasks like GSM8K.
 
 
-
-## 🚀 Quick Links
-
-- 📄 **Paper**: [Regress, Don't Guess – A Regression-like Loss on Number Tokens for Language Models](https://arxiv.org/abs/2411.02083)
-- 🌐 **Project Page**: [https://tum-ai.github.io/number-token-loss/](https://tum-ai.github.io/number-token-loss/)
-- 🎮 **Interactive Demo**: [https://huggingface.co/spaces/jannisborn/NumberTokenLoss](https://huggingface.co/spaces/jannisborn/NumberTokenLoss)
-- 📋 **NeurIPS 2024 MathAI Workshop Poster**: [View Poster](https://github.com/tum-ai/number-token-loss/blob/main/resources/neurips_mathai_poster.pdf)
-- 💻 **Lightweight Integration Example**: [loss_integration.ipynb](scripts/loss_integration.ipynb) - Easy integration into your own models
 
 ## 🛠️ Installation
 
@@ -229,23 +215,7 @@ python src/ntl/run_language_modeling.py \
     model_args.model_name_or_path=<path_to_checkpoint>
 ```
 
-## 📝 Citation
 
-If you find this work useful, please cite our paper:
-
-```bibtex
-@inproceedings{zausinger2025regress,
-  title   = {Regress, Don't Guess – A Regression-like Loss on Number Tokens for Language Models},
-  author  = {Jonas Zausinger and Lars Pennig and Anamarija Kozina and Sean Sdahl
-             and Julian Sikora and Adrian Dendorfer and Timofey Kuznetsov
-             and Mohamad Hagog and Nina Wiedemann and Kacper Chlodny
-             and Vincent Limbach and Anna Ketteler and Thorben Prein
-             and Vishwa Mohan Singh and Michael Danziger and Jannis Born},
-  booktitle = {Proc. of the 42nd International Conference on Machine Learning (ICML)},
-  year    = {2025},
-  url     = {https://tum-ai.github.io/number-token-loss/}
-}
-```
 
 ## 📄 License
 
@@ -256,9 +226,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 This work was supported by TUM.ai, Technical University of Munich, and IBM Research Europe. Special thanks to the NeurIPS 2024 MathAI Workshop for featuring our research.
 -->
 --- 
-
-<div align="center">
-
-**[🌐 Project Website](https://tum-ai.github.io/number-token-loss/) | [📄 Paper](https://arxiv.org/abs/2411.02083) | [🎮 Demo](https://huggingface.co/spaces/jannisborn/NumberTokenLoss) | [💻 Integration Example](scripts/loss_integration.ipynb)**
-
-</div>
