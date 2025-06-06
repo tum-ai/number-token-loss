@@ -241,7 +241,7 @@ If you find this work useful, please cite our paper:
              and Mohamad Hagog and Nina Wiedemann and Kacper Chlodny
              and Vincent Limbach and Anna Ketteler and Thorben Prein
              and Vishwa Mohan Singh and Michael Danziger and Jannis Born},
-  booktitle = {Proc. of the 41st International Conference on Machine Learning (ICML)},
+  booktitle = {Proc. of the 42nd International Conference on Machine Learning (ICML)},
   year    = {2025},
   url     = {https://tum-ai.github.io/number-token-loss/}
 }
