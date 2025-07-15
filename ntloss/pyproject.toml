@@ -1,7 +1,8 @@
 [project]
 name = "ntloss"
 version = "0.0.1"
-description = "A regression-alike loss to improve numerical reasoning in language models"
+description = "Number Token Loss - A regression-alike loss to improve numerical reasoning in language models"
+
 authors = [
     # TODO: Add the others
     { name = "Jannis Born", email = "jab@zurich.ibm.com" }
