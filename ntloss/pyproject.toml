@@ -1,6 +1,15 @@
+[build-system]
+# use setuptools & Cython to compile your .pyx modules
+requires = [
+  "setuptools>=61.0",
+  "wheel",
+  "Cython>=0.29.0"
+]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "ntloss"
-version = "0.0.1"
+version = "0.0.2"
 description = "Number Token Loss - A regression-alike loss to improve numerical reasoning in language models"
 
 authors = [
@@ -51,3 +60,7 @@ dev = [
 [tool.ruff]
 line-length = 88
 lint.select = ["N8"]
+
+[tool.setuptools.packages.find]
+where   = ["."]
+include = ["ntloss", "ntloss.*"]
