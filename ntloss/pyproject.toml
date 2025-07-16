@@ -1,0 +1,66 @@
+[build-system]
+# use setuptools & Cython to compile your .pyx modules
+requires = [
+  "setuptools>=61.0",
+  "wheel",
+  "Cython>=0.29.0"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ntloss"
+version = "0.0.2"
+description = "Number Token Loss - A regression-alike loss to improve numerical reasoning in language models"
+
+authors = [
+    # TODO: Add the others
+    { name = "Jannis Born", email = "jab@zurich.ibm.com" }
+]
+readme = "README.md"
+keywords = [
+    "Machine Learning",
+    "Language Models",
+    "Number Token Loss",
+    "AI4Math",
+    "LLM",
+    "LLM Training",
+    "Reasoning models"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence"
+]
+dependencies = [
+  "transformers>=4.53.2",
+  "loguru>=0.7.3",
+  "torch>=2.7.1",
+]
+
+
+[project.urls]
+homepage = "https://tum-ai.github.io/number-token-loss/"
+repository = "https://github.com/tum-ai/number-token-loss"
+
+
+
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "ruff",
+]
+
+
+[tool.ruff]
+line-length = 88
+lint.select = ["N8"]
+
+[tool.setuptools.packages.find]
+where   = ["."]
+include = ["ntloss", "ntloss.*"]
