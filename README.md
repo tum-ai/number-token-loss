@@ -7,7 +7,7 @@
 [![Landing](https://img.shields.io/badge/GitHub-Pages-blue.svg)](https://tum-ai.github.io/number-token-loss/)
 [![Demo](https://img.shields.io/badge/🤗-Demo-yellow.svg)](https://huggingface.co/spaces/jannisborn/NumberTokenLoss)
 [![Integration](https://img.shields.io/badge/💻-Integration_Example-purple.svg)](scripts/loss_integration.ipynb)
-[![CI](https://github.com/tum-ai/number-token-loss/workflows/ci/badge.svg)](https://github.com/tum-ai/number-token-loss/actions)
+[![CI](https://github.com/tum-ai/number-token-loss/actions/workflows/ci.yml/badge.svg)](https://github.com/tum-ai/number-token-loss/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![PyPI](https://badge.fury.io/py/ntloss.svg)](https://badge.fury.io/py/ntloss)
 [![Downloads](https://static.pepy.tech/badge/ntloss)](https://pepy.tech/project/ntloss)
