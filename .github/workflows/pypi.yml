@@ -24,12 +24,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv lock --no-interaction       # update lockfile (if needed)
-          uv sync --no-interaction       # install project deps into venv :contentReference[oaicite:0]{index=0}
+          uv lock --no-interaction
+          uv sync --no-interaction
 
       - name: Build package
         run: |
-          uv build                       # produces dist/*.tar.gz and *.whl :contentReference[oaicite:1]{index=1}
+          uv build
 
       - name: Publish to PyPI
         env:

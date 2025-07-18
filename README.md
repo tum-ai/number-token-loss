@@ -4,10 +4,14 @@
 # Regress, Don't Guess – A Regression-like Loss on Number Tokens for Language Models
 
 [![Paper](https://img.shields.io/badge/Paper-ICML-darkgreen.svg)](https://arxiv.org/abs/2411.02083)
-[![GitHub Pages](https://img.shields.io/badge/GitHub-Pages-blue.svg)](https://tum-ai.github.io/number-token-loss/)
+[![Landing](https://img.shields.io/badge/GitHub-Pages-blue.svg)](https://tum-ai.github.io/number-token-loss/)
 [![Demo](https://img.shields.io/badge/🤗-Demo-yellow.svg)](https://huggingface.co/spaces/jannisborn/NumberTokenLoss)
 [![Integration](https://img.shields.io/badge/💻-Integration_Example-purple.svg)](scripts/loss_integration.ipynb)
+[![CI](https://github.com/tum-ai/number-token-loss/workflows/ci/badge.svg)](https://github.com/tum-ai/number-token-loss/actions)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![PyPI](https://badge.fury.io/py/ntloss.svg)](https://badge.fury.io/py/ntloss)
+[![Downloads](https://static.pepy.tech/badge/ntloss)](https://pepy.tech/project/ntloss)
+
 
 *Introducing "Number Token Loss" (NTL) for language models to improve 
 numerical reasoning by using regression-based loss functions on number tokens.
@@ -64,9 +68,39 @@ Achieves better performance on math tasks without computational overhead 🚀*
 - 🌐 **Project Page**: [https://tum-ai.github.io/number-token-loss/](https://tum-ai.github.io/number-token-loss/)
 - 🎮 **Interactive Demo**: [https://huggingface.co/spaces/jannisborn/NumberTokenLoss](https://huggingface.co/spaces/jannisborn/NumberTokenLoss)
 - 📋 **NeurIPS 2024 MathAI Workshop Poster**: [View Poster](https://github.com/tum-ai/number-token-loss/blob/main/resources/neurips_mathai_poster.pdf)
-- 💻 **Lightweight Integration Example**: [loss_integration.ipynb](scripts/loss_integration.ipynb) - Easy integration into your own models
+- 💻 **Tutorial**: [loss_integration.ipynb](scripts/loss_integration.ipynb) - Easy integration into your own models
+- 💻 **PyPI**: Fetch `ntloss` from [PyPI](https://pypi.org/project/ntloss/)
 
-## 🛠️ Installation
+## 🏃‍♂️ Quick Start
+
+### PyPI
+
+Simply install NTL into your existing project
+```sh
+uv add ntloss
+pip install ntloss # if you are oldschool
+```
+
+Use like this:
+```py
+from ntloss import NTLoss as NTL
+ntl = NTL(tokenizer=tokenizer)
+loss = ntl(logits, labels)
+```
+
+NOTE: `ntloss` is currently in alpha phase and pre-release. Feedback & PRs are very welcome.
+
+
+### Tutorial for Integration into Your Model
+
+For a **minimal working example** of how to integrate NTL into your existing Hugging Face model, check out our [lightweight integration notebook](scripts/loss_integration.ipynb). It demonstrates:
+
+- How to add NTL to any decoder-only language model (e.g., LLaMA, GPT)
+- Custom trainer implementation with CE+NTL loss
+- Complete working example with TinyLLaMA
+
+
+## 🛠️ Paper Reproduction
 
 ### Prerequisites
 - Python 3.9 or higher
@@ -98,16 +132,6 @@ Achieves better performance on math tasks without computational overhead 🚀*
    export WANDB_ENTITY='<your_entity>'
    export WANDB_PROJECT='<your_project_name>'
    ```
-
-## 🏃‍♂️ Quick Start
-
-### Easy Integration into Your Model
-
-For a **minimal working example** of how to integrate NTL into your existing Hugging Face model, check out our [lightweight integration notebook](scripts/loss_integration.ipynb). It demonstrates:
-
-- How to add NTL to any decoder-only language model (e.g., LLaMA, GPT)
-- Custom trainer implementation with CE+NTL loss
-- Complete working example with TinyLLaMA
 
 ### Full Training Pipeline
 
