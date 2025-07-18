@@ -1,8 +1,14 @@
 <div align="center">
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![PyPI](https://badge.fury.io/py/ntloss.svg)](https://badge.fury.io/py/ntloss)
+[![Downloads](https://static.pepy.tech/badge/ntloss)](https://pepy.tech/project/ntloss)
 
 # ntloss
 
 *Introducing `ntloss` -- a lightweight python package to calculate a regression-like loss on a token head of a LLM. Use `ntloss` to achieve better performance on math tasks without computational overhead or complex reasoning 🚀*
+
+</div>
+
 
 ## Usage
 
