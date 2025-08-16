@@ -1,4 +1,5 @@
 <div align="center">
+
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![PyPI](https://badge.fury.io/py/ntloss.svg)](https://badge.fury.io/py/ntloss)
 [![Downloads](https://static.pepy.tech/badge/ntloss)](https://pepy.tech/project/ntloss)

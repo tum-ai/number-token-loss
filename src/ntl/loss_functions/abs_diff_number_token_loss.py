@@ -9,7 +9,7 @@ logger = logging.get_logger(__name__)
 
 class AbsDiffNumberTokenLoss:
     """
-    Loss function for numberical tokens based on the weighted absolute difference between true and predicted number
+    Loss function for numerical tokens based on the weighted absolute difference between true and predicted number
     NOTE: This loss is equivalent to the Wasserstein distance as long as the ground truth distribution is one-hot
     """
 
