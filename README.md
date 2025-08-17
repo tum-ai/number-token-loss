@@ -3,13 +3,13 @@
 
 # Regress, Don't Guess – A Regression-like Loss on Number Tokens for Language Models
 
-[![Paper](https://img.shields.io/badge/Paper-ICML-darkgreen.svg)](https://arxiv.org/abs/2411.02083)
-[![Landing](https://img.shields.io/badge/GitHub-Pages-blue.svg)](https://tum-ai.github.io/number-token-loss/)
-[![Demo](https://img.shields.io/badge/🤗-Demo-yellow.svg)](https://huggingface.co/spaces/jannisborn/NumberTokenLoss)
-[![Integration](https://img.shields.io/badge/💻-Integration_Example-purple.svg)](scripts/loss_integration.ipynb)
+[![Paper](https://img.shields.io/badge/Paper-ICML-darkgreen.svg)](https://ibm.biz/ntl-paper)
+[![Landing](https://img.shields.io/badge/Landing-Page-blue.svg)](https://ibm.biz/ntl-main)
+[![Demo](https://img.shields.io/badge/🤗-Demo-yellow.svg)](https://ibm.biz/ntl-demo)
+[![YouTube](https://img.shields.io/badge/YouTube-Talk-red?logo=youtube)](https://ibm.biz/ntl-5min-yt)
 [![CI](https://github.com/tum-ai/number-token-loss/actions/workflows/ci.yml/badge.svg)](https://github.com/tum-ai/number-token-loss/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![PyPI](https://badge.fury.io/py/ntloss.svg)](https://badge.fury.io/py/ntloss)
+[![PyPI](https://img.shields.io/pypi/v/ntloss?label=pypi&color=brightgreen)](https://pypi.org/project/ntloss/)
 [![Downloads](https://static.pepy.tech/badge/ntloss)](https://pepy.tech/project/ntloss)
 
 
@@ -22,11 +22,18 @@ Achieves better performance on math tasks without computational overhead 🚀*
 
 ---
 
+## 🧭 Navigation
+### This repo contains the *full development code* for our [ICML 2025 paper](https://ibm.biz/ntl-paper). It is functional but a bit heavy so we will archive it soon! 
+### To use NTL in your own project, we highlighy recommend to use the [PyPI version](https://pypi.org/project/ntloss/) which is maintained [separately here](https://ibm.biz/ntl-pypi-repo).
+
 ## 📖 Overview
 
 **Number Token Loss (NTL)** introduces a novel approach to enhance language models' numerical reasoning capabilities. Unlike traditional cross-entropy loss that treats all incorrect predictions equally, NTL incorporates the numerical proximity of tokens, providing regression-like behavior at the token level.
 
 ![NTL Concept](resources%2Fntl-image.jpg)
+<div align="center">
+  <img src="resources/ntl-image.jpg" alt="NTL Concept" width="75%">
+</div>
 
 
 ## 🎯 Why do we need the Number Token Loss (NTL)?
@@ -49,7 +56,10 @@ Achieves better performance on math tasks without computational overhead 🚀*
   <strong>NTL-MSE</strong> – Dot-product expectation of numeric value with squared error (most intuitive but has some undesired local minima)
 </p>
 
-![Loss Comparison](docs/assets/loss_comparison_v4.svg)
+<div align="center">
+  <img src="docs/assets/loss_comparison_v4.svg" alt="Loss Comparison" width="50%">
+</div>
+
 
 ## 🔑 Key Features
 
@@ -58,18 +68,19 @@ Achieves better performance on math tasks without computational overhead 🚀*
 - ⚡ **No computational overhead**: NTL adds only ~1% compute time to <emph>loss calculation</emph> which is negligible over a full training step.
 - 📈 **Consistently improves performance**: NTL outperforms plain cross entropy across multiple architectures and math benchmarks.
 - 🔢 **Performs true regression**: On regression tasks a LM head with NTL matches a dedicated regression head.
-- 🚀 **Scales to large models**: Even <a href="https://huggingface.co/ibm-granite/granite-3.2-2b-instruct">Granite 3.2 2B</a> and <a href="https://huggingface.co/google-t5/t5-3b">T5-3B</a> benefit heavily from NTL on math tasks like GSM8K.
+- 🚀 **Scales to large models**: <a href="https://huggingface.co/ibm-granite/granite-3.2-2b-instruct">Granite 3.2 2B</a> and <a href="https://huggingface.co/google-t5/t5-3b">T5-3B</a> benefit heavily from NTL on math tasks like GSM8K.
 
 
 
 ## 🚀 Quick Links
 
-- 📄 **Paper**: [Regress, Don't Guess – A Regression-like Loss on Number Tokens for Language Models](https://arxiv.org/abs/2411.02083)
-- 🌐 **Project Page**: [https://tum-ai.github.io/number-token-loss/](https://tum-ai.github.io/number-token-loss/)
-- 🎮 **Interactive Demo**: [https://huggingface.co/spaces/jannisborn/NumberTokenLoss](https://huggingface.co/spaces/jannisborn/NumberTokenLoss)
+- 💻 **Use NTL**: Stable, maintained & lightweight implementation available as `ntloss` from [PyPI](https://pypi.org/project/ntloss/). Codebase available [separately here](https://ibm.biz/ntl-pypi-repo).
+- 📄 **Paper**: [Regress, Don't Guess – A Regression-like Loss on Number Tokens for Language Models](https://ibm.biz/ntl-paper)
+- 🌐 **Project Page**: [https://tum-ai.github.io/number-token-loss/](https://ibm.biz/ntl-main)
+- 📺 **5 min YouTube Talk**: [Talk about the ICML paper](https://ibm.biz/ntl-5min-yt)
+- 🎮 **Interactive Demo**: [https://huggingface.co/spaces/jannisborn/NumberTokenLoss](https://ibm.biz/ntl-demo)
 - 📋 **NeurIPS 2024 MathAI Workshop Poster**: [View Poster](https://github.com/tum-ai/number-token-loss/blob/main/resources/neurips_mathai_poster.pdf)
-- 💻 **Tutorial**: [loss_integration.ipynb](scripts/loss_integration.ipynb) - Easy integration into your own models
-- 💻 **PyPI**: Fetch `ntloss` from [PyPI](https://pypi.org/project/ntloss/)
+
 
 ## 🏃‍♂️ Quick Start
 
@@ -267,7 +278,7 @@ If you find this work useful, please cite our paper:
              and Vishwa Mohan Singh and Michael Danziger and Jannis Born},
   booktitle = {Proc. of the 42nd International Conference on Machine Learning (ICML)},
   year    = {2025},
-  url     = {https://tum-ai.github.io/number-token-loss/}
+  url     = {https://ibm.biz/ntl-main}
 }
 ```
 
@@ -276,13 +287,12 @@ If you find this work useful, please cite our paper:
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 <!-- ## 🙏 Acknowledgments
-
-This work was supported by TUM.ai, Technical University of Munich, and IBM Research Europe. Special thanks to the NeurIPS 2024 MathAI Workshop for featuring our research.
+This work was supported and conducted by TUM.ai & Technical University of Munich and led by IBM Research Europe. 
 -->
 --- 
 
 <div align="center">
 
-**[🌐 Project Website](https://tum-ai.github.io/number-token-loss/) | [📄 Paper](https://arxiv.org/abs/2411.02083) | [🎮 Demo](https://huggingface.co/spaces/jannisborn/NumberTokenLoss) | [💻 Integration Example](scripts/loss_integration.ipynb)**
+**[🌐 Project Website](https://ibm.biz/ntl-main) | [📄 Paper](https://ibm.biz/ntl-paper) | [🎮 Demo](https://ibm.biz/ntl-demo) | [💻 Use NTL](https://ibm.biz/ntl-pypi-repo)**
 
 </div>
