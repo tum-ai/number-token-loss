@@ -30,7 +30,6 @@ Achieves better performance on math tasks without computational overhead 🚀*
 
 **Number Token Loss (NTL)** introduces a novel approach to enhance language models' numerical reasoning capabilities. Unlike traditional cross-entropy loss that treats all incorrect predictions equally, NTL incorporates the numerical proximity of tokens, providing regression-like behavior at the token level.
 
-![NTL Concept](resources%2Fntl-image.jpg)
 <div align="center">
   <img src="resources/ntl-image.jpg" alt="NTL Concept" width="75%">
 </div>
